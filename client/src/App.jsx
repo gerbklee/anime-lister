@@ -7,20 +7,22 @@ import TabBar from './components/TabBar.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import ListsPage from './pages/ListsPage.jsx';
 import WatchPage from './pages/WatchPage.jsx';
-import AnimePage from './pages/AnimePage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import AnimeDetail from './pages/AnimeDetail.jsx';
 import FeedPage from './pages/FeedPage.jsx';
 import DiscoverPage from './pages/DiscoverPage.jsx';
 import ComparePage from './pages/ComparePage.jsx';
-import SettingsPage from './pages/SettingsPage.jsx';
 
 function readRoute() {
   const h = window.location.hash.replace(/^#/, '');
   let m;
   if ((m = h.match(/^\/list\/(\d+)$/))) return { tab: 'lists', id: Number(m[1]) };
-  if ((m = h.match(/^\/anime\/u\/(\d+)$/))) return { tab: 'anime', userId: Number(m[1]) };
+  // Anime pages (not a tab of their own).
   if ((m = h.match(/^\/anime\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[1]), suggest: !!m[2] };
-  if (h === '/anime') return { tab: 'anime' };
+  // Profile: your anime catalogue and settings, or someone else's anime.
+  if ((m = h.match(/^\/(?:profile|anime)\/u\/(\d+)$/))) return { tab: 'profile', view: 'anime', userId: Number(m[1]) };
+  if (h === '/profile' || h === '/anime') return { tab: 'profile', view: 'anime' };
+  if (h === '/profile/settings' || h === '/settings') return { tab: 'profile', view: 'settings' };
   if ((m = h.match(/^\/watch\/(\d+)$/))) return { tab: 'watch', id: Number(m[1]) };
   if (h === '/watch') return { tab: 'watch' };
   if ((m = h.match(/^\/discover\/season\/(\d{4})\/(WINTER|SPRING|SUMMER|FALL)$/)))
@@ -30,7 +32,6 @@ function readRoute() {
   if (h === '/discover' || h === '/discover/season') return { tab: 'discover', view: 'season' };
   if (h === '/feed') return { tab: 'feed' };
   if (h === '/compare') return { tab: 'compare' };
-  if (h === '/settings') return { tab: 'settings' };
   return { tab: 'lists' };
 }
 
@@ -122,12 +123,11 @@ function Main({ me, setMe }) {
   let page;
   if (route.tab === 'lists') page = <ListsPage route={route} />;
   else if (route.tab === 'watch') page = <WatchPage route={route} />;
-  else if (route.tab === 'anime' && route.animeId) page = <AnimeDetail key={route.animeId} id={route.animeId} suggest={route.suggest} />;
-  else if (route.tab === 'anime') page = <AnimePage key={route.userId ?? 'me'} userId={route.userId ?? me.id} />;
+  else if (route.tab === 'anime') page = <AnimeDetail key={route.animeId} id={route.animeId} suggest={route.suggest} />;
   else if (route.tab === 'discover') page = <DiscoverPage route={route} />;
   else if (route.tab === 'feed') page = <FeedPage />;
   else if (route.tab === 'compare') page = <ComparePage />;
-  else page = <SettingsPage onLogout={logout} />;
+  else page = <ProfilePage route={route} onLogout={logout} />;
 
   return (
     <AppContext.Provider value={ctx}>
@@ -138,7 +138,11 @@ function Main({ me, setMe }) {
           </a>
           <div className="top-nav">
             <ThemeToggle />
-            <a href="#/settings" className={`nav-link ${route.tab === 'settings' ? 'active' : ''}`} title="Account settings">
+            <a
+              href="#/profile"
+              className={`nav-link ${route.tab === 'profile' && !route.userId ? 'active' : ''}`}
+              title="My profile: my anime and settings"
+            >
               <Avatar user={me} size={26} />
               <span className="hide-mobile">{me.username}</span>
             </a>

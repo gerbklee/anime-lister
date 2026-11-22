@@ -168,10 +168,10 @@ export default function AnimePage({ userId }) {
   return (
     <section className="catalogue">
       <div className="catalogue-header">
-        <h2>{isMe ? 'My anime' : `${owner?.username ?? 'Someone'}'s anime`}</h2>
+        <span className="muted small">Show the anime of</span>
         <select
           value={userId}
-          onChange={(e) => navigate(Number(e.target.value) === me.id ? '#/anime' : `#/anime/u/${e.target.value}`)}
+          onChange={(e) => navigate(Number(e.target.value) === me.id ? '#/profile' : `#/profile/u/${e.target.value}`)}
           aria-label="Whose anime"
         >
           {users.map((u) => (

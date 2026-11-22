@@ -366,7 +366,7 @@ function ForYouView() {
     return (
       <div className="empty-state">
         <p className="muted">
-          Add anime you've watched in the <a href="#/anime">Anime</a> tab and rate them. Recommendations are based on what you
+          Add anime you've watched under <a href="#/profile">My anime</a> (your profile) and rate them. Recommendations are based on what you
           liked.
         </p>
       </div>

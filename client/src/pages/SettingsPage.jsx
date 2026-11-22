@@ -73,10 +73,10 @@ export default function SettingsPage({ onLogout }) {
 
   return (
     <section className="settings">
-      <div className="settings-user">
-        <Avatar user={me} size={72} />
-        <div>
-          <h2>{me.username}</h2>
+      <div className="card settings-card">
+        <h3>Profile photo</h3>
+        <div className="settings-user">
+          <Avatar user={me} size={56} />
           <div className="settings-buttons">
             <button className="btn ghost" onClick={() => setPicking(true)}>
               🖼️ Change photo
@@ -86,12 +86,9 @@ export default function SettingsPage({ onLogout }) {
                 Remove photo
               </button>
             )}
-            <button className="btn ghost" onClick={onLogout}>
-              Log out
-            </button>
           </div>
-          {avatarError && <p className="error-text small">{avatarError}</p>}
         </div>
+        {avatarError && <p className="error-text small">{avatarError}</p>}
       </div>
 
       <form className="card settings-card" onSubmit={changePassword}>
@@ -113,6 +110,12 @@ export default function SettingsPage({ onLogout }) {
           Change password
         </button>
       </form>
+
+      <div>
+        <button className="btn ghost" onClick={onLogout}>
+          Log out
+        </button>
+      </div>
 
       {picking && <AvatarPicker onClose={() => setPicking(false)} onPicked={updated} />}
     </section>

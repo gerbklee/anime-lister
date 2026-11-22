@@ -83,9 +83,9 @@ package page on GitHub) and click **Up**.
 
 ## Anime, watchlists and feed
 
-The app has six tabs (a bottom bar on phones): **Lists · Anime · Discover · Watchlists · Feed · Compare**.
+The app has five tabs (a bottom bar on phones): **Lists · Discover · Watchlists · Feed · Compare**. Your profile (tap your photo at the top right) holds **My anime** and **Settings**.
 
-- **Anime**: your catalogue. Search AniList, mark anime as *Watched*, *Watching* (with episode progress) or *Dropped*, rate them (0.5–5 stars) and write reviews (optionally marked as spoilers). Everyone can browse everyone's catalogue.
+- **My anime** (in your profile): your catalogue. Search AniList, mark anime as *Watched*, *Watching* (with episode progress) or *Dropped*, rate them (0.5–5 stars) and write reviews (optionally marked as spoilers). Everyone can browse everyone's catalogue.
 - **Anime pages**: cover, banner, synopsis, trailer, everyone's ratings and reviews (with replies and ❤️ 😂 😮 reactions), the characters from your lists who appear in it, and its main characters with *+ List* buttons. After marking an anime as watched, it suggests ranking its characters.
 - **Anime lists**: in the Lists tab, switch between 👤 Characters and 🎬 Anime. Anime lists rank anime the same way character lists rank characters.
 - **Watchlists**: shared watchlists with members. Rank by priority, play trailers in the page, comment on each anime, and use **✓ Watched it** to add it to the catalogues of whoever watched it. Comments stay on the anime page afterwards.
@@ -97,7 +97,7 @@ The app has six tabs (a bottom bar on phones): **Lists · Anime · Discover · W
   - *For you*: recommendations from AniList's community recommendations ("fans of X also liked Y"), weighted by your ratings (5★ counts a lot, 2.5★ nothing, lower ratings and dropped anime count against). Each pick says why.
   - *Similar*: pick one anime (yours or any) to see what its fans also liked.
   - The **obscurity slider** re-ranks recommendations from mainstream hits to hidden gems (by AniList popularity). Anime in your catalogue are never recommended.
-- **Pictures (no uploads)**: tap a character's picture in your list to choose another one, from AniList, MyAnimeList (via the Jikan API) or Safebooru fan art. Profile photos are chosen the same way under Settings. Chosen images are cached on the server.
+- **Pictures (no uploads)**: tap a character's picture in your list to choose another one, from AniList, MyAnimeList (via the Jikan API) or Safebooru fan art. Profile photos are chosen the same way under Profile → Settings. Chosen images are cached on the server.
 
 Character entries added before this version are linked to their anime in the background on the first start (about 1.5 seconds per character).
 

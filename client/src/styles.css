@@ -2815,3 +2815,22 @@ button.chip {
     width: 100%;
   }
 }
+
+/* ---- Profile ---------------------------------------------------------------- */
+
+.profile {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profile-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
