@@ -2,14 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { api } from '../api.js';
+import { animeSearch, api, characterSearch } from '../api.js';
+import { useApp } from '../AppContext.jsx';
+import { plural } from '../util.js';
 import SearchBox from './SearchBox.jsx';
 import EntryRow from './EntryRow.jsx';
+import WatchRow from './WatchRow.jsx';
 import MembersPanel from './MembersPanel.jsx';
+import ImagePicker from './ImagePicker.jsx';
+import TrailerModal from './TrailerModal.jsx';
+import WatchedDialog from './WatchedDialog.jsx';
 
 const POLL_MS = 5000;
 
-export default function ListView({ listId, me, users, onListsChanged }) {
+const WORDS = {
+  character: ['character', 'Search for a character to add…'],
+  anime: ['anime', 'Search for an anime to add…'],
+  watchlist: ['anime', 'Search for an anime you want to watch…'],
+};
+
+export default function ListView({ listId, onListsChanged }) {
+  const { me, users, refreshCatalogue } = useApp();
   const [detail, setDetail] = useState(null);
   const [entries, setEntries] = useState([]);
   const [error, setError] = useState(null);
@@ -17,6 +30,9 @@ export default function ListView({ listId, me, users, onListsChanged }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [sharing, setSharing] = useState(false);
+  const [picking, setPicking] = useState(null); // entry whose picture is being changed
+  const [trailer, setTrailer] = useState(null); // entry whose trailer is playing
+  const [watching, setWatching] = useState(null); // entry being marked as watched
 
   const rootRef = useRef(null);
   const versionRef = useRef(null);
@@ -45,12 +61,16 @@ export default function ListView({ listId, me, users, onListsChanged }) {
     }
   };
 
+  const modalOpen = !!(picking || trailer || watching);
+  const modalRef = useRef(false);
+  modalRef.current = modalOpen;
+
   // ---- Auto-refresh: pick up changes made by other people ----------------------
   useEffect(() => {
     let stopped = false;
 
     const isBusy = () => {
-      if (draggingRef.current || pendingRef.current > 0) return true;
+      if (draggingRef.current || pendingRef.current > 0 || modalRef.current) return true;
       const el = document.activeElement;
       return !!(
         el &&
@@ -131,7 +151,7 @@ export default function ListView({ listId, me, users, onListsChanged }) {
   // ---- Entries ----------------------------------------------------------------
   const handleAdd = async (result) => {
     try {
-      const entry = await track(api.addEntry(listId, result.anilistId));
+      const entry = await track(api.addEntry(listId, result.id));
       setEntries((prev) => (prev.some((e) => e.id === entry.id) ? prev : [...prev, entry]));
       onListsChanged();
     } catch (err) {
@@ -140,12 +160,13 @@ export default function ListView({ listId, me, users, onListsChanged }) {
     }
   };
 
+  const replaceEntry = (updated) => setEntries((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+
   const updateEntry = async (id, patch) => {
     try {
-      const updated = await track(api.updateEntry(id, patch));
-      setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)));
+      replaceEntry(await track(api.updateEntry(id, patch)));
     } catch (err) {
-      if (err.status === 404) await reloadAfterConflict('That character was removed by someone else.');
+      if (err.status === 404) await reloadAfterConflict('That entry was removed by someone else.');
       else setError(err.message);
     }
   };
@@ -157,9 +178,22 @@ export default function ListView({ listId, me, users, onListsChanged }) {
       setEntries((prev) => prev.filter((e) => e.id !== entry.id));
       onListsChanged();
     } catch (err) {
-      if (err.status === 404) await reloadAfterConflict('That character was already removed by someone else.');
+      if (err.status === 404) await reloadAfterConflict('That entry was already removed by someone else.');
       else setError(err.message);
     }
+  };
+
+  const markWatched = async (entry, userIds) => {
+    await track(api.markWatched(entry.id, userIds));
+    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+    setNotice(
+      <>
+        🎉 {entry.name} was added to {userIds.includes(me.id) ? 'your catalogue' : 'their catalogues'}.{' '}
+        <a href={`#/anime/${entry.anilistId}/suggest`}>Rate it and rank its characters →</a>
+      </>,
+    );
+    refreshCatalogue();
+    onListsChanged();
   };
 
   // ---- List actions -----------------------------------------------------------
@@ -186,8 +220,8 @@ export default function ListView({ listId, me, users, onListsChanged }) {
   };
 
   const deleteList = async () => {
-    const count = entries.length;
-    const msg = `Delete the list "${detail.name}"${count ? ` and its ${count} character${count === 1 ? '' : 's'}` : ''}? This cannot be undone.`;
+    const n = entries.length;
+    const msg = `Delete "${detail.name}"${n ? ` and its ${plural(n, 'entry', 'entries')}` : ''}? This cannot be undone.`;
     if (!window.confirm(msg)) return;
     try {
       await api.deleteList(listId);
@@ -201,7 +235,7 @@ export default function ListView({ listId, me, users, onListsChanged }) {
     if (
       !detail.isShared &&
       !window.confirm(
-        `Share "${detail.name}" with ${username}?\n\nThey will be able to add, remove and reorder characters. The list moves to "Shared", and shared lists don't count in comparisons.`,
+        `Share "${detail.name}" with ${username}?\n\nThey will be able to add, remove and reorder entries. The list moves to "Shared", and shared lists don't count in comparisons.`,
       )
     ) {
       return false;
@@ -237,7 +271,10 @@ export default function ListView({ listId, me, users, onListsChanged }) {
     return error ? <div className="banner error">{error}</div> : <p className="muted">Loading…</p>;
   }
 
+  const { kind } = detail;
   const readOnly = !detail.canEdit;
+  const [word, placeholder] = WORDS[kind];
+  const people = [detail.owner, ...detail.members].filter(Boolean);
 
   return (
     <section className="list-view" ref={rootRef}>
@@ -268,10 +305,8 @@ export default function ListView({ listId, me, users, onListsChanged }) {
             {detail.name}
           </h2>
         )}
-        <span className="muted">
-          {entries.length} character{entries.length === 1 ? '' : 's'}
-        </span>
-        {detail.isShared && <span className="pill">👥 Shared</span>}
+        <span className="muted">{plural(entries.length, word, word === 'anime' ? 'anime' : `${word}s`)}</span>
+        {detail.isShared && kind !== 'watchlist' && <span className="pill">👥 Shared</span>}
         <div className="spacer" />
         {detail.isOwner && !detail.isShared && (
           <button className="btn ghost" onClick={() => setSharing((s) => !s)} aria-expanded={sharing}>
@@ -284,13 +319,13 @@ export default function ListView({ listId, me, users, onListsChanged }) {
               Rename
             </button>
             <button className="btn danger" onClick={deleteList}>
-              Delete list
+              Delete
             </button>
           </>
         )}
         {detail.isShared && !detail.isOwner && (
           <button className="btn ghost" onClick={leave}>
-            Leave list
+            Leave
           </button>
         )}
       </div>
@@ -305,7 +340,14 @@ export default function ListView({ listId, me, users, onListsChanged }) {
         <MembersPanel detail={detail} me={me} users={users} onInvite={invite} onRemove={removeMember} />
       )}
 
-      {!readOnly && <SearchBox existingIds={existingIds} onAdd={handleAdd} />}
+      {!readOnly && (
+        <SearchBox
+          search={kind === 'character' ? characterSearch : animeSearch}
+          existingIds={existingIds}
+          onAdd={handleAdd}
+          placeholder={placeholder}
+        />
+      )}
 
       {notice && (
         <div className="banner info">
@@ -326,9 +368,7 @@ export default function ListView({ listId, me, users, onListsChanged }) {
 
       {entries.length === 0 ? (
         <div className="empty-state">
-          <p className="muted">
-            {readOnly ? 'This list is empty.' : 'This list is empty. Search for a character above to add them.'}
-          </p>
+          <p className="muted">{readOnly ? 'This list is empty.' : 'This list is empty. Use the search above to add something.'}</p>
         </div>
       ) : (
         <DndContext
@@ -345,22 +385,56 @@ export default function ListView({ listId, me, users, onListsChanged }) {
         >
           <SortableContext items={entries.map((e) => e.id)} strategy={verticalListSortingStrategy}>
             <ol className="entries">
-              {entries.map((entry, index) => (
-                <EntryRow
-                  key={entry.id}
-                  entry={entry}
-                  rank={index + 1}
-                  total={entries.length}
-                  readOnly={readOnly}
-                  showAuthors={detail.isShared}
-                  onMove={moveEntry}
-                  onUpdate={updateEntry}
-                  onDelete={deleteEntry}
-                />
-              ))}
+              {entries.map((entry, index) =>
+                kind === 'watchlist' ? (
+                  <WatchRow
+                    key={entry.id}
+                    entry={entry}
+                    rank={index + 1}
+                    total={entries.length}
+                    onMove={moveEntry}
+                    onUpdate={updateEntry}
+                    onDelete={deleteEntry}
+                    onTrailer={() => setTrailer(entry)}
+                    onWatched={() => setWatching(entry)}
+                  />
+                ) : (
+                  <EntryRow
+                    key={entry.id}
+                    kind={kind}
+                    entry={entry}
+                    rank={index + 1}
+                    total={entries.length}
+                    readOnly={readOnly}
+                    showAuthors={detail.isShared}
+                    onMove={moveEntry}
+                    onUpdate={updateEntry}
+                    onDelete={deleteEntry}
+                    onChangeImage={() => setPicking(entry)}
+                  />
+                ),
+              )}
             </ol>
           </SortableContext>
         </DndContext>
+      )}
+
+      {picking && (
+        <ImagePicker
+          characterId={picking.anilistId}
+          title={`Picture for ${picking.name}`}
+          onClose={() => setPicking(null)}
+          onPick={async (url) => replaceEntry(await track(api.updateEntry(picking.id, { imageUrl: url })))}
+          onReset={
+            picking.customImage
+              ? async () => replaceEntry(await track(api.updateEntry(picking.id, { resetImage: true })))
+              : undefined
+          }
+        />
+      )}
+      {trailer && <TrailerModal trailer={trailer.anime.trailer} title={trailer.name} onClose={() => setTrailer(null)} />}
+      {watching && (
+        <WatchedDialog entry={watching} people={people} me={me} onClose={() => setWatching(null)} onConfirm={(ids) => markWatched(watching, ids)} />
       )}
     </section>
   );

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { useApp } from '../AppContext.jsx';
+import { STATUS_LABELS } from '../util.js';
 import Avatar from './Avatar.jsx';
 
-function RankInput({ rank, total, onMove }) {
+export function RankInput({ rank, total, onMove }) {
   const [value, setValue] = useState(String(rank));
   const cancelled = useRef(false);
 
@@ -49,7 +51,7 @@ function RankInput({ rank, total, onMove }) {
   );
 }
 
-function NoteEditor({ note, noteBy, showAuthor, onSave }) {
+export function NoteEditor({ note, noteBy, showAuthor, onSave }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note);
   const cancelled = useRef(false);
@@ -79,7 +81,7 @@ function NoteEditor({ note, noteBy, showAuthor, onSave }) {
       rows={2}
       maxLength={1000}
       value={draft}
-      placeholder="Why are they ranked here? (Enter to save, Esc to cancel)"
+      placeholder="Why is it ranked here? (Enter to save, Esc to cancel)"
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
@@ -102,13 +104,48 @@ function NoteEditor({ note, noteBy, showAuthor, onSave }) {
   );
 }
 
-export default function EntryRow({ entry, rank, total, readOnly, showAuthors, onMove, onUpdate, onDelete }) {
+// "✓ ★4.5", "▶ Watching" etc. for an anime in your catalogue.
+export function CatalogueBadge({ animeId }) {
+  const { catalogue } = useApp();
+  const c = catalogue[animeId];
+  if (!c) return null;
+  const icon = c.status === 'watched' ? '✓' : c.status === 'watching' ? '▶' : '✕';
+  return (
+    <span className={`cat-badge ${c.status}`} title={`${STATUS_LABELS[c.status]}${c.rating ? ` · ${c.rating} stars` : ''}`}>
+      {icon}
+      {c.rating ? ` ★${c.rating}` : ` ${STATUS_LABELS[c.status]}`}
+    </span>
+  );
+}
+
+export function Portrait({ src, alt, onClick, label }) {
+  const img = src ? (
+    <img className="portrait" src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" />
+  ) : (
+    <div className="portrait img-placeholder" aria-hidden="true">
+      ?
+    </div>
+  );
+  if (!onClick) return img;
+  return (
+    <button type="button" className="portrait-btn" onClick={onClick} aria-label={label} title={label}>
+      {img}
+      <span className="portrait-edit" aria-hidden="true">
+        🖼️
+      </span>
+    </button>
+  );
+}
+
+export default function EntryRow({ kind, entry, rank, total, readOnly, showAuthors, onMove, onUpdate, onDelete, onChangeImage }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
     disabled: readOnly,
   });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const isAnime = kind === 'anime';
+  const animeId = isAnime ? entry.anilistId : entry.seriesAnimeId;
 
   return (
     <li ref={setNodeRef} style={style} className={`entry ${isDragging ? 'dragging' : ''} ${readOnly ? 'read-only' : ''}`}>
@@ -133,43 +170,52 @@ export default function EntryRow({ entry, rank, total, readOnly, showAuthors, on
         <RankInput rank={rank} total={total} onMove={(target) => onMove(entry.id, target)} />
       )}
 
-      {entry.image ? (
-        <img className="portrait" src={entry.image} alt={entry.name} loading="lazy" />
-      ) : (
-        <div className="portrait img-placeholder" aria-hidden="true">?</div>
-      )}
+      <Portrait
+        src={entry.image}
+        alt={entry.name}
+        onClick={!readOnly && !isAnime ? onChangeImage : undefined}
+        label={`Change picture of ${entry.name}`}
+      />
 
       <div className="entry-info">
         <div className="entry-title">
           <a
             className="entry-name"
-            href={`https://anilist.co/character/${entry.anilistId}`}
-            target="_blank"
-            rel="noreferrer"
-            title="Open on AniList"
+            href={isAnime ? `#/anime/${entry.anilistId}` : `https://anilist.co/character/${entry.anilistId}`}
+            target={isAnime ? undefined : '_blank'}
+            rel={isAnime ? undefined : 'noreferrer'}
+            title={isAnime ? 'Open anime page' : 'Open on AniList'}
           >
             {entry.name}
           </a>
           {showAuthors && entry.addedBy && <Avatar user={entry.addedBy} size={18} title={`Added by ${entry.addedBy.username}`} />}
         </div>
 
-        {!readOnly && entry.seriesOptions.length > 1 ? (
-          <select
-            className="series-select"
-            value={entry.seriesTitle ?? ''}
-            onChange={(e) => onUpdate(entry.id, { seriesTitle: e.target.value })}
-            title="Change which series is shown"
-            aria-label={`Series shown for ${entry.name}`}
-          >
-            {entry.seriesOptions.map((title) => (
-              <option key={title} value={title}>
-                {title}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="series">{entry.seriesTitle || 'Unknown series'}</span>
-        )}
+        <div className="series-line">
+          {!isAnime && !readOnly && entry.seriesOptions.length > 1 ? (
+            <select
+              className="series-select"
+              value={entry.seriesTitle ?? ''}
+              onChange={(e) => onUpdate(entry.id, { seriesTitle: e.target.value })}
+              title="Change which series is shown"
+              aria-label={`Series shown for ${entry.name}`}
+            >
+              {entry.seriesOptions.map((title) => (
+                <option key={title} value={title}>
+                  {title}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="series">{entry.seriesTitle || 'Unknown series'}</span>
+          )}
+          {animeId && (
+            <a className="anime-link" href={`#/anime/${animeId}`} title="Open anime page">
+              {isAnime ? null : '🎬'}
+              <CatalogueBadge animeId={animeId} />
+            </a>
+          )}
+        </div>
 
         {readOnly ? (
           entry.note && <p className="note read-only">{entry.note}</p>

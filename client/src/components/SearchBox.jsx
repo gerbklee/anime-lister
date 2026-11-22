@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 300;
@@ -16,7 +15,17 @@ function highlight(text, term) {
   );
 }
 
-export default function SearchBox({ existingIds, onAdd }) {
+// Search-as-you-type box. `search(term, signal)` returns results shaped
+// { id, name, image, subtitle, extra? }. Items in `existingIds` can't be picked.
+export default function SearchBox({
+  search,
+  existingIds,
+  onAdd,
+  placeholder = 'Search…',
+  existingLabel = 'In list',
+  addLabel = '+ Add',
+  badgeFor,
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,10 +48,10 @@ export default function SearchBox({ existingIds, onAdd }) {
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const data = await api.search(term, controller.signal);
-        setResults(data.results);
+        const found = await search(term, controller.signal);
+        setResults(found);
         setError(null);
-        setActive(data.results.length ? 0 : -1);
+        setActive(found.length ? 0 : -1);
       } catch (err) {
         if (err.name !== 'AbortError') setError(err.message);
       } finally {
@@ -53,11 +62,13 @@ export default function SearchBox({ existingIds, onAdd }) {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [term]);
+  }, [term, search]);
+
+  const isExisting = (r) => existingIds?.has(r.id);
 
   const choose = async (result) => {
-    if (!result || existingIds.has(result.anilistId) || adding) return;
-    setAdding(result.anilistId);
+    if (!result || isExisting(result) || adding) return;
+    setAdding(result.id);
     setError(null);
     try {
       await onAdd(result);
@@ -94,15 +105,16 @@ export default function SearchBox({ existingIds, onAdd }) {
     content = <li className="suggestion-msg error-text">{error}</li>;
   } else if (results.length) {
     content = results.map((r, i) => {
-      const inList = existingIds.has(r.anilistId);
+      const existing = isExisting(r);
+      const badge = badgeFor?.(r);
       return (
         <li
-          key={r.anilistId}
+          key={r.id}
           id={`suggestion-${i}`}
           role="option"
           aria-selected={i === active}
-          aria-disabled={inList}
-          className={`suggestion ${i === active ? 'active' : ''} ${inList ? 'disabled' : ''}`}
+          aria-disabled={existing}
+          className={`suggestion ${i === active ? 'active' : ''} ${existing ? 'disabled' : ''}`}
           onMouseDown={(e) => e.preventDefault()} // keep focus in the input
           onMouseEnter={() => setActive(i)}
           onClick={() => choose(r)}
@@ -111,12 +123,13 @@ export default function SearchBox({ existingIds, onAdd }) {
           <div className="suggestion-text">
             <div className="suggestion-name">{highlight(r.name, term)}</div>
             <div className="suggestion-series">
-              {r.series[0] ?? 'Unknown series'}
-              {r.series.length > 1 && <span className="muted"> +{r.series.length - 1} more</span>}
+              {r.subtitle}
+              {r.extra && <span className="muted"> {r.extra}</span>}
+              {badge && <span className="pill tiny">{badge}</span>}
             </div>
           </div>
-          <span className={`badge ${inList ? '' : 'add'}`}>
-            {inList ? 'In list' : adding === r.anilistId ? 'Adding…' : '+ Add'}
+          <span className={`badge ${existing ? '' : 'add'}`}>
+            {existing ? existingLabel : adding === r.id ? 'Adding…' : addLabel}
           </span>
         </li>
       );
@@ -124,15 +137,17 @@ export default function SearchBox({ existingIds, onAdd }) {
   } else if (loading) {
     content = <li className="suggestion-msg muted">Searching…</li>;
   } else {
-    content = <li className="suggestion-msg muted">No characters found</li>;
+    content = <li className="suggestion-msg muted">Nothing found</li>;
   }
 
   return (
     <div className="search">
-      <span className="search-icon" aria-hidden="true">🔍</span>
+      <span className="search-icon" aria-hidden="true">
+        🔍
+      </span>
       <input
         type="search"
-        placeholder="Search for a character to add…"
+        placeholder={placeholder}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);

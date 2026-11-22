@@ -78,6 +78,108 @@ const MIGRATIONS = {
 
     UPDATE lists SET is_shared = 1;
   `,
+
+  // v3: anime catalogue, anime lists & watchlists, activity feed, comments,
+  // reactions, profile photos and custom character images.
+  3: `
+    ALTER TABLE users ADD COLUMN avatar_file TEXT;
+
+    -- 'character' | 'anime' | 'watchlist'
+    ALTER TABLE lists ADD COLUMN kind TEXT NOT NULL DEFAULT 'character';
+
+    -- Lets a character entry switch back to the AniList image after picking another one.
+    ALTER TABLE entries ADD COLUMN original_image_url TEXT;
+    UPDATE entries SET original_image_url = image_url;
+
+    -- Cached AniList anime metadata (shared by everyone).
+    CREATE TABLE anime (
+      id             INTEGER PRIMARY KEY,
+      id_mal         INTEGER,
+      title          TEXT    NOT NULL,
+      title_romaji   TEXT,
+      cover_url      TEXT,
+      cover_file     TEXT,
+      banner_url     TEXT,
+      color          TEXT,
+      format         TEXT,
+      episodes       INTEGER,
+      season         TEXT,
+      season_year    INTEGER,
+      status         TEXT,
+      genres         TEXT    NOT NULL DEFAULT '[]',
+      studios        TEXT,
+      description    TEXT,
+      trailer_site   TEXT,
+      trailer_id     TEXT,
+      average_score  INTEGER,
+      characters     TEXT    NOT NULL DEFAULT '[]',
+      fetched_at     INTEGER NOT NULL
+    );
+
+    -- Which characters appear in which anime (from AniList), for linking.
+    CREATE TABLE character_media (
+      character_id  INTEGER NOT NULL,
+      anime_id      INTEGER NOT NULL,
+      PRIMARY KEY (character_id, anime_id)
+    );
+    CREATE INDEX idx_character_media_anime ON character_media (anime_id);
+
+    -- Characters whose anime links have been fetched (background backfill).
+    CREATE TABLE character_sync (
+      character_id  INTEGER PRIMARY KEY,
+      synced_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- A user's anime catalogue: status, progress, rating and review.
+    CREATE TABLE user_anime (
+      user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      anime_id           INTEGER NOT NULL REFERENCES anime(id),
+      status             TEXT    NOT NULL,
+      progress           INTEGER NOT NULL DEFAULT 0,
+      rating             REAL,
+      review             TEXT    NOT NULL DEFAULT '',
+      review_spoiler     INTEGER NOT NULL DEFAULT 0,
+      review_updated_at  TEXT,
+      created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at         TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, anime_id)
+    );
+    CREATE INDEX idx_user_anime_anime ON user_anime (anime_id);
+
+    -- Feed events.
+    CREATE TABLE activities (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type        TEXT    NOT NULL,
+      anime_id    INTEGER,
+      list_id     INTEGER,
+      item_id     INTEGER,
+      data        TEXT    NOT NULL DEFAULT '{}',
+      created_at  INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_activities_created ON activities (created_at);
+    CREATE INDEX idx_activities_user ON activities (user_id, type, anime_id);
+
+    -- Comments belong to a thread, e.g. 'review:<animeId>:<userId>',
+    -- 'activity:<id>' or 'watch:<listId>:<animeId>'.
+    CREATE TABLE comments (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      thread      TEXT    NOT NULL,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_comments_thread ON comments (thread, created_at);
+
+    -- Emoji reactions on a target: a thread key or 'comment:<id>'.
+    CREATE TABLE reactions (
+      target   TEXT    NOT NULL,
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      emoji    TEXT    NOT NULL,
+      PRIMARY KEY (target, user_id, emoji)
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

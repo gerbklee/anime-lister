@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function Section({ title, lists, selectedId, emptyText, showOwner }) {
+function Section({ title, lists, selectedId, emptyText, showOwner, hrefFor }) {
   return (
     <div className="sidebar-section">
       <h2 className="sidebar-title">{title}</h2>
@@ -11,7 +11,7 @@ function Section({ title, lists, selectedId, emptyText, showOwner }) {
           {lists.map((list) => (
             <li key={list.id}>
               <a
-                href={`#/list/${list.id}`}
+                href={hrefFor(list)}
                 className={`list-link ${list.id === selectedId ? 'active' : ''}`}
                 aria-current={list.id === selectedId ? 'page' : undefined}
               >
@@ -29,7 +29,9 @@ function Section({ title, lists, selectedId, emptyText, showOwner }) {
   );
 }
 
-export default function ListSidebar({ open, lists, selectedId, onCreate, onPick }) {
+// Sidebar with list sections and a "new list" form.
+// `watchlists` mode shows a single section (watchlists are always shared).
+export default function ListSidebar({ open, lists, selectedId, onCreate, onPick, hrefFor, header, watchlists = false }) {
   const [name, setName] = useState('');
   const [shared, setShared] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,7 @@ export default function ListSidebar({ open, lists, selectedId, onCreate, onPick 
     setBusy(true);
     setError(null);
     try {
-      await onCreate(trimmed, shared);
+      await onCreate(trimmed, watchlists || shared);
       setName('');
     } catch (err) {
       setError(err.message);
@@ -62,19 +64,40 @@ export default function ListSidebar({ open, lists, selectedId, onCreate, onPick 
 
   return (
     <aside className={`sidebar ${open ? 'open' : ''}`}>
+      {header}
       <nav onClick={(e) => e.target.closest('a') && onPick?.()}>
-        <Section title="My lists" lists={mine} selectedId={selectedId} emptyText="No personal lists yet." />
-        <Section title="Shared" lists={sharedLists} selectedId={selectedId} emptyText="No shared lists yet." showOwner />
-        {[...othersByOwner.entries()].map(([owner, ownerLists]) => (
-          <Section key={owner} title={`${owner}'s lists`} lists={ownerLists} selectedId={selectedId} />
-        ))}
+        {watchlists ? (
+          <Section
+            title="Watchlists"
+            lists={sharedLists}
+            selectedId={selectedId}
+            emptyText="No watchlists yet."
+            showOwner
+            hrefFor={hrefFor}
+          />
+        ) : (
+          <>
+            <Section title="My lists" lists={mine} selectedId={selectedId} emptyText="No personal lists yet." hrefFor={hrefFor} />
+            <Section
+              title="Shared"
+              lists={sharedLists}
+              selectedId={selectedId}
+              emptyText="No shared lists yet."
+              showOwner
+              hrefFor={hrefFor}
+            />
+            {[...othersByOwner.entries()].map(([owner, ownerLists]) => (
+              <Section key={owner} title={`${owner}'s lists`} lists={ownerLists} selectedId={selectedId} hrefFor={hrefFor} />
+            ))}
+          </>
+        )}
       </nav>
 
       <form className="new-list" onSubmit={submit}>
         <div className="new-list-row">
           <input
             type="text"
-            placeholder="New list name…"
+            placeholder={watchlists ? 'New watchlist name…' : 'New list name…'}
             value={name}
             maxLength={100}
             onChange={(e) => setName(e.target.value)}
@@ -84,14 +107,16 @@ export default function ListSidebar({ open, lists, selectedId, onCreate, onPick 
             Add
           </button>
         </div>
-        <div className="segmented" role="radiogroup" aria-label="List type">
-          <button type="button" role="radio" aria-checked={!shared} className={!shared ? 'active' : ''} onClick={() => setShared(false)}>
-            Personal
-          </button>
-          <button type="button" role="radio" aria-checked={shared} className={shared ? 'active' : ''} onClick={() => setShared(true)}>
-            👥 Shared
-          </button>
-        </div>
+        {!watchlists && (
+          <div className="segmented" role="radiogroup" aria-label="List type">
+            <button type="button" role="radio" aria-checked={!shared} className={!shared ? 'active' : ''} onClick={() => setShared(false)}>
+              Personal
+            </button>
+            <button type="button" role="radio" aria-checked={shared} className={shared ? 'active' : ''} onClick={() => setShared(true)}>
+              👥 Shared
+            </button>
+          </div>
+        )}
       </form>
       {error && <p className="error-text">{error}</p>}
     </aside>

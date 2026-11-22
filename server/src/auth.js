@@ -6,6 +6,7 @@ const { promisify } = require('util');
 const express = require('express');
 const { db } = require('./db');
 const { HttpError, wrap } = require('./http');
+const { publicUser } = require('./users');
 
 const scrypt = promisify(crypto.scrypt);
 
@@ -23,7 +24,7 @@ const q = {
   claimLists: db.prepare('UPDATE lists SET owner_id = ? WHERE owner_id IS NULL'),
   insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
   sessionUser: db.prepare(`
-    SELECT u.id, u.username, s.expires_at
+    SELECT u.id, u.username, u.avatar_file, s.expires_at
     FROM sessions s JOIN users u ON u.id = s.user_id
     WHERE s.token_hash = ?`),
   extendSession: db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?'),
@@ -105,7 +106,7 @@ function loadUser(req, res, next) {
     const row = q.sessionUser.get(tokenHash);
     const now = Date.now();
     if (row && row.expires_at > now) {
-      req.user = { id: row.id, username: row.username };
+      req.user = publicUser(row);
       req.sessionHash = tokenHash;
       if (row.expires_at - now < SESSION_MS - SESSION_REFRESH_MS) {
         q.extendSession.run(now + SESSION_MS, tokenHash);
@@ -164,7 +165,7 @@ router.post('/register', wrap(async (req, res) => {
     throw err;
   }
   startSession(res, id);
-  res.status(201).json({ id, username });
+  res.status(201).json({ id, username, avatar: null });
 }));
 
 router.post('/login', wrap(async (req, res) => {
@@ -180,7 +181,7 @@ router.post('/login', wrap(async (req, res) => {
   failures.delete(req.ip);
   q.purgeExpired.run(Date.now());
   startSession(res, user.id);
-  res.json({ id: user.id, username: user.username });
+  res.json(publicUser(user));
 }));
 
 router.post('/logout', (req, res) => {

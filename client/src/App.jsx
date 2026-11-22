@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, setUnauthorizedHandler } from './api.js';
+import { AppContext } from './AppContext.jsx';
 import AuthPage from './components/AuthPage.jsx';
 import Avatar from './components/Avatar.jsx';
-import ComparePage from './components/ComparePage.jsx';
-import ListSidebar from './components/ListSidebar.jsx';
-import ListView from './components/ListView.jsx';
-import SettingsPage from './components/SettingsPage.jsx';
+import TabBar from './components/TabBar.jsx';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import ListsPage from './pages/ListsPage.jsx';
+import WatchPage from './pages/WatchPage.jsx';
+import AnimePage from './pages/AnimePage.jsx';
+import AnimeDetail from './pages/AnimeDetail.jsx';
+import FeedPage from './pages/FeedPage.jsx';
+import ComparePage from './pages/ComparePage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 
 function readRoute() {
-  const hash = window.location.hash;
-  const list = hash.match(/^#\/list\/(\d+)$/);
-  if (list) return { page: 'list', id: Number(list[1]) };
-  if (hash === '#/compare') return { page: 'compare' };
-  if (hash === '#/settings') return { page: 'settings' };
-  return { page: 'home' };
+  const h = window.location.hash.replace(/^#/, '');
+  let m;
+  if ((m = h.match(/^\/list\/(\d+)$/))) return { tab: 'lists', id: Number(m[1]) };
+  if ((m = h.match(/^\/anime\/u\/(\d+)$/))) return { tab: 'anime', userId: Number(m[1]) };
+  if ((m = h.match(/^\/anime\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[1]), suggest: !!m[2] };
+  if (h === '/anime') return { tab: 'anime' };
+  if ((m = h.match(/^\/watch\/(\d+)$/))) return { tab: 'watch', id: Number(m[1]) };
+  if (h === '/watch') return { tab: 'watch' };
+  if (h === '/feed') return { tab: 'feed' };
+  if (h === '/compare') return { tab: 'compare' };
+  if (h === '/settings') return { tab: 'settings' };
+  return { tab: 'lists' };
 }
 
 export default function App() {
@@ -30,15 +41,15 @@ export default function App() {
 
   if (me === undefined) return <p className="muted center-page">Loading…</p>;
   if (!me) return <AuthPage onAuthed={setMe} />;
-  return <Main key={me.id} me={me} onLoggedOut={() => setMe(null)} />;
+  return <Main key={me.id} me={me} setMe={setMe} />;
 }
 
-function Main({ me, onLoggedOut }) {
+function Main({ me, setMe }) {
   const [lists, setLists] = useState(null); // null = not loaded yet
   const [users, setUsers] = useState([]);
+  const [catalogue, setCatalogue] = useState({});
   const [route, setRoute] = useState(readRoute);
   const [error, setError] = useState(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const refreshLists = useCallback(async () => {
     try {
@@ -47,7 +58,15 @@ function Main({ me, onLoggedOut }) {
       setUsers(nextUsers);
       setError(null);
     } catch (err) {
-      if (err.status !== 401) setError(`Could not load lists: ${err.message}`);
+      if (err.status !== 401) setError(`Could not load your data: ${err.message}`);
+    }
+  }, []);
+
+  const refreshCatalogue = useCallback(async () => {
+    try {
+      setCatalogue(await api.catalogueSummary());
+    } catch {
+      // badges just stay as they are
     }
   }, []);
 
@@ -58,9 +77,10 @@ function Main({ me, onLoggedOut }) {
 
   useEffect(() => {
     refreshLists();
-  }, [refreshLists]);
+    refreshCatalogue();
+  }, [refreshLists, refreshCatalogue]);
 
-  // Pick up lists someone else shared with you.
+  // Pick up lists someone else shared with you, new avatars, etc.
   useEffect(() => {
     const refreshIfVisible = () => document.visibilityState === 'visible' && refreshLists();
     const timer = setInterval(refreshIfVisible, 30_000);
@@ -74,91 +94,55 @@ function Main({ me, onLoggedOut }) {
   useEffect(() => {
     const onHashChange = () => {
       setRoute(readRoute());
-      setMenuOpen(false);
+      window.scrollTo(0, 0);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Home, or a list that no longer exists: go to the first of your own/shared lists.
-  useEffect(() => {
-    if (!lists || route.page === 'compare' || route.page === 'settings') return;
-    if (route.page === 'list' && lists.some((l) => l.id === route.id)) return;
-    const first = lists.find((l) => l.isOwner || l.isShared) ?? lists[0];
-    if (first) navigate(`#/list/${first.id}`);
-    else if (route.page !== 'home') navigate('#/');
-  }, [lists, route, navigate]);
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
-  const handleCreate = async (name, shared) => {
-    const list = await api.createList(name, shared);
-    await refreshLists();
-    navigate(`#/list/${list.id}`);
-  };
+  const ctx = useMemo(
+    () => ({ me, setMe, users, usersById, lists, refreshLists, catalogue, refreshCatalogue, navigate }),
+    [me, setMe, users, usersById, lists, refreshLists, catalogue, refreshCatalogue, navigate],
+  );
 
   const logout = async () => {
     await api.logout().catch(() => {});
     window.history.replaceState(null, '', window.location.pathname);
-    onLoggedOut();
+    setMe(null);
   };
 
-  const selected = route.page === 'list' ? lists?.find((l) => l.id === route.id) : undefined;
-
-  let content;
-  if (route.page === 'compare') {
-    content = <ComparePage me={me} users={users} />;
-  } else if (route.page === 'settings') {
-    content = <SettingsPage me={me} onLogout={logout} />;
-  } else if (lists === null) {
-    content = <p className="muted">Loading…</p>;
-  } else if (selected) {
-    content = <ListView key={selected.id} listId={selected.id} me={me} users={users} onListsChanged={refreshLists} />;
-  } else {
-    content = (
-      <div className="empty-state">
-        <h2>No lists yet</h2>
-        <p className="muted">Create your first list, e.g. “Top 10 Villains”.</p>
-      </div>
-    );
-  }
+  let page;
+  if (route.tab === 'lists') page = <ListsPage route={route} />;
+  else if (route.tab === 'watch') page = <WatchPage route={route} />;
+  else if (route.tab === 'anime' && route.animeId) page = <AnimeDetail key={route.animeId} id={route.animeId} suggest={route.suggest} />;
+  else if (route.tab === 'anime') page = <AnimePage key={route.userId ?? 'me'} userId={route.userId ?? me.id} />;
+  else if (route.tab === 'feed') page = <FeedPage />;
+  else if (route.tab === 'compare') page = <ComparePage />;
+  else page = <SettingsPage onLogout={logout} />;
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <a className="logo" href="#/">
-          <span aria-hidden="true">⭐</span> Anime Lister
-        </a>
-        <nav className="top-nav">
-          <a href="#/compare" className={`nav-link ${route.page === 'compare' ? 'active' : ''}`}>
-            <span aria-hidden="true">📊</span> <span className="hide-mobile">Compare</span>
+    <AppContext.Provider value={ctx}>
+      <div className="app">
+        <header className="topbar">
+          <a className="logo" href="#/lists">
+            <span aria-hidden="true">⭐</span> Anime Lister
           </a>
-          <ThemeToggle />
-          <a
-            href="#/settings"
-            className={`nav-link ${route.page === 'settings' ? 'active' : ''}`}
-            title="Account settings"
-          >
-            <Avatar user={me} size={24} />
-            <span className="hide-mobile">{me.username}</span>
-          </a>
-        </nav>
-      </header>
+          <div className="top-nav">
+            <ThemeToggle />
+            <a href="#/settings" className={`nav-link ${route.tab === 'settings' ? 'active' : ''}`} title="Account settings">
+              <Avatar user={me} size={26} />
+              <span className="hide-mobile">{me.username}</span>
+            </a>
+          </div>
+        </header>
+        <TabBar active={route.tab} />
 
-      {error && <div className="banner error">{error}</div>}
+        {error && <div className="banner error app-banner">{error}</div>}
 
-      <div className="layout">
-        <button className="list-switcher" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
-          <span>📋 {selected ? selected.name : 'Lists'}</span>
-          <span aria-hidden="true">{menuOpen ? '▲' : '▼'}</span>
-        </button>
-        <ListSidebar
-          open={menuOpen}
-          lists={lists ?? []}
-          selectedId={route.page === 'list' ? route.id : null}
-          onCreate={handleCreate}
-          onPick={() => setMenuOpen(false)}
-        />
-        <main className="main">{content}</main>
+        <div className="page">{page}</div>
       </div>
-    </div>
+    </AppContext.Provider>
   );
 }

@@ -1,13 +1,18 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { db, IMAGE_DIR } = require('./db');
+const { IMAGE_DIR } = require('./db');
 const { HttpError, wrap } = require('./http');
 const { authRouter, loadUser, requireUser } = require('./auth');
 const { listsRouter } = require('./lists');
 const { compareRouter } = require('./compare');
+const { catalogueRouter } = require('./catalogue');
+const { socialRouter } = require('./social');
+const { picturesRouter } = require('./pictures');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
+const { backfillCharacterLinks } = require('./anime');
+const { allUsers } = require('./users');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -27,8 +32,7 @@ app.use('/api/auth', authRouter);
 
 app.use('/api', requireUser);
 
-const allUsers = db.prepare('SELECT id, username FROM users ORDER BY username COLLATE NOCASE');
-app.get('/api/users', (req, res) => res.json(allUsers.all()));
+app.get('/api/users', (req, res) => res.json(allUsers()));
 
 app.get('/api/search', wrap(async (req, res) => {
   const term = String(req.query.q ?? '').trim();
@@ -39,6 +43,9 @@ app.get('/api/search', wrap(async (req, res) => {
 
 app.use('/api', listsRouter);
 app.use('/api', compareRouter);
+app.use('/api', catalogueRouter);
+app.use('/api', socialRouter);
+app.use('/api', picturesRouter);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -56,7 +63,10 @@ if (fs.existsSync(PUBLIC_DIR)) {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
-  if (status >= 500) console.error(err);
+  // Unexpected errors get a stack trace; expected ones (e.g. an external
+  // service being down) just a one-line warning.
+  if (status >= 500 && !err.status) console.error(err);
+  else if (status >= 500) console.warn(`${req.method} ${req.path}: ${err.message}`);
   const message = status >= 500 && !err.status ? 'Internal server error' : err.message;
   if (req.path.startsWith('/images/')) return res.status(status).end();
   res.status(status).json({ error: message });
@@ -64,5 +74,8 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Anime Lister running on http://0.0.0.0:${PORT}`);
-  retryMissingImages().catch((err) => console.warn('Image retry failed:', err.message));
+  retryMissingImages()
+    .catch((err) => console.warn('Image retry failed:', err.message))
+    .then(() => backfillCharacterLinks())
+    .catch((err) => console.warn('Character linking failed:', err.message));
 });
