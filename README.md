@@ -91,6 +91,12 @@ The app has five tabs (a bottom bar on phones): **Lists · Anime · To watch · 
 - **To watch**: shared watchlists with members. Rank by priority, play trailers in the page, comment on each anime, and use **✓ Watched it** to add it to the catalogues of whoever watched it. Comments stay on the anime page afterwards.
 - **Feed**: watched / started / dropped, ratings, reviews, list additions, new lists and watchlist activity, with comments and reactions. Activity in shared lists and watchlists is only shown to their members. Quick repeated changes (e.g. re-rating within 10 minutes) are merged into one event.
 - **Compare → Anime**: an anime taste match (watched overlap + rating similarity), ratings side by side, biggest disagreements, favourite genres, recommendations ("rated highly by them, not seen by you") and anime-list rankings.
+- **Discover**:
+  - *This season*: all anime of the current season (◀ ▶ to browse other seasons), with format/genre filters, sorting, next-episode countdowns, a ▶ Trailer button per anime and **Play all trailers** (a reel with auto-advance). Anime related to ones you've seen (new seasons, side stories) are highlighted.
+  - *Calendar*: everything announced for the next ~2 years, grouped by season, with exact dates where known, and a "Coming up from anime you've seen" box.
+  - *For you*: recommendations from AniList's community recommendations ("fans of X also liked Y"), weighted by your ratings (5★ counts a lot, 2.5★ nothing, lower ratings and dropped anime count against). Each pick says why.
+  - *Similar*: pick one anime (yours or any) to see what its fans also liked.
+  - The **obscurity slider** re-ranks recommendations from mainstream hits to hidden gems (by AniList popularity). Anime in your catalogue are never recommended.
 - **Pictures (no uploads)**: tap a character's picture in your list to choose another one, from AniList, MyAnimeList (via the Jikan API) or Safebooru fan art. Profile photos are chosen the same way under Settings. Chosen images are cached on the server.
 
 Character entries added before this version are linked to their anime in the background on the first start (about 1.5 seconds per character).

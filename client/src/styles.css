@@ -2452,3 +2452,350 @@ button.chip {
     height: 100px;
   }
 }
+
+/* ======================================================================== */
+/* ---- v4: Discover -------------------------------------------------------- */
+
+.discover {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.discover-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+
+.discover-tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-link {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+}
+
+.tab-link.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.season-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.season-nav h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+}
+
+.segmented.compact-seg button {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+}
+
+.spinner.inline {
+  position: static;
+  display: inline-block;
+  margin: 0 auto 8px;
+}
+
+/* Tiles */
+.tile-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tile.highlight {
+  border-color: #f5b301;
+  box-shadow: 0 0 0 2px rgba(245, 179, 1, 0.25);
+}
+
+.tile-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 3;
+  background: var(--cover-color);
+  border-radius: var(--radius) var(--radius) 0 0;
+  overflow: hidden;
+}
+
+.tile-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tile-date,
+.tile-pop {
+  position: absolute;
+  font-size: 0.74rem;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.tile-date {
+  top: 6px;
+  left: 6px;
+  font-weight: 700;
+}
+
+.tile-pop {
+  bottom: 6px;
+  right: 6px;
+}
+
+.tile-body {
+  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.tile-related {
+  font-size: 0.74rem;
+  color: #d29b00;
+  font-weight: 600;
+}
+
+.tile-title {
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tile-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.airing {
+  color: var(--accent);
+}
+
+.tile-reason {
+  color: var(--muted);
+}
+
+.tile-reason a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.tile-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tile-badges:empty {
+  display: none;
+}
+
+.tile-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.tile-actions .menu {
+  left: auto;
+  right: 0;
+  bottom: calc(100% + 4px);
+  top: auto;
+}
+
+/* Calendar */
+.calendar-season {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.calendar-head {
+  margin: 10px 0 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 108px;
+  background: var(--bg);
+  z-index: 5;
+}
+
+.mine-upcoming h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+
+.mine-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mine-list a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+/* Recommendations */
+.rec-filters {
+  align-items: flex-end;
+}
+
+.obscurity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(320px, 100%);
+}
+
+.obscurity-head {
+  display: flex;
+  justify-content: space-between;
+}
+
+.obscurity input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.obscurity-scale {
+  display: flex;
+  justify-content: space-between;
+}
+
+.similar-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.similar-pick select {
+  max-width: 100%;
+}
+
+.similar-search {
+  flex: 1;
+  min-width: 220px;
+}
+
+.similar-search .search {
+  margin-bottom: 0;
+}
+
+.similar-base {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.similar-base img {
+  width: 56px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.similar-base h3 {
+  margin: 2px 0;
+}
+
+.similar-base h3 a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* Trailer reel */
+.reel-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.reel-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.reel-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text);
+  text-align: left;
+}
+
+@media (max-width: 760px) {
+  .tile-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .tab {
+    font-size: 0.62rem;
+  }
+
+  .tab-icon {
+    font-size: 1.15rem;
+  }
+
+  .calendar-head {
+    top: 0;
+  }
+
+  .season-nav .btn.primary {
+    width: 100%;
+  }
+}

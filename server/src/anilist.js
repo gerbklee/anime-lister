@@ -201,4 +201,4 @@ async function fetchAnime(id) {
   return normalizeAnime(data.Media);
 }
 
-module.exports = { searchCharacters, searchAnime, getCharacter, fetchAnime, AniListError };
+module.exports = { gql, titleOf, searchCharacters, searchAnime, getCharacter, fetchAnime, AniListError };

@@ -180,6 +180,15 @@ const MIGRATIONS = {
       PRIMARY KEY (target, user_id, emoji)
     );
   `,
+
+  // v4: cached AniList community recommendations per anime (for Discover).
+  4: `
+    CREATE TABLE anime_recs (
+      anime_id    INTEGER PRIMARY KEY,
+      data        TEXT    NOT NULL,
+      fetched_at  INTEGER NOT NULL
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

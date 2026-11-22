@@ -82,6 +82,13 @@ export const api = {
     request('GET', `/api/characters/${characterId}/images/fanart${tag ? `?tag=${enc(tag)}` : ''}`),
   fanartTags: (term) => request('GET', `/api/fanart/tags?q=${enc(term)}`),
 
+  // Discover
+  discoverSeason: (season, year) =>
+    request('GET', `/api/discover/season${season ? `?season=${season}&year=${year}` : ''}`),
+  discoverUpcoming: () => request('GET', '/api/discover/upcoming'),
+  forYou: () => request('GET', '/api/discover/foryou'),
+  similar: (animeId) => request('GET', `/api/discover/similar/${animeId}`),
+
   // Compare
   compare: (userId, kind = 'character') => request('GET', `/api/compare?with=${userId}&kind=${kind}`),
   compareAnime: (userId) => request('GET', `/api/compare/anime?with=${userId}`),

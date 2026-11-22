@@ -257,6 +257,9 @@ export default function AnimeDetail({ id, suggest }) {
         )}
         <AddToListMenu kind="watchlist" itemId={anime.id} label="🍿 To watch" />
         <AddToListMenu kind="anime" itemId={anime.id} label="📋 Anime list" />
+        <a className="btn ghost" href={`#/discover/similar/${anime.id}`}>
+          🔎 Similar anime
+        </a>
         <a className="btn ghost" href={`https://anilist.co/anime/${anime.id}`} target="_blank" rel="noreferrer">
           AniList ↗
         </a>

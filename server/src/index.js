@@ -9,6 +9,7 @@ const { compareRouter } = require('./compare');
 const { catalogueRouter } = require('./catalogue');
 const { socialRouter } = require('./social');
 const { picturesRouter } = require('./pictures');
+const { discoverRouter } = require('./discover');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
 const { backfillCharacterLinks } = require('./anime');
@@ -46,6 +47,7 @@ app.use('/api', compareRouter);
 app.use('/api', catalogueRouter);
 app.use('/api', socialRouter);
 app.use('/api', picturesRouter);
+app.use('/api', discoverRouter);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

@@ -1,8 +1,9 @@
 import Modal from './Modal.jsx';
 
-function embedUrl(trailer) {
+export function embedUrl(trailer, { api = false } = {}) {
   if (trailer.site === 'dailymotion') return `https://www.dailymotion.com/embed/video/${encodeURIComponent(trailer.id)}?autoplay=1`;
-  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer.id)}?autoplay=1&rel=0`;
+  const extra = api ? `&enablejsapi=1&origin=${encodeURIComponent(window.location.origin)}` : '';
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(trailer.id)}?autoplay=1&rel=0${extra}`;
 }
 
 export default function TrailerModal({ trailer, title, onClose }) {

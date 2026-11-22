@@ -10,6 +10,7 @@ import WatchPage from './pages/WatchPage.jsx';
 import AnimePage from './pages/AnimePage.jsx';
 import AnimeDetail from './pages/AnimeDetail.jsx';
 import FeedPage from './pages/FeedPage.jsx';
+import DiscoverPage from './pages/DiscoverPage.jsx';
 import ComparePage from './pages/ComparePage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 
@@ -22,6 +23,11 @@ function readRoute() {
   if (h === '/anime') return { tab: 'anime' };
   if ((m = h.match(/^\/watch\/(\d+)$/))) return { tab: 'watch', id: Number(m[1]) };
   if (h === '/watch') return { tab: 'watch' };
+  if ((m = h.match(/^\/discover\/season\/(\d{4})\/(WINTER|SPRING|SUMMER|FALL)$/)))
+    return { tab: 'discover', view: 'season', year: Number(m[1]), season: m[2] };
+  if ((m = h.match(/^\/discover\/similar\/(\d+)$/))) return { tab: 'discover', view: 'similar', animeId: Number(m[1]) };
+  if ((m = h.match(/^\/discover\/(calendar|foryou|similar)$/))) return { tab: 'discover', view: m[1] };
+  if (h === '/discover' || h === '/discover/season') return { tab: 'discover', view: 'season' };
   if (h === '/feed') return { tab: 'feed' };
   if (h === '/compare') return { tab: 'compare' };
   if (h === '/settings') return { tab: 'settings' };
@@ -118,6 +124,7 @@ function Main({ me, setMe }) {
   else if (route.tab === 'watch') page = <WatchPage route={route} />;
   else if (route.tab === 'anime' && route.animeId) page = <AnimeDetail key={route.animeId} id={route.animeId} suggest={route.suggest} />;
   else if (route.tab === 'anime') page = <AnimePage key={route.userId ?? 'me'} userId={route.userId ?? me.id} />;
+  else if (route.tab === 'discover') page = <DiscoverPage route={route} />;
   else if (route.tab === 'feed') page = <FeedPage />;
   else if (route.tab === 'compare') page = <ComparePage />;
   else page = <SettingsPage onLogout={logout} />;
