@@ -5240,3 +5240,72 @@ code {
     align-items: stretch;
   }
 }
+
+/* ---- v7.1: iPhone app mode (safe areas) & no sideways scrolling ---------- */
+
+/* Nothing may make the page wider than the screen. `clip` (unlike `hidden`)
+   keeps the sticky header working. */
+html,
+body,
+.app {
+  overflow-x: clip;
+}
+
+/* Tab rows that don't fit scroll inside themselves instead of widening the page. */
+.tabs {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar,
+.profile-tabs::-webkit-scrollbar,
+.discover-tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabs button,
+.tabs a {
+  white-space: nowrap;
+}
+
+/* Installed app on iPhone: the page is drawn under the status bar / notch
+   (black-translucent), so the header makes room for it. */
+.topbar {
+  padding-top: calc(12px + env(safe-area-inset-top));
+  padding-left: max(24px, env(safe-area-inset-left));
+  padding-right: max(24px, env(safe-area-inset-right));
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    padding: calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+  }
+
+  .modal {
+    max-height: calc(88vh - env(safe-area-inset-top));
+  }
+
+  .modal-body {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+
+  .modal-backdrop.center {
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .tabs.compact button,
+  .tab-link {
+    padding: 8px 10px;
+  }
+}
+
+/* iOS zooms in (and the page then sits shifted sideways) when a text field
+   with text smaller than 16px gets focus. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
