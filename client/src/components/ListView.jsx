@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
-import { animeSearch, api, characterSearch, mangaSearch, mediaSearch } from '../api.js';
+import { animeSearch, api, characterSearch, mangaSearch, mediaSearch, shipSearch } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import { listEmoji, plural } from '../util.js';
 import SearchBox from './SearchBox.jsx';
@@ -24,6 +24,7 @@ const WORDS = {
   anime: ['anime', 'Search for an anime to add…'],
   manga: ['manga', 'Search for a manga to add…'],
   watchlist: ['entry', 'Search for an anime or manga you want to watch or read…'],
+  ship: ['ship', 'Search your ships to add… (new ships: Ship board)'],
 };
 
 // Entries ranked by one person, in their order.
@@ -491,7 +492,7 @@ export default function ListView({ listId, onListsChanged }) {
 
       {!readOnly && (
         <SearchBox
-          search={{ character: characterSearch, anime: animeSearch, manga: mangaSearch, watchlist: mediaSearch }[kind]}
+          search={{ character: characterSearch, anime: animeSearch, manga: mangaSearch, watchlist: mediaSearch, ship: shipSearch }[kind]}
           existingIds={existingIds}
           onAdd={handleAdd}
           placeholder={placeholder}

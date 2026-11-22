@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { formatMinutes, plural, timeAgo } from '../util.js';
+import { VOTES, formatMinutes, plural, timeAgo } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Wrapped from '../components/Wrapped.jsx';
 import ComparePage from './ComparePage.jsx';
@@ -12,6 +12,8 @@ const GAME_INFO = {
   character: { emoji: '🕵️', text: 'A blurred picture slowly sharpens; guess the character.' },
   ranked: { emoji: '💞', text: 'How well do you know each other’s lists and ratings?' },
   higherlower: { emoji: '📈', text: 'Is this anime more or less popular on AniList?' },
+  guessship: { emoji: '🔍', text: 'Blurred fan art of a ship slowly sharpens; name the ship.' },
+  shipharder: { emoji: '💘', text: 'Who voted higher on the Ship-o-meter?' },
 };
 
 function GamesHome() {
@@ -169,6 +171,15 @@ function togetherSlides(w, me) {
       big: w.disagreement.anime.title,
       sub: `${me.username} ${w.disagreement.me} ★ vs ${other} ${w.disagreement.them} ★`,
       image: w.disagreement.anime.cover,
+    });
+  }
+  if (w.shipFight) {
+    slides.push({
+      emoji: '⚔️',
+      kicker: 'The ship you fought about',
+      big: w.shipFight.ship.name,
+      sub: `${me.username} ${VOTES[w.shipFight.me].emoji} ${VOTES[w.shipFight.me].label} vs ${other} ${VOTES[w.shipFight.them].emoji} ${VOTES[w.shipFight.them].label}`,
+      image: w.shipFight.ship.cover ?? w.shipFight.ship.members[0]?.image,
     });
   }
   if (w.games.played) {

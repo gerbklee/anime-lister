@@ -6,6 +6,8 @@
 //   character   – a blurred character picture, pick the name
 //   ranked      – questions about the other person's lists and ratings
 //   higherlower – which anime is more popular on AniList?
+//   guessship   – blurred fan art of a ship, pick the ship
+//   shipharder  – who voted higher on a ship?
 //
 // Answers are kept on the server and only revealed after you've played.
 const express = require('express');
@@ -15,12 +17,15 @@ const { gql, titleOf } = require('./anilist');
 const { getUser, usersById } = require('./users');
 const { fetchThemes } = require('./themes');
 const { notify } = require('./notify');
+const { guessShipQuestions, shipHarderQuestions } = require('./ships');
 
 const TYPES = {
   opening: { label: 'Guess the opening', count: 8 },
   character: { label: "Who's this character?", count: 10 },
   ranked: { label: 'Who ranked them higher?', count: 8 },
   higherlower: { label: 'Higher or lower', count: 12 },
+  guessship: { label: 'Guess the ship', count: 8 },
+  shipharder: { label: 'Who ships it harder?', count: 8 },
 };
 
 const q = {
@@ -301,6 +306,8 @@ router.post('/games', wrap(async (req, res) => {
   if (type === 'ranked') data = { byUser: { [me]: rankedQuestions(me, opponent), [opponent]: rankedQuestions(opponent, me) } };
   else if (type === 'opening') data = { shared: await openingQuestions(me, opponent) };
   else if (type === 'character') data = { shared: characterQuestions(me, opponent) };
+  else if (type === 'guessship') data = { shared: guessShipQuestions(TYPES.guessship.count) };
+  else if (type === 'shipharder') data = { shared: shipHarderQuestions(me, opponent, TYPES.shipharder.count) };
   else data = { shared: await higherLowerQuestions() };
 
   const id = db.transaction(() => {

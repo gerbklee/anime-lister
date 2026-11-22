@@ -4735,3 +4735,508 @@ code {
     gap: 10px;
   }
 }
+
+/* ---- v7: ships ---------------------------------------------------------- */
+
+.ship-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.ship-collage {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  overflow: hidden;
+}
+.ship-collage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  min-height: 0;
+}
+.ship-collage.n3 img:first-child {
+  grid-row: span 2;
+}
+.ship-cover.small {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+.ship-cover.large {
+  width: 220px;
+  max-width: 100%;
+}
+
+.ship-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.ship-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.ship-badge.status-canon {
+  background: rgba(232, 176, 36, 0.18);
+}
+.ship-badge.status-fanon {
+  background: var(--accent-soft);
+}
+.ship-badge.status-crack {
+  background: rgba(46, 186, 120, 0.18);
+}
+.ship-badge.pop-rarepair {
+  background: rgba(64, 170, 255, 0.18);
+}
+.ship-badge.pop-popular {
+  background: rgba(255, 110, 50, 0.18);
+}
+.ship-badge.war {
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.vote-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.vote-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px 1px 1px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.ship-o-meter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vote-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 62px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: transform 0.1s, background 0.15s;
+}
+.vote-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.vote-btn .vote-emoji {
+  font-size: 1.3rem;
+}
+.vote-btn .vote-label {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.vote-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.vote-btn.active .vote-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.ship-o-meter.compact {
+  gap: 2px;
+}
+.ship-o-meter.compact .vote-btn {
+  min-width: 0;
+  padding: 2px 5px;
+  border-radius: 8px;
+}
+.ship-o-meter.compact .vote-emoji {
+  font-size: 1rem;
+}
+
+/* Board */
+.ship-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ship-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ship-filters input[type="search"] {
+  max-width: 360px;
+}
+.chip-row button.chip {
+  border: 1px solid transparent;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 3px 10px;
+}
+.ship-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.ship-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+}
+.ship-card.at-war {
+  box-shadow: 0 0 0 2px var(--danger-soft), var(--shadow);
+}
+.ship-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.ship-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.ship-name {
+  font-size: 1.02rem;
+}
+.ship-members {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ship-card-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+.board-link {
+  margin: 8px 0 4px;
+  display: flex;
+}
+
+/* Builder */
+.ship-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.builder-members,
+.ship-members-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.builder-member {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ship-x {
+  color: var(--accent);
+  font-weight: 700;
+}
+.builder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px 3px 3px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.builder-chip img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+}
+
+/* Ship page */
+.back-link {
+  display: inline-block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.ship-hero {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+.ship-hero-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.ship-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.ship-hero-text h4 {
+  margin: 4px 0 0;
+}
+.segmented.small button {
+  padding: 3px 8px;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.ship-votes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.ship-votes:empty {
+  display: none;
+}
+.ship-votes.at-war {
+  background: var(--danger-soft);
+}
+.war-banner {
+  font-weight: 700;
+  color: var(--danger);
+}
+.ship-vote-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+.vote-meter {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.vote-meter span {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+.vote-meter span.on {
+  background: var(--accent);
+}
+.headcanon-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: 10px;
+}
+.headcanon-form textarea {
+  flex: 1;
+  min-width: 0;
+}
+.headcanons {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.headcanon {
+  padding: 10px 12px;
+  background: var(--surface-2);
+  box-shadow: none;
+}
+.headcanon-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.headcanon-body {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}
+.gallery-grid {
+  max-height: none;
+}
+
+/* Small ship rows (character page, compare, my type) */
+.mini-ships,
+.ship-compare,
+.pairings {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mini-ship {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.mini-ship > span {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+.pairings-title {
+  margin: 12px 0 6px;
+}
+.pairings li,
+.ship-compare-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pairing-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.pairing-who img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: top;
+}
+.pairing-who > span {
+  display: flex;
+  flex-direction: column;
+}
+.ship-compare-votes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+.ship-with {
+  text-decoration: none;
+  opacity: 0.6;
+}
+.ship-with:hover {
+  opacity: 1;
+}
+
+/* Shipping type */
+.shipping-type {
+  margin-top: 14px;
+}
+.shipper-title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.ship-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0 12px;
+}
+.ship-bar-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 8px;
+}
+.ship-bar-row .bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.ship-bar-row .bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.mini-ship-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.mini-ship-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 64px;
+  color: inherit;
+  text-decoration: none;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .ship-hero {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ship-cover.large {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .ship-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .vote-btn {
+    min-width: 0;
+    flex: 1;
+    padding: 6px 2px;
+  }
+  .ship-o-meter.compact .vote-btn {
+    flex: 0 0 auto;
+  }
+  .ship-bar-row {
+    grid-template-columns: 100px minmax(0, 1fr) 36px;
+  }
+  .headcanon-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

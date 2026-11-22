@@ -8,6 +8,7 @@ const { toAnimeSummary } = require('./anime');
 const { getUser } = require('./users');
 const { compareCatalogues } = require('./compare');
 const { rankedByCategory } = require('./traits');
+const { otpOfYear, shipFight } = require('./ships');
 
 const q = {
   catalogue: db.prepare(`
@@ -180,6 +181,8 @@ function wrapped(userId, year) {
     reviews: acts.filter((a) => a.type === 'anime_review').length,
     charactersAdded: acts.filter((a) => a.type === 'list_add' && JSON.parse(a.data).kind === 'character').length,
     listsCreated: acts.filter((a) => a.type === 'list_create').length,
+    shipsCreated: acts.filter((a) => a.type === 'ship_create').length,
+    otp: otpOfYear(userId, year),
     favourites: categories,
   };
 }
@@ -224,6 +227,7 @@ function wrappedTogether(meId, otherId, year) {
     disagreement,
     favouriteTogether,
     games: { myWins, theirWins, played: games.size },
+    shipFight: shipFight(meId, otherId, year),
   };
 }
 

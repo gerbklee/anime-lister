@@ -471,4 +471,4 @@ router.get('/types/me/suggest', wrap(async (req, res) => {
   res.json(await suggest(req.user.id, category));
 }));
 
-module.exports = { traitsRouter: router, enqueueTraits: enqueue, startTraitBackfill, rankedByCategory };
+module.exports = { traitsRouter: router, enqueueTraits: enqueue, startTraitBackfill, rankedByCategory, getCharacterTraits: cachedTraits };

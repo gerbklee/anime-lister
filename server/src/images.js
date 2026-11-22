@@ -56,7 +56,8 @@ async function cacheImage(url, baseName) {
 const isImageUsed = db.prepare(`
   SELECT 1 WHERE EXISTS (SELECT 1 FROM entries WHERE image_file = @f)
               OR EXISTS (SELECT 1 FROM users WHERE avatar_file = @f)
-              OR EXISTS (SELECT 1 FROM anime WHERE cover_file = @f)`);
+              OR EXISTS (SELECT 1 FROM anime WHERE cover_file = @f)
+              OR EXISTS (SELECT 1 FROM ships WHERE cover_file = @f)`);
 
 // Deletes a cached image once nothing references it anymore.
 function removeImageIfUnused(file) {

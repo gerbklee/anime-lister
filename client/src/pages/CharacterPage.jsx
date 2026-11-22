@@ -9,6 +9,97 @@ import { CatalogueBadge } from '../components/EntryRow.jsx';
 import { FanartTab, SimpleTab } from '../components/ImagePicker.jsx';
 import { formatPopularity } from '../components/AnimeTile.jsx';
 import { RichText, splitFacts } from '../components/RichText.jsx';
+import { ShipCover, StatusBadge, VoteChips } from '../components/ShipBits.jsx';
+import ShipBuilder from '../components/ShipBuilder.jsx';
+import { compactCount } from '../util.js';
+
+// Ships with this character, and who fans usually pair them with (Safebooru).
+function ShipsCard({ c }) {
+  const { navigate } = useApp();
+  const [ships, setShips] = useState(null);
+  const [pairings, setPairings] = useState(null);
+  const [pairError, setPairError] = useState(null);
+  const [builder, setBuilder] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.ships({ character: c.id }).then((d) => !cancelled && setShips(d.ships)).catch(() => !cancelled && setShips([]));
+    api
+      .pairings(c.id)
+      .then((d) => !cancelled && setPairings(d.pairings))
+      .catch((err) => !cancelled && setPairError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [c.id]);
+
+  const self = { id: c.id, name: c.name, image: c.image };
+  const first = c.name.split(' ')[0];
+  return (
+    <div className="card">
+      <h3>💕 Ships</h3>
+      {ships === null ? (
+        <p className="muted small">Loading…</p>
+      ) : ships.length === 0 ? (
+        <p className="muted small">No ships with {first} yet.</p>
+      ) : (
+        <ul className="mini-ships">
+          {ships.map((s) => (
+            <li key={s.id}>
+              <a href={`#/ship/${s.id}`} className="mini-ship">
+                <ShipCover ship={s} className="small" />
+                <span>
+                  <b>{s.name}</b>
+                  <span className="muted tiny">{s.members.filter((m) => m.id !== c.id).map((m) => m.name).join(', ')}</span>
+                  <span className="ship-badges">
+                    <StatusBadge status={s.status} />
+                    <VoteChips ship={s} />
+                  </span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h4 className="pairings-title">🔥 Fans ship {first} with</h4>
+      {pairError ? (
+        <p className="muted small">Fan art is unavailable right now.</p>
+      ) : pairings === null ? (
+        <p className="muted small">Looking through fan art…</p>
+      ) : pairings.length === 0 ? (
+        <p className="muted small">No popular pairings found.</p>
+      ) : (
+        <ul className="pairings">
+          {pairings.map((p) => (
+            <li key={p.character.id}>
+              <a href={`#/character/${p.character.id}`} className="pairing-who">
+                {p.character.image && <img src={p.character.image} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+                <span>
+                  <b>{p.character.name}</b>
+                  {p.count != null && <span className="muted tiny">{compactCount(p.count)} pictures</span>}
+                </span>
+              </a>
+              {p.shipId ? (
+                <a className="btn ghost small-btn" href={`#/ship/${p.shipId}`}>
+                  Open ship
+                </a>
+              ) : (
+                <button type="button" className="btn ghost small-btn" onClick={() => setBuilder([self, p.character])}>
+                  💕 Ship
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      <button type="button" className="btn primary small-btn" onClick={() => setBuilder([self])}>
+        💕 Ship {first} with…
+      </button>
+      {builder && <ShipBuilder initial={builder} onClose={() => setBuilder(null)} onCreated={(s) => navigate(`#/ship/${s.id}`)} />}
+    </div>
+  );
+}
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const ROLE_LABELS = { MAIN: 'Main', SUPPORTING: 'Supporting', BACKGROUND: 'Background' };
@@ -198,6 +289,9 @@ export default function CharacterPage({ id }) {
           )}
           <div className="char-actions">
             <AddToListMenu kind="character" itemId={c.id} label="+ Add to list" />
+            <a className="btn ghost" href={`#/ships/new/${c.id}`}>
+              💕 Ship with…
+            </a>
             <a className="btn ghost" href={c.siteUrl} target="_blank" rel="noreferrer">
               AniList ↗
             </a>
@@ -266,6 +360,8 @@ export default function CharacterPage({ id }) {
               </div>
             </div>
           )}
+
+          <ShipsCard c={c} />
 
           {c.voiceActors.length > 0 && (
             <div className="card">

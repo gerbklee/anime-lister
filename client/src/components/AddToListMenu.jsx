@@ -6,6 +6,7 @@ const EMPTY_HINT = {
   character: 'Create a character list in the Lists tab first.',
   anime: 'Create an anime list in the Lists tab first.',
   watchlist: 'Create a watchlist in the Watchlists tab first.',
+  ship: 'Create an OTP list first: Lists → 💕 Ships → sidebar.',
 };
 
 // "+ Add to list ▾" button with a dropdown of the lists of `kind` you can edit.

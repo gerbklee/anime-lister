@@ -5,6 +5,85 @@ import { animeMeta, plural } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Stars from '../components/Stars.jsx';
 import AddToListMenu from '../components/AddToListMenu.jsx';
+import { ShipCover, StatusBadge } from '../components/ShipBits.jsx';
+import { VOTES } from '../util.js';
+
+function ShipRow({ ship, me, them, otherName }) {
+  return (
+    <li className="ship-compare-row">
+      <a href={`#/ship/${ship.id}`} className="mini-ship">
+        <ShipCover ship={ship} className="small" />
+        <span>
+          <b>{ship.name}</b>
+          <span className="muted tiny">{ship.members.map((m) => m.name).join(' × ')}</span>
+          <StatusBadge status={ship.status} />
+        </span>
+      </a>
+      <span className="ship-compare-votes small">
+        {me != null && (
+          <span title={`You: ${VOTES[me].label}`}>
+            You {VOTES[me].emoji}
+          </span>
+        )}
+        {them != null && (
+          <span title={`${otherName}: ${VOTES[them].label}`}>
+            {otherName} {VOTES[them].emoji}
+          </span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function ShipList({ title, rows, emptyText, otherName }) {
+  return (
+    <div className="card">
+      <h3>{title}</h3>
+      {rows.length === 0 ? (
+        <p className="muted small">{emptyText}</p>
+      ) : (
+        <ul className="ship-compare">
+          {rows.map((r) => (
+            <ShipRow key={r.ship.id} ship={r.ship} me={r.me} them={r.them} otherName={otherName} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ShipsTab({ data, me, other }) {
+  const s = data.stats;
+  const n = other.username;
+  return (
+    <>
+      <ScoreCard
+        me={me}
+        other={other}
+        score={s.score}
+        label={s.score >= 70 ? 'Shipping soulmates 💞' : s.score >= 40 ? 'Mostly on the same ship' : s.both ? 'Rival fleets ⚔️' : 'Vote on some ships first'}
+        details={[[plural(s.both, 'ship') + ' you both voted on', s.similarity != null ? `${Math.round(s.similarity * 100)}% similar votes` : null].filter(Boolean)]}
+        explain="Shipping match: 40% how many of the same ships you voted on, 60% how close your votes are."
+      />
+      <div className="compare-grid">
+        <ShipList title="💕 You both ship it" rows={data.bothLove} otherName={n} emptyText="No ship you both love yet." />
+        <ShipList title="⚔️ Ship wars" rows={data.wars} otherName={n} emptyText="No big disagreements. Suspicious." />
+        <ShipList
+          title={`🙋 Only you (${n} hasn't voted)`}
+          rows={data.onlyMine.map((x) => ({ ship: x.ship, me: x.vote }))}
+          otherName={n}
+          emptyText="Nothing here."
+        />
+        <ShipList
+          title={`🙋 Only ${n} (you haven't voted)`}
+          rows={data.onlyTheirs.map((x) => ({ ship: x.ship, them: x.vote }))}
+          otherName={n}
+          emptyText="Nothing here."
+        />
+      </div>
+    </>
+  );
+}
 
 const placementText = (p) => `#${p.rank} of ${p.listSize} · ${p.listName}`;
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -382,7 +461,12 @@ export default function ComparePage() {
     if (selectedId == null) return undefined;
     let cancelled = false;
     setLoading(true);
-    const req = tab === 'characters' ? api.compare(selectedId, 'character') : api.compareAnime(selectedId, tab === 'manga' ? 'MANGA' : 'ANIME');
+    const req =
+      tab === 'characters'
+        ? api.compare(selectedId, 'character')
+        : tab === 'ships'
+          ? api.compareShips(selectedId)
+          : api.compareAnime(selectedId, tab === 'manga' ? 'MANGA' : 'ANIME');
     req
       .then((d) => {
         if (cancelled) return;
@@ -436,18 +520,24 @@ export default function ComparePage() {
         <button type="button" role="tab" aria-selected={tab === 'manga'} className={tab === 'manga' ? 'active' : ''} onClick={() => setTab('manga')}>
           📖 Manga
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'ships'} className={tab === 'ships' ? 'active' : ''} onClick={() => setTab('ships')}>
+          💕 Ships
+        </button>
       </div>
 
       <p className="muted small">
         {tab === 'characters'
           ? "Uses everyone's character lists (shared lists with each person's own ranking). When a character is in several of your lists, their best placement counts, adjusted for list length."
-          : `Uses everyone's ${tab} catalogue (status and ratings) and their ${tab} lists.`}
+          : tab === 'ships'
+            ? 'Uses your Ship-o-meter votes on the Ship board.'
+            : `Uses everyone's ${tab} catalogue (status and ratings) and their ${tab} lists.`}
       </p>
 
       {error && <div className="banner error">{error}</div>}
 
       {ready && tab === 'characters' && <CharacterTab data={data} me={me} other={data.other} />}
-      {ready && tab !== 'characters' && <AnimeTab data={data} me={me} other={data.other} manga={tab === 'manga'} />}
+      {ready && tab === 'ships' && <ShipsTab data={data} me={me} other={data.other} />}
+      {ready && (tab === 'anime' || tab === 'manga') && <AnimeTab data={data} me={me} other={data.other} manga={tab === 'manga'} />}
     </section>
   );
 }

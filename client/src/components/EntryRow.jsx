@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useApp } from '../AppContext.jsx';
 import { STATUS_LABELS } from '../util.js';
+import { StatusBadge, VoteChips } from './ShipBits.jsx';
 import Avatar from './Avatar.jsx';
 import Reactions from './Reactions.jsx';
 import Thread from './Thread.jsx';
@@ -162,6 +163,7 @@ export default function EntryRow({
 
   const style = { transform: CSS.Transform.toString(transform), transition };
   const isAnime = kind === 'anime' || kind === 'manga';
+  const isShip = kind === 'ship';
   const animeId = isAnime ? entry.anilistId : entry.seriesAnimeId;
   const mediaLink = kind === 'manga' ? `#/manga/${entry.anilistId}` : `#/anime/${entry.anilistId}`;
   const [showThread, setShowThread] = useState(false);
@@ -194,7 +196,7 @@ export default function EntryRow({
       <Portrait
         src={entry.image}
         alt={entry.name}
-        onClick={!readOnly && !isAnime ? onChangeImage : undefined}
+        onClick={!readOnly && kind === 'character' ? onChangeImage : undefined}
         label={`Change picture of ${entry.name}`}
       />
 
@@ -202,8 +204,8 @@ export default function EntryRow({
         <div className="entry-title">
           <a
             className="entry-name"
-            href={isAnime ? mediaLink : `#/character/${entry.anilistId}`}
-            title={isAnime ? 'Open page' : 'Open character page'}
+            href={isShip ? `#/ship/${entry.anilistId}` : isAnime ? mediaLink : `#/character/${entry.anilistId}`}
+            title={isShip ? 'Open ship page' : isAnime ? 'Open page' : 'Open character page'}
           >
             {entry.name}
           </a>
@@ -211,7 +213,7 @@ export default function EntryRow({
         </div>
 
         <div className="series-line">
-          {!isAnime && !readOnly && entry.seriesOptions.length > 1 ? (
+          {kind === 'character' && !readOnly && entry.seriesOptions.length > 1 ? (
             <select
               className="series-select"
               value={entry.seriesTitle ?? ''}
@@ -227,6 +229,11 @@ export default function EntryRow({
             </select>
           ) : (
             <span className="series">{entry.seriesTitle || 'Unknown series'}</span>
+          )}
+          {kind === 'character' && (
+            <a className="anime-link ship-with" href={`#/ships/new/${entry.anilistId}`} title={`Ship ${entry.name} with…`}>
+              💕
+            </a>
           )}
           {animeId && (
             <a className="anime-link" href={`#/anime/${animeId}`} title="Open anime page">
@@ -245,6 +252,13 @@ export default function EntryRow({
             showAuthor={showAuthors}
             onSave={(note) => onUpdate(entry.id, { note })}
           />
+        )}
+
+        {isShip && entry.ship && (
+          <div className="ship-badges">
+            <StatusBadge status={entry.ship.status} />
+            <VoteChips ship={entry.ship} />
+          </div>
         )}
 
         {extra}

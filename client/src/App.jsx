@@ -14,6 +14,7 @@ import CharacterPage from './pages/CharacterPage.jsx';
 import DiscoverPage from './pages/DiscoverPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import UsPage from './pages/UsPage.jsx';
+import ShipPage from './pages/ShipPage.jsx';
 
 function readRoute() {
   const h = window.location.hash.replace(/^#/, '');
@@ -40,6 +41,9 @@ function readRoute() {
   if ((m = h.match(/^\/us\/(compare|games|wrapped)$/))) return { tab: 'us', view: m[1] };
   if (h === '/us' || h === '/compare') return { tab: 'us', view: 'compare' };
   if (h === '/lists') return { tab: 'lists' };
+  if (h === '/ships') return { tab: 'lists', ships: true };
+  if ((m = h.match(/^\/ships\/new\/(\d+)$/))) return { tab: 'lists', ships: true, newWith: Number(m[1]) };
+  if ((m = h.match(/^\/ship\/(\d+)$/))) return { tab: 'ship', id: Number(m[1]) };
   return { tab: 'home' };
 }
 
@@ -136,6 +140,7 @@ function Main({ me, setMe }) {
   else if (route.tab === 'character') page = <CharacterPage key={route.id} id={route.id} />;
   else if (route.tab === 'home') page = route.view === 'feed' ? <FeedPage /> : <HomePage />;
   else if (route.tab === 'us') page = <UsPage route={route} />;
+  else if (route.tab === 'ship') page = <ShipPage key={route.id} id={route.id} />;
   else page = <ProfilePage route={route} onLogout={logout} />;
 
   return (
@@ -157,7 +162,7 @@ function Main({ me, setMe }) {
             </a>
           </div>
         </header>
-        <TabBar active={route.tab} />
+        <TabBar active={route.tab === 'ship' ? 'lists' : route.tab} />
 
         {error && <div className="banner error app-banner">{error}</div>}
 

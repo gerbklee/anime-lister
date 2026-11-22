@@ -16,6 +16,7 @@ const { themesRouter } = require('./themes');
 const { homeRouter, startAiringJob } = require('./home');
 const { statsRouter } = require('./stats');
 const { gamesRouter } = require('./games');
+const { shipsRouter } = require('./ships');
 const { pushRouter } = require('./notify');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
@@ -56,6 +57,7 @@ app.get('/api/search', wrap(async (req, res) => {
 }));
 
 app.use('/api', listsRouter);
+app.use('/api', shipsRouter);
 app.use('/api', compareRouter);
 app.use('/api', themesRouter);
 app.use('/api', catalogueRouter);

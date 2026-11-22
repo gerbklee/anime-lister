@@ -61,3 +61,42 @@ export const CATEGORIES = {
 };
 
 export const listEmoji = (l) => l.emoji || (l.kind === 'character' ? CATEGORIES[l.category]?.emoji : null) || '';
+
+// ---- Ships ----
+export const VOTES = [
+  { value: 0, emoji: '🚫', label: 'No way' },
+  { value: 1, emoji: '🤷', label: 'Meh' },
+  { value: 2, emoji: '🙂', label: 'Cute' },
+  { value: 3, emoji: '💕', label: 'Ship it' },
+  { value: 4, emoji: '💍', label: 'OTP' },
+];
+export const voteText = (v) => (v == null ? 'No vote' : `${VOTES[v].emoji} ${VOTES[v].label}`);
+
+export const SHIP_STATUS = {
+  canon: { emoji: '💍', label: 'Canon', hint: 'Together in the story' },
+  fanon: { emoji: '💫', label: 'Fanon', hint: 'Fans made it happen' },
+  crack: { emoji: '🤡', label: 'Crack', hint: 'Gloriously unhinged' },
+};
+
+export const POPULARITY = {
+  rarepair: { emoji: '💎', label: 'Rarepair' },
+  known: { emoji: '✨', label: 'Known' },
+  popular: { emoji: '🔥', label: 'Popular' },
+};
+
+export const compactCount = (n) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
+
+// Ship name suggestion in fandom style: the start of each first name up to its
+// second vowel ("Naruto" + "Sasuke" -> "NaruSasu", "Satoru" + "Suguru" -> "SatoSugu").
+function syllables(name) {
+  const vowels = [...name.matchAll(/[aeiouy]+/gi)];
+  const end = vowels.length >= 2 ? vowels[1].index + vowels[1][0].length : name.length;
+  const part = name.slice(0, Math.min(end, 5)).toLowerCase();
+  return part.charAt(0).toUpperCase() + part.slice(1);
+}
+
+export function blendNames(names) {
+  const first = names.map((n) => String(n).trim().split(/[\s,]+/)[0]).filter(Boolean);
+  if (first.length < 2) return first[0] ?? '';
+  return first.map(syllables).join('');
+}

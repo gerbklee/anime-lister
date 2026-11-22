@@ -4,6 +4,80 @@ import { useApp } from '../AppContext.jsx';
 import { CATEGORIES, plural } from '../util.js';
 import AddToListMenu from '../components/AddToListMenu.jsx';
 import Avatar from '../components/Avatar.jsx';
+import { ShipCover } from '../components/ShipBits.jsx';
+
+function shipperTitle(t) {
+  if (t.status.crack >= 0.4) return '🤡 Chaos captain';
+  if (t.crossover >= 0.4) return '🌌 Crossover cartographer';
+  if (t.rarepair >= 0.5) return '💎 Rarepair hunter';
+  if (t.poly >= 0.4) return '🫶 The more the merrier';
+  if (t.status.canon >= 0.6) return '💍 Canon loyalist';
+  if (t.popular >= 0.5) return '🔥 Fleet admiral';
+  return '💫 Fanon dreamer';
+}
+
+const pctText = (n) => `${Math.round(n * 100)}%`;
+
+// "Your shipping type", from ships voted 💕 Ship it or 💍 OTP.
+function ShippingType({ userId, isMe, name }) {
+  const [t, setT] = useState(null);
+  useEffect(() => {
+    api
+      .shippingType(userId)
+      .then(setT)
+      .catch(() => setT({ count: 0 }));
+  }, [userId]);
+  if (!t) return null;
+  if (!t.count) {
+    return (
+      <div className="card shipping-type">
+        <h3>💕 {isMe ? 'Your' : `${name}'s`} shipping type</h3>
+        <p className="muted small">
+          {isMe ? 'Vote 💕 Ship it or 💍 OTP on some ships (Lists → 💕 Ships) to find out.' : `${name} hasn't shipped anything yet.`}
+        </p>
+      </div>
+    );
+  }
+  const bars = [
+    ['💍 Canon', t.status.canon],
+    ['💫 Fanon', t.status.fanon],
+    ['🤡 Crack', t.status.crack],
+    ['🌌 Crossover', t.crossover],
+    ['💎 Rarepairs', t.rarepair],
+    ['🔥 Popular', t.popular],
+    ['🫶 3+ characters', t.poly],
+  ];
+  return (
+    <div className="card shipping-type">
+      <h3>💕 {isMe ? 'Your' : `${name}'s`} shipping type</h3>
+      <div className="shipper-title">{shipperTitle(t)}</div>
+      <p className="muted small">
+        From {plural(t.count, 'ship')} {isMe ? 'you' : name} ship ({plural(t.otps, 'OTP')}).
+        {t.ageGap != null && ` Average age gap: ${t.ageGap} years.`}
+        {t.heightGap != null && ` Average height gap: ${t.heightGap} cm.`}
+      </p>
+      <div className="ship-bars">
+        {bars.map(([label, v]) => (
+          <div key={label} className="ship-bar-row">
+            <span className="small">{label}</span>
+            <span className="bar">
+              <span style={{ width: pctText(v) }} />
+            </span>
+            <span className="muted tiny">{pctText(v)}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mini-ship-row">
+        {t.top.map((s) => (
+          <a key={s.id} href={`#/ship/${s.id}`} className="mini-ship-tile" title={s.members.map((m) => m.name).join(' × ')}>
+            <ShipCover ship={s} className="small" />
+            <span className="tiny">{s.name}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const GROUPS = [
   ['hair', 'Hair'],
@@ -289,6 +363,7 @@ export default function TypePage({ userId }) {
 
   if (data.categories.length === 0) {
     return (
+      <>
       <div className="empty-state">
         <p className="muted">
           {isMe
@@ -296,6 +371,8 @@ export default function TypePage({ userId }) {
             : `${name} has no Daddy/Mommy/Waifu/Husbando lists you can see yet.`}
         </p>
       </div>
+      <ShippingType userId={userId} isMe={isMe} name={name} />
+      </>
     );
   }
 
@@ -339,6 +416,7 @@ export default function TypePage({ userId }) {
           />
         ))}
       </div>
+      <ShippingType userId={userId} isMe={isMe} name={name} />
     </div>
   );
 }

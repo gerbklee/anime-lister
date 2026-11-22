@@ -13,6 +13,8 @@ const { toAnimeSummary } = require('./anime');
 
 const MERGE_MS = 10 * 60 * 1000;
 const MERGEABLE = new Set(['anime_status', 'anime_rating', 'anime_review']);
+// Merged per item (ship) instead of per anime.
+const MERGEABLE_ITEM = new Set(['ship_vote']);
 const EMOJIS = ['❤️', '😂', '😮', '😳', '🔥'];
 
 const q = {
@@ -22,7 +24,11 @@ const q = {
   insert: db.prepare(`
     INSERT INTO activities (user_id, type, anime_id, list_id, item_id, data, created_at, updated_at)
     VALUES (@userId, @type, @animeId, @listId, @itemId, @data, @now, @now)`),
+  lastSimilarItem: db.prepare(`
+    SELECT id, created_at FROM activities WHERE user_id = ? AND type = ? AND item_id IS ? ORDER BY id DESC LIMIT 1`),
   update: db.prepare('UPDATE activities SET data = ?, updated_at = ? WHERE id = ?'),
+  ship: db.prepare('SELECT * FROM ships WHERE id = ?'),
+  headcanon: db.prepare('SELECT * FROM headcanons WHERE id = ?'),
   get: db.prepare('SELECT * FROM activities WHERE id = ?'),
   canSeeList: db.prepare(`
     SELECT 1 FROM lists l WHERE l.id = @list AND (
@@ -71,8 +77,8 @@ const q = {
 // 10 minutes update the previous event instead of adding a new one.
 function record({ userId, type, animeId = null, listId = null, itemId = null, data = {} }) {
   const now = Date.now();
-  if (MERGEABLE.has(type)) {
-    const last = q.lastSimilar.get(userId, type, animeId);
+  if (MERGEABLE.has(type) || MERGEABLE_ITEM.has(type)) {
+    const last = MERGEABLE_ITEM.has(type) ? q.lastSimilarItem.get(userId, type, itemId) : q.lastSimilar.get(userId, type, animeId);
     if (last && now - last.created_at < MERGE_MS) {
       q.update.run(JSON.stringify(data), now, last.id);
       return last.id;
@@ -109,6 +115,9 @@ function canUseThread(key, me) {
     return !!list && list.kind === 'watchlist' && !!q.canEditList.get({ list: list.id, me });
   }
   if (k.kind === 'activity' && k.nums.length === 1) return canSeeActivity(q.get.get(k.nums[0]), me);
+  // Ships and their headcanons are shared by everyone.
+  if (k.kind === 'ship' && k.nums.length === 1) return !!q.ship.get(k.nums[0]);
+  if (k.kind === 'headcanon' && k.nums.length === 1) return !!q.headcanon.get(k.nums[0]);
   // Comments/reactions on a list entry: anyone who can see the list.
   if (k.kind === 'entry' && k.nums.length === 1) {
     const listId = q.entryList.get(k.nums[0])?.list_id;
@@ -180,6 +189,11 @@ function threadAudience(key) {
     return { userIds: listId ? [...listPeople(listId), ...commenters] : commenters, url: listId ? `#/list/${listId}` : '#/' };
   }
   if (k.kind === 'activity') return { userIds: [q.get.get(k.nums[0])?.user_id, ...commenters], url: '#/feed' };
+  if (k.kind === 'ship') return { userIds: commenters, url: `#/ship/${k.nums[0]}` };
+  if (k.kind === 'headcanon') {
+    const h = q.headcanon.get(k.nums[0]);
+    return { userIds: [h?.user_id, ...commenters], url: h ? `#/ship/${h.ship_id}` : '#/' };
+  }
   return { userIds: commenters, url: '#/' };
 }
 
@@ -198,6 +212,10 @@ function deleteComment(comment) {
 function threadAndTarget(a) {
   if (a.type === 'anime_review') {
     const key = `review:${a.anime_id}:${a.user_id}`;
+    return { thread: key, target: key };
+  }
+  if (a.type === 'headcanon') {
+    const key = `headcanon:${a.item_id}`;
     return { thread: key, target: key };
   }
   if (a.type.startsWith('watchlist_')) {
@@ -243,6 +261,20 @@ function feedItem(a, me, users) {
     const c = q.comment.get(a.item_id);
     if (!c) return null;
     item.comment = { id: c.id, body: c.body };
+  }
+  if (a.type.startsWith('ship_') || a.type === 'headcanon') {
+    // Lazy require: ships.js depends on this module.
+    const { shipSummary } = require('./ships');
+    let shipId = a.item_id;
+    if (a.type === 'headcanon') {
+      const h = q.headcanon.get(a.item_id);
+      if (!h) return null;
+      item.headcanon = { id: h.id, body: h.body };
+      shipId = h.ship_id;
+    }
+    const row = q.ship.get(shipId);
+    if (!row) return null;
+    item.ship = shipSummary(row, users, me);
   }
   if (a.type === 'watchlist_watched') {
     item.watchers = (data.userIds ?? []).map((id) => users.get(id)).filter(Boolean);

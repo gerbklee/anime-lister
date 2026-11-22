@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { STATUS_LABELS, mediaHref, timeAgo } from '../util.js';
+import { STATUS_LABELS, mediaHref, timeAgo, voteText } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Stars from '../components/Stars.jsx';
 import Thread from '../components/Thread.jsx';
@@ -22,9 +22,17 @@ function listHref(list) {
 
 const ListLink = ({ list }) => <a href={listHref(list)}>{list.name}</a>;
 
+const ShipLink = ({ ship }) => (ship ? <a href={`#/ship/${ship.id}`}>{ship.name}</a> : <span>a ship</span>);
+
 function Sentence({ item, me }) {
   const { type, data, anime, list } = item;
   switch (type) {
+    case 'ship_create':
+      return <>shipped <ShipLink ship={item.ship} /> 💕 ({item.ship?.members.map((m) => m.name).join(' × ')})</>;
+    case 'ship_vote':
+      return <>voted {voteText(data.vote)} on <ShipLink ship={item.ship} /></>;
+    case 'headcanon':
+      return <>shared a headcanon about <ShipLink ship={item.ship} /></>;
     case 'anime_status':
       const manga = anime?.type === 'MANGA';
       if (data.status === 'watching') return <>started {manga ? 'reading' : 'watching'} <AnimeLink anime={anime} /></>;
@@ -39,7 +47,8 @@ function Sentence({ item, me }) {
     case 'anime_review':
       return <>reviewed <AnimeLink anime={anime} /></>;
     case 'list_add':
-      return data.kind === 'anime' ? (
+      if (data.kind === 'ship') return <>added <a href={`#/ship/${item.itemId}`}>{data.name}</a> to <ListLink list={list} /> at #{data.rank}</>;
+      return data.kind === 'anime' || data.kind === 'manga' ? (
         <>added <AnimeLink anime={anime} /> to <ListLink list={list} /> at #{data.rank}</>
       ) : (
         <>added <a href={`#/character/${item.itemId}`}>{data.name}</a> to <ListLink list={list} /> at #{data.rank}</>
@@ -48,7 +57,7 @@ function Sentence({ item, me }) {
       return data.kind === 'watchlist' ? (
         <>created the watchlist <ListLink list={list} /></>
       ) : (
-        <>created the {data.kind === 'anime' ? 'anime' : 'character'} list <ListLink list={list} /></>
+        <>created the {{ anime: 'anime', manga: 'manga', ship: 'OTP' }[data.kind] ?? 'character'} list <ListLink list={list} /></>
       );
     case 'watchlist_add':
       return <>added <AnimeLink anime={anime} /> to the watchlist <ListLink list={list} /></>;
@@ -66,8 +75,8 @@ function Sentence({ item, me }) {
 export function FeedItem({ item, me }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(item.commentCount);
-  const thumb = item.anime?.cover ?? (item.type === 'list_add' ? item.data.image : null);
-  const thumbHref = item.anime ? mediaHref(item.anime) : item.list ? listHref(item.list) : null;
+  const thumb = item.anime?.cover ?? (item.type === 'list_add' ? item.data.image : null) ?? (item.ship ? item.ship.cover ?? item.ship.members[0]?.image : null);
+  const thumbHref = item.anime ? mediaHref(item.anime) : item.ship ? `#/ship/${item.ship.id}` : item.list ? listHref(item.list) : null;
 
   return (
     <li className="feed-item card">
@@ -89,6 +98,7 @@ export function FeedItem({ item, me }) {
             </>
           )}
           {item.comment && <p className="feed-quote">“{item.comment.body}”</p>}
+          {item.headcanon && <p className="feed-quote">💭 {item.headcanon.body}</p>}
         </div>
         {thumb && thumbHref && (
           <a href={thumbHref} className="feed-thumb">

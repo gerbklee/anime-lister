@@ -22,6 +22,7 @@ async function request(method, url, body, { signal } = {}) {
     if (res.status === 401 && !url.startsWith('/api/auth/')) onUnauthorized();
     const err = new Error(data?.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.data = data;
     throw err;
   }
   return data;
@@ -118,7 +119,32 @@ export const api = {
   pushUnsubscribe: (endpoint) => request("POST", "/api/push/unsubscribe", { endpoint }),
   pushPrefs: (prefs) => request("PUT", "/api/push/prefs", prefs),
   pushTest: () => request("POST", "/api/push/test"),
+
+  // Ships
+  ships: (params = {}) => request('GET', `/api/ships?${new URLSearchParams(params)}`),
+  ship: (id) => request('GET', `/api/ships/${id}`),
+  createShip: (characterIds, name, status) => request('POST', '/api/ships', { characterIds, name, status }),
+  updateShip: (id, patch) => request('PATCH', `/api/ships/${id}`, patch),
+  deleteShip: (id) => request('DELETE', `/api/ships/${id}`),
+  voteShip: (id, vote) => request('PUT', `/api/ships/${id}/vote`, { vote }),
+  addHeadcanon: (id, body) => request('POST', `/api/ships/${id}/headcanons`, { body }),
+  deleteHeadcanon: (id) => request('DELETE', `/api/headcanons/${id}`),
+  shipFanart: (id, tags) => request('GET', `/api/ships/${id}/fanart${tags ? `?tags=${enc(tags)}` : ''}`),
+  pairings: (characterId) => request('GET', `/api/characters/${characterId}/pairings`),
+  compareShips: (userId) => request('GET', `/api/compare/ships?with=${userId}`),
+  shippingType: (userId) => request('GET', `/api/types/${userId}/ships`),
 };
+
+// Existing ships (for OTP lists).
+export const shipSearch = (term, signal) =>
+  request('GET', `/api/ships?q=${enc(term)}`, undefined, { signal }).then((d) =>
+    d.ships.map((s) => ({
+      id: s.id,
+      name: s.name,
+      image: s.cover ?? s.members[0]?.image,
+      subtitle: s.members.map((m) => m.name).join(' × '),
+    })),
+  );
 
 // Search adapters: turn API results into the generic shape SearchBox shows.
 export const characterSearch = (term, signal) =>

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import ListSidebar from '../components/ListSidebar.jsx';
 import ListView from '../components/ListView.jsx';
+import ShipBoard from './ShipBoard.jsx';
 
 const KIND_KEY = 'lists-kind';
 
@@ -10,6 +11,7 @@ const KIND_INFO = {
   character: { icon: '👤', lists: 'Character lists', word: 'character', example: '“Top 10 Villains”' },
   anime: { icon: '🎬', lists: 'Anime lists', word: 'anime', example: '“Best openings” or “Top 10 anime”' },
   manga: { icon: '📖', lists: 'Manga lists', word: 'manga', example: '“Best art” or “Top 10 manga”' },
+  ship: { icon: '💕', lists: 'Ships', word: 'OTP', example: '“Our OTPs” or “Crack ships”' },
 };
 
 function savedKind() {
@@ -24,7 +26,7 @@ function savedKind() {
 // Ranked lists of characters or anime.
 export default function ListsPage({ route }) {
   const { lists, refreshLists, navigate } = useApp();
-  const [kind, setKind] = useState(savedKind);
+  const [kind, setKind] = useState(() => (route.ships ? 'ship' : savedKind()));
   const [menuOpen, setMenuOpen] = useState(false);
 
   const selected = lists?.find((l) => l.id === route.id && l.kind !== 'watchlist');
@@ -32,7 +34,8 @@ export default function ListsPage({ route }) {
 
   useEffect(() => {
     if (selected && selected.kind !== kind) setKind(selected.kind);
-  }, [selected, kind]);
+    else if (route.ships && kind !== 'ship') setKind('ship');
+  }, [selected, kind, route.ships]);
 
   useEffect(() => {
     try {
@@ -42,19 +45,28 @@ export default function ListsPage({ route }) {
     }
   }, [kind]);
 
-  useEffect(() => setMenuOpen(false), [route.id]);
+  useEffect(() => setMenuOpen(false), [route.id, route.ships]);
 
   // No list (or a deleted one) selected: open the first of your own/shared lists.
   useEffect(() => {
     if (!lists || selected) return;
+    // Ships: the board is the start page.
+    if (kind === 'ship' || route.ships) {
+      if (!route.ships) navigate('#/ships');
+      return;
+    }
     const first = lists.find((l) => l.kind === kind && (l.isOwner || l.isShared)) ?? lists.find((l) => l.kind === kind);
     if (first) navigate(`#/list/${first.id}`);
     else if (route.id) navigate('#/lists');
-  }, [lists, selected, kind, route.id, navigate]);
+  }, [lists, selected, kind, route.id, route.ships, navigate]);
 
   const switchKind = (next) => {
     if (next === kind) return;
     setKind(next);
+    if (next === 'ship') {
+      navigate('#/ships');
+      return;
+    }
     const first = (lists ?? []).find((l) => l.kind === next && (l.isOwner || l.isShared)) ?? lists?.find((l) => l.kind === next);
     navigate(first ? `#/list/${first.id}` : '#/lists');
   };
@@ -76,21 +88,35 @@ export default function ListsPage({ route }) {
       <button type="button" role="tab" aria-selected={kind === 'manga'} className={kind === 'manga' ? 'active' : ''} onClick={() => switchKind('manga')}>
         📖 Manga
       </button>
+      <button type="button" role="tab" aria-selected={kind === 'ship'} className={kind === 'ship' ? 'active' : ''} onClick={() => switchKind('ship')}>
+        💕 Ships
+      </button>
     </div>
   );
+  const header =
+    kind === 'ship' ? (
+      <>
+        {kindToggle}
+        <a href="#/ships" className={`list-link board-link ${!selected ? 'active' : ''}`} onClick={() => setMenuOpen(false)}>
+          <span className="list-link-name">💕 Ship board</span>
+        </a>
+      </>
+    ) : (
+      kindToggle
+    );
   const kindInfo = KIND_INFO[kind];
 
   return (
     <div className="layout">
       <button className="list-switcher" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
         <span>
-          {kindInfo.icon} {selected ? selected.name : kindInfo.lists}
+          {kindInfo.icon} {selected ? selected.name : kind === 'ship' ? 'Ship board' : kindInfo.lists}
         </span>
         <span aria-hidden="true">{menuOpen ? '▲' : '▼'}</span>
       </button>
       <ListSidebar
         open={menuOpen}
-        header={kindToggle}
+        header={header}
         lists={ofKind}
         selectedId={selected?.id ?? null}
         hrefFor={(l) => `#/list/${l.id}`}
@@ -103,6 +129,8 @@ export default function ListsPage({ route }) {
           <p className="muted">Loading…</p>
         ) : selected ? (
           <ListView key={selected.id} listId={selected.id} onListsChanged={refreshLists} />
+        ) : kind === 'ship' ? (
+          <ShipBoard key={route.newWith ?? 'board'} newWith={route.newWith} />
         ) : (
           <div className="empty-state">
             <h2>No {kindInfo.word} lists yet</h2>

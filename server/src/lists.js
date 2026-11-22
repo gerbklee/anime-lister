@@ -1,7 +1,8 @@
 // Lists, entries and list members.
 //
 // List kinds: 'character' (ranked characters), 'anime' (ranked anime) and
-// 'watchlist' (shared "to watch" list; always shared, one joint order).
+// 'watchlist' (shared "to watch" list; always shared, one joint order) and
+// 'ship' (ranked ships; entries.anilist_id is the ship id).
 //
 // Rankings:
 //   personal list: one order (entries.position), owned by the owner
@@ -23,10 +24,12 @@ const { usersById } = require('./users');
 const activity = require("./activity");
 const { notify } = require("./notify");
 
-const KINDS = ["character", "anime", "manga", "watchlist"];
+const KINDS = ["character", "anime", "manga", "watchlist", "ship"];
 const CATEGORIES = ['daddy', 'mommy', 'waifu', 'husbando', 'other'];
 
 const q = {
+  shipRow: db.prepare('SELECT * FROM ships WHERE id = ?'),
+  shipMembers: db.prepare('SELECT * FROM ship_members WHERE ship_id = ? ORDER BY position'),
   visibleLists: db.prepare(`
     SELECT l.id, l.name, l.kind, l.category, l.emoji, l.is_shared, l.owner_id,
            (SELECT COUNT(*) FROM entries e WHERE e.list_id = l.id) AS count,
@@ -143,6 +146,9 @@ function toEntry(row, list, users, me, ranks) {
     entry.seriesOptions = options.map((o) => o.title);
     entry.seriesAnimeId = options.find((o) => o.title === row.series_title && o.type === 'ANIME')?.id ?? null;
     entry.customImage = !!row.original_image_url && row.image_url !== row.original_image_url;
+  } else if (kind === 'ship') {
+    const { shipSummary } = require('./ships');
+    entry.ship = shipSummary(q.shipRow.get(row.anilist_id), users, me);
   } else {
     entry.anime = toAnimeSummary(q.anime.get(row.anilist_id));
   }
@@ -418,6 +424,19 @@ async function animeValues(animeId) {
   };
 }
 
+function shipValues(shipId) {
+  const ship = q.shipRow.get(shipId);
+  if (!ship) throw new HttpError(404, 'Ship not found');
+  const members = q.shipMembers.all(shipId);
+  return {
+    name: ship.name,
+    imageFile: ship.cover_file,
+    imageUrl: ship.cover_url ?? members[0]?.image ?? null,
+    seriesTitle: members.map((m) => m.name).join(' × '),
+    seriesOptions: '[]',
+  };
+}
+
 let onCharacterAdded = () => {};
 // Lets the traits module learn about new characters without a require cycle.
 function setCharacterAddedHook(fn) {
@@ -428,10 +447,10 @@ router.post('/lists/:id/entries', wrap(async (req, res) => {
   const a = requireEdit(access(parseId(req.params.id), req.user));
   const itemId = parseId(req.body?.anilistId);
   const kind = a.list.kind;
-  const already = kind === 'character' ? 'This character is already in the list.' : 'This anime is already in the list.';
+  const already = { character: 'This character is already in the list.', ship: 'This ship is already in the list.' }[kind] ?? 'This anime is already in the list.';
   if (q.findEntry.get(a.list.id, itemId)) throw new HttpError(409, already);
 
-  const values = kind === 'character' ? await characterValues(itemId) : await animeValues(itemId);
+  const values = kind === 'character' ? await characterValues(itemId) : kind === 'ship' ? shipValues(itemId) : await animeValues(itemId);
 
   let inserted;
   try {
@@ -448,7 +467,7 @@ router.post('/lists/:id/entries', wrap(async (req, res) => {
     type: kind === 'watchlist' ? 'watchlist_add' : 'list_add',
     listId: a.list.id,
     itemId,
-    animeId: kind === 'character' ? null : itemId,
+    animeId: kind === 'character' || kind === 'ship' ? null : itemId,
     data: { kind, name: values.name, image: values.imageFile ? `/images/${values.imageFile}` : values.imageUrl, rank: inserted.rank },
   });
   if (kind === "character") onCharacterAdded(itemId);

@@ -59,6 +59,15 @@ export function personalSlides(w, name) {
       sub: `${plural(w.charactersAdded, 'character')} added to lists · ${plural(w.listsCreated, 'new list')}`,
     });
   }
+  if (w.otp) {
+    slides.push({
+      emoji: '💍',
+      kicker: 'OTP of the year',
+      big: w.otp.ship.name,
+      sub: `${w.otp.ship.members.map((m) => m.name).join(' × ')}${w.shipsCreated ? ` · ${plural(w.shipsCreated, 'ship')} launched` : ''}`,
+      image: w.otp.ship.cover ?? w.otp.ship.members[0]?.image,
+    });
+  }
   slides.push({ emoji: '✨', kicker: `That was ${w.year}`, big: 'See you next year!', sub: 'Made with ⭐ Anime Lister' });
   return slides;
 }

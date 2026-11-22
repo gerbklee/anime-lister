@@ -240,4 +240,37 @@ function sbTagCounts(tag) {
   return run;
 }
 
-module.exports = { picturesRouter: router, guessTag, sbTagCounts };
+// Number of (work-safe) Safebooru pictures with all the given tags.
+const countCache = memo();
+function sbCount(tags) {
+  return countCache(tags, async () => {
+    const url = `${SAFEBOORU}/index.php?page=dapi&s=post&q=index&limit=0&tags=${encodeURIComponent(`${tags} rating:general`)}`;
+    let res;
+    try {
+      res = await fetch(url, { headers: UA, signal: AbortSignal.timeout(10_000) });
+    } catch (err) {
+      throw new HttpError(503, `Safebooru is unavailable right now (${err.message}).`);
+    }
+    const text = await res.text();
+    const m = text.match(/count="(\d+)"/);
+    return m ? Number(m[1]) : 0;
+  });
+}
+
+// Tag counts over a character's recent pictures (not only solo ones), to find
+// who they are usually drawn with.
+const coCache = memo();
+function sbCoTags(tag) {
+  return coCache(tag, async () => {
+    const rows = await sbJson(
+      `${SAFEBOORU}/index.php?page=dapi&s=post&q=index&json=1&limit=100&tags=${encodeURIComponent(`${tag} rating:general -solo`)}`,
+    );
+    const counts = new Map();
+    for (const p of Array.isArray(rows) ? rows : []) {
+      for (const t of new Set(String(p.tags ?? '').split(/\s+/))) if (t && t !== tag) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    return counts;
+  });
+}
+
+module.exports = { picturesRouter: router, guessTag, sbTagCounts, sbPosts, sbCount, sbCoTags, character };

@@ -118,6 +118,15 @@ Character entries added before this version are linked to their anime in the bac
 - **📊 Stats** (profile): hours watched, chapters read, ratings, genres, studios, monthly activity, favourite characters, top rated. **🎁 Wrapped**: a slideshow for any year (slides can be saved as images); **Our Wrapped** (Us tab) for the two of you.
 - **🎮 Games** (Us tab): *Guess the opening*, *Who's this character?*, *Who ranked them higher?* and *Higher or lower*. A challenge has fixed questions that each of you plays on your own phone; points for right answers and speed; head-to-head score.
 
+## 💕 Ships (OTPs)
+
+- **Ship board** (Lists → 💕 Ships): ships of 2–4 characters that everyone shares. Each has a name (a blended suggestion like *NaruSasu*, editable), a status (💍 Canon / 💫 Fanon / 🤡 Crack), a cover picked from fan art of the pair, and an automatic 💎 Rarepair / 🔥 Popular badge from the number of Safebooru pictures.
+- **Ship-o-meter**: everyone votes 🚫 No way · 🤷 Meh · 🙂 Cute · 💕 Ship it · 💍 OTP. Ships you disagree on by two or more steps get a ⚔️ *Ship war* badge. Filters: we all ship it, ship wars, only mine, not voted, canon/fanon/crack.
+- **Ship pages**: members, votes, fan art gallery, **headcanons** with reactions and replies, and a discussion thread.
+- **OTP lists**: 💕 Ships lists work like other lists (personal rankings in shared lists, battles, tiers).
+- **Creating ships**: *+ New ship*, *💕 Ship with…* on character pages and the 💕 next to characters in lists. Character pages also show **who fans ship them with** (most fan art together, e.g. "Levi × Erwin: 208 pictures").
+- Also in: **My type** (your shipping type: canon vs crack, crossovers, rarepairs, age and height gaps), **Compare → 💕 Ships** (shipping match, ship wars), **Wrapped** (OTP of the year; Our Wrapped: the ship you fought about), **Games** (*Guess the ship* from blurred fan art, *Who ships it harder?*), the feed and push notifications (new *Ships* type in Settings).
+
 ## Install as app & outside access (Tailscale)
 
 Installing to the home screen and push notifications need HTTPS. [Tailscale](https://tailscale.com) (free for personal use) gives the NAS a private HTTPS address that works from anywhere, without opening ports on your router.

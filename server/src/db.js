@@ -286,6 +286,58 @@ const MIGRATIONS = {
       PRIMARY KEY (anime_id, episode)
     );
   `,
+
+  // v7: ships (2-4 characters), votes, headcanons, popular pairings cache.
+  7: `
+    CREATE TABLE ships (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      signature     TEXT    NOT NULL UNIQUE,   -- sorted character ids, e.g. "40882-45627"
+      name          TEXT    NOT NULL,
+      status        TEXT    NOT NULL DEFAULT 'fanon',  -- canon | fanon | crack
+      cover_url     TEXT,
+      cover_file    TEXT,
+      fanart_count  INTEGER,
+      fanart_tags   TEXT,
+      created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at    INTEGER NOT NULL,
+      updated_at    INTEGER NOT NULL
+    );
+
+    CREATE TABLE ship_members (
+      ship_id       INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      character_id  INTEGER NOT NULL,
+      name          TEXT    NOT NULL,
+      image         TEXT,
+      series        TEXT,
+      position      INTEGER NOT NULL,
+      PRIMARY KEY (ship_id, character_id)
+    );
+    CREATE INDEX idx_ship_members_character ON ship_members (character_id);
+
+    -- 0 = No way, 1 = Meh, 2 = Cute, 3 = Ship it, 4 = OTP
+    CREATE TABLE ship_votes (
+      ship_id     INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote        INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL,
+      PRIMARY KEY (ship_id, user_id)
+    );
+
+    CREATE TABLE headcanons (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ship_id     INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_headcanons_ship ON headcanons (ship_id);
+
+    CREATE TABLE pairing_cache (
+      character_id  INTEGER PRIMARY KEY,
+      data          TEXT    NOT NULL,
+      fetched_at    INTEGER NOT NULL
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));
