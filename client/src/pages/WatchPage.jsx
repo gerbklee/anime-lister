@@ -28,8 +28,8 @@ export default function WatchPage({ route }) {
   return (
     <div className="layout">
       <button className="list-switcher" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
-        <span>🍿 {selected ? selected.name : 'Watchlists'}</span>
-        <span aria-hidden="true">{menuOpen ? '▲' : '▼'}</span>
+        <span>🍿 Watchlists <span className="muted small">· {watchlists.length}</span></span>
+        <span aria-hidden="true">▾</span>
       </button>
       <ListSidebar
         open={menuOpen}

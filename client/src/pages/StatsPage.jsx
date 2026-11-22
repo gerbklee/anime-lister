@@ -68,7 +68,7 @@ export function personalSlides(w, name) {
       image: w.otp.ship.cover ?? w.otp.ship.members[0]?.image,
     });
   }
-  slides.push({ emoji: '✨', kicker: `That was ${w.year}`, big: 'See you next year!', sub: 'Made with ⭐ Anime Lister' });
+  slides.push({ emoji: '✨', kicker: `That was ${w.year}`, big: 'See you next year!', sub: 'Made with ✦ Anime Hub' });
   return slides;
 }
 

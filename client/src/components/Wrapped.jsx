@@ -102,7 +102,7 @@ async function saveSlide(slide, index) {
   }
   ctx.font = '30px system-ui, sans-serif';
   ctx.globalAlpha = 0.7;
-  ctx.fillText('⭐ Anime Lister', W / 2, H - 60);
+  ctx.fillText('✦ Anime Hub', W / 2, H - 60);
 
   const blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
   const file = new File([blob], `wrapped-${index + 1}.png`, { type: 'image/png' });

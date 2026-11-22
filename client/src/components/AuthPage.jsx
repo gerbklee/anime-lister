@@ -43,7 +43,7 @@ export default function AuthPage({ onAuthed }) {
       </div>
       <form className="auth-card" onSubmit={submit}>
         <h1 className="logo auth-logo">
-          <span aria-hidden="true">⭐</span> Anime Lister
+          <span className="logo-mark" aria-hidden="true">✦</span> Anime Hub
         </h1>
 
         <div className="tabs" role="tablist">

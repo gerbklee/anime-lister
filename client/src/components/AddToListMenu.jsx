@@ -1,32 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { api } from '../api.js';
 import { editableLists, useApp } from '../AppContext.jsx';
+import Menu from './Menu.jsx';
 
 const EMPTY_HINT = {
   character: 'Create a character list in the Lists tab first.',
   anime: 'Create an anime list in the Lists tab first.',
+  manga: 'Create a manga list in the Lists tab first.',
   watchlist: 'Create a watchlist in the Watchlists tab first.',
   ship: 'Create an OTP list first: Lists → 💕 Ships → sidebar.',
 };
 
-// "+ Add to list ▾" button with a dropdown of the lists of `kind` you can edit.
-export default function AddToListMenu({ kind, itemId, label = '+ Add to list', className = 'btn ghost' }) {
-  const { lists, refreshLists } = useApp();
-  const [open, setOpen] = useState(false);
-  const [status, setStatus] = useState({});
-  const ref = useRef(null);
-  const options = editableLists(lists, kind);
+const LABELS = { adding: 'Adding…', added: '✓ Added', already: 'Already in', error: 'Failed' };
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false);
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('touchstart', onDown);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('touchstart', onDown);
-    };
-  }, [open]);
+// "+ Add to list ▾": the lists of `kind` you can edit (a sheet on phones).
+export default function AddToListMenu({ kind, itemId, label = '+ Add to list', className = 'btn ghost', icon = null }) {
+  const { lists, refreshLists } = useApp();
+  const [status, setStatus] = useState({});
+  const options = editableLists(lists, kind);
 
   const add = async (list) => {
     setStatus((s) => ({ ...s, [list.id]: 'adding' }));
@@ -39,34 +30,24 @@ export default function AddToListMenu({ kind, itemId, label = '+ Add to list', c
     }
   };
 
-  const labels = { adding: 'Adding…', added: '✓ Added', already: 'Already in', error: 'Failed' };
-
   return (
-    <span className="menu-wrap" ref={ref}>
-      <button type="button" className={className} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        {label} ▾
-      </button>
-      {open && (
-        <div className="menu" role="menu">
-          {options.length === 0 && <p className="muted small menu-empty">{EMPTY_HINT[kind]}</p>}
-          {options.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              role="menuitem"
-              className="menu-item"
-              onClick={() => add(l)}
-              disabled={!!status[l.id] && status[l.id] !== 'error'}
-            >
-              <span className="menu-item-name">
-                {l.isShared && '👥 '}
-                {l.name}
-              </span>
-              <span className="muted small">{labels[status[l.id]] ?? `${l.count}`}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </span>
+    <Menu
+      className={className}
+      icon={icon}
+      text={`${label} ▾`}
+      label={label}
+      title={label.replace(/^\+\s*/, '')}
+      align="left"
+      items={options.map((l) => ({
+        icon: l.isShared ? '👥' : '📋',
+        label: l.name,
+        right: LABELS[status[l.id]] ?? String(l.count),
+        disabled: !!status[l.id] && status[l.id] !== 'error',
+        keepOpen: true,
+        onSelect: () => add(l),
+      }))}
+    >
+      {options.length === 0 && <p className="muted small menu-empty">{EMPTY_HINT[kind]}</p>}
+    </Menu>
   );
 }

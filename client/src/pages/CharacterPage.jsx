@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import { formatLabel, plural } from '../util.js';
 import AddToListMenu from '../components/AddToListMenu.jsx';
+import Menu from '../components/Menu.jsx';
 import Avatar from '../components/Avatar.jsx';
 import Modal from '../components/Modal.jsx';
 import { CatalogueBadge } from '../components/EntryRow.jsx';
@@ -93,9 +94,6 @@ function ShipsCard({ c }) {
           ))}
         </ul>
       )}
-      <button type="button" className="btn primary small-btn" onClick={() => setBuilder([self])}>
-        💕 Ship {first} with…
-      </button>
       {builder && <ShipBuilder initial={builder} onClose={() => setBuilder(null)} onCreated={(s) => navigate(`#/ship/${s.id}`)} />}
     </div>
   );
@@ -292,9 +290,11 @@ export default function CharacterPage({ id }) {
             <a className="btn ghost" href={`#/ships/new/${c.id}`}>
               💕 Ship with…
             </a>
-            <a className="btn ghost" href={c.siteUrl} target="_blank" rel="noreferrer">
-              AniList ↗
-            </a>
+            <Menu
+              title={c.name}
+              className="icon-btn menu-trigger bordered"
+              items={[{ icon: '↗️', label: 'Open on AniList', href: c.siteUrl, external: true }]}
+            />
           </div>
         </div>
       </div>

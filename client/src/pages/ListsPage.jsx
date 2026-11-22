@@ -110,9 +110,9 @@ export default function ListsPage({ route }) {
     <div className="layout">
       <button className="list-switcher" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
         <span>
-          {kindInfo.icon} {selected ? selected.name : kind === 'ship' ? 'Ship board' : kindInfo.lists}
+          {kindInfo.icon} {kindInfo.lists} <span className="muted small">· {ofKind.length}</span>
         </span>
-        <span aria-hidden="true">{menuOpen ? '▲' : '▼'}</span>
+        <span aria-hidden="true">▾</span>
       </button>
       <ListSidebar
         open={menuOpen}

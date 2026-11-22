@@ -4,7 +4,6 @@ import { AppContext } from './AppContext.jsx';
 import AuthPage from './components/AuthPage.jsx';
 import Avatar from './components/Avatar.jsx';
 import TabBar from './components/TabBar.jsx';
-import ThemeToggle from './components/ThemeToggle.jsx';
 import ListsPage from './pages/ListsPage.jsx';
 import WatchPage from './pages/WatchPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
@@ -148,10 +147,12 @@ function Main({ me, setMe }) {
       <div className="app">
         <header className="topbar">
           <a className="logo" href="#/">
-            <span aria-hidden="true">⭐</span> Anime Lister
+            <span className="logo-mark" aria-hidden="true">
+              ✦
+            </span>
+            Anime Hub
           </a>
           <div className="top-nav">
-            <ThemeToggle />
             <a
               href="#/profile"
               className={`nav-link ${route.tab === 'profile' && !route.userId ? 'active' : ''}`}

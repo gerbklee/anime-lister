@@ -8,6 +8,7 @@ import Thread from '../components/Thread.jsx';
 import Reactions from '../components/Reactions.jsx';
 import TrailerModal from '../components/TrailerModal.jsx';
 import AddToListMenu from '../components/AddToListMenu.jsx';
+import Menu from '../components/Menu.jsx';
 import { formatPopularity } from '../components/AnimeTile.jsx';
 import { CatalogueBadge } from '../components/EntryRow.jsx';
 import Modal from '../components/Modal.jsx';
@@ -435,17 +436,20 @@ export default function AnimeDetail({ id, suggest }) {
       <div className="anime-actions">
         {anime.trailer && (
           <button className="btn primary" onClick={() => setTrailer(true)}>
-            ▶ Watch trailer
+            ▶ Trailer
           </button>
         )}
         <AddToListMenu kind="watchlist" itemId={anime.id} label="🍿 Watchlist" />
-        <AddToListMenu kind={manga ? 'manga' : 'anime'} itemId={anime.id} label={manga ? '📋 Manga list' : '📋 Anime list'} />
-        <a className="btn ghost" href={`#/discover/similar/${anime.id}`}>
-          🔎 Similar {manga ? 'manga' : 'anime'}
-        </a>
-        <a className="btn ghost" href={`https://anilist.co/${manga ? 'manga' : 'anime'}/${anime.id}`} target="_blank" rel="noreferrer">
-          AniList ↗
-        </a>
+        <AddToListMenu kind={manga ? 'manga' : 'anime'} itemId={anime.id} label="📋 List" />
+        <Menu
+          title={anime.title}
+          label="More"
+          className="icon-btn menu-trigger bordered"
+          items={[
+            { icon: '🔎', label: `Similar ${manga ? 'manga' : 'anime'}`, href: `#/discover/similar/${anime.id}` },
+            { icon: '↗️', label: 'Open on AniList', href: `https://anilist.co/${manga ? 'manga' : 'anime'}/${anime.id}`, external: true },
+          ]}
+        />
       </div>
 
       <div className="anime-columns">

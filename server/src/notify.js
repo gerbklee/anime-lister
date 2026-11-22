@@ -101,7 +101,7 @@ router.put('/push/prefs', (req, res) => {
 router.post('/push/test', wrap(async (req, res) => {
   const subs = q.subs.all(req.user.id);
   if (!subs.length) throw new HttpError(400, 'This account has no device with notifications switched on.');
-  await sendTo(req.user.id, 'comments', { title: 'Anime Lister', body: 'Notifications work! 🎉', url: '#/', tag: 'test' });
+  await sendTo(req.user.id, 'comments', { title: 'Anime Hub', body: 'Notifications work! 🎉', url: '#/', tag: 'test' });
   res.json({ ok: true });
 }));
 

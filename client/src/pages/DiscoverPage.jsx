@@ -7,6 +7,7 @@ import TrailerModal from '../components/TrailerModal.jsx';
 import TrailerReel from '../components/TrailerReel.jsx';
 import ObscuritySlider, { applyObscurity, savedObscurity } from '../components/ObscuritySlider.jsx';
 import SearchBox from '../components/SearchBox.jsx';
+import FilterPanel from '../components/FilterPanel.jsx';
 import Stars from '../components/Stars.jsx';
 
 const SEASONS = ['WINTER', 'SPRING', 'SUMMER', 'FALL'];
@@ -138,15 +139,19 @@ function SeasonView({ season, year }) {
             Back to this season
           </a>
         )}
-        <div className="spacer" />
-        {withTrailers.length > 0 && (
-          <button type="button" className="btn primary" onClick={() => setReel(0)}>
-            ▶ Play all trailers ({withTrailers.length})
-          </button>
-        )}
       </div>
 
-      <div className="filters">
+      <FilterPanel
+        active={[format !== 'all', !!genre, sort !== 'popular', onlyMine, hideSeen].filter(Boolean).length}
+        onReset={() => {
+          setFormat('all');
+          setGenre('');
+          setSort('popular');
+          setOnlyMine(false);
+          setHideSeen(false);
+        }}
+        summary={data ? plural(shown.length, 'anime', 'anime') : null}
+      >
         <FormatFilter value={format} onChange={setFormat} />
         <select value={genre} onChange={(e) => setGenre(e.target.value)} aria-label="Genre">
           <option value="">All genres</option>
@@ -170,13 +175,18 @@ function SeasonView({ season, year }) {
         <label className="check small">
           <input type="checkbox" checked={hideSeen} onChange={(e) => setHideSeen(e.target.checked)} /> Hide my catalogue
         </label>
-      </div>
+      </FilterPanel>
+
+      {withTrailers.length > 0 && (
+        <button type="button" className="btn primary wide trailer-all" onClick={() => setReel(0)}>
+          ▶ Play all {withTrailers.length} trailers
+        </button>
+      )}
 
       {error && <div className="banner error">{error}</div>}
       {!data && !error && <Loading text="Loading the season from AniList…" />}
       {data && (
         <>
-          <p className="muted small">{plural(shown.length, 'anime', 'anime')}</p>
           <ul className="tile-grid">
             {shown.map((a) => (
               <AnimeTile key={a.id} a={a} onTrailer={setTrailer} />
@@ -269,14 +279,20 @@ function CalendarView() {
         </div>
       )}
 
-      <div className="filters">
+      <FilterPanel
+        active={[format !== 'all', onlyMine].filter(Boolean).length}
+        onReset={() => {
+          setFormat('all');
+          setOnlyMine(false);
+        }}
+      >
         <FormatFilter value={format} onChange={setFormat} />
         {mine.length > 0 && (
           <label className="check small">
             <input type="checkbox" checked={onlyMine} onChange={(e) => setOnlyMine(e.target.checked)} /> ⭐ Only anime related to mine
           </label>
         )}
-      </div>
+      </FilterPanel>
 
       {error && <div className="banner error">{error}</div>}
       {!data && !error && <Loading text="Loading upcoming releases from AniList…" />}

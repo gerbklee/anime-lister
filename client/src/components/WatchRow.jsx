@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { animeMeta, mediaHref } from "../util.js";
+import { animeMeta, mediaHref } from '../util.js';
 import Avatar from './Avatar.jsx';
+import Menu from './Menu.jsx';
 import Thread from './Thread.jsx';
 import { CatalogueBadge, NoteEditor, Portrait, RankInput } from './EntryRow.jsx';
 
@@ -12,12 +13,21 @@ export default function WatchRow({ entry, rank, total, onMove, onUpdate, onDelet
     id: entry.id,
   });
   const [showComments, setShowComments] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
   const [count, setCount] = useState(entry.commentCount ?? 0);
   useEffect(() => setCount(entry.commentCount ?? 0), [entry.commentCount]);
   const a = entry.anime;
-  const manga = a?.type === "MANGA";
+  const manga = a?.type === 'MANGA';
+  const href = a ? mediaHref(a) : `#/anime/${entry.anilistId}`;
 
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const menuItems = [
+    { icon: '📝', label: entry.note ? 'Edit note' : 'Add note', onSelect: () => setEditingNote(true) },
+    a?.trailer && { icon: '▶️', label: 'Watch trailer', onSelect: onTrailer },
+    { icon: '📄', label: manga ? 'Open manga page' : 'Open anime page', href },
+    'divider',
+    { icon: '🗑️', label: 'Remove from watchlist', danger: true, onSelect: () => onDelete(entry) },
+  ];
 
   return (
     <li ref={setNodeRef} style={style} className={`entry watch-entry ${isDragging ? 'dragging' : ''}`}>
@@ -26,37 +36,35 @@ export default function WatchRow({ entry, rank, total, onMove, onUpdate, onDelet
           ⠿
         </button>
         <RankInput rank={rank} total={total} onMove={(target) => onMove(entry.id, target)} />
-        <Portrait src={entry.image} alt={entry.name} />
+        <a href={href} className="portrait-link" tabIndex={-1} aria-hidden="true">
+          <Portrait src={entry.image} alt="" />
+        </a>
         <div className="entry-info">
           <div className="entry-title">
-            <a className="entry-name" href={a ? mediaHref(a) : `#/anime/${entry.anilistId}`} title="Open page">
+            <a className="entry-name" href={href}>
               {entry.name}
             </a>
-            {manga && <span className="pill tiny">📖 Manga</span>}
             {entry.addedBy && <Avatar user={entry.addedBy} size={18} title={`Added by ${entry.addedBy.username}`} />}
           </div>
           <div className="series-line">
+            {manga && <span className="pill tiny">📖</span>}
             <span className="series">{animeMeta(a) || entry.seriesTitle}</span>
             <CatalogueBadge animeId={entry.anilistId} />
           </div>
-          {a?.genres?.length > 0 && <div className="genres muted small">{a.genres.slice(0, 4).join(' · ')}</div>}
-          <NoteEditor note={entry.note} noteBy={entry.noteBy} showAuthor onSave={(note) => onUpdate(entry.id, { note })} />
+          {a?.genres?.length > 0 && <div className="genres muted tiny">{a.genres.slice(0, 3).join(' · ')}</div>}
+          <NoteEditor note={entry.note} noteBy={entry.noteBy} showAuthor editing={editingNote} setEditing={setEditingNote} onSave={(note) => onUpdate(entry.id, { note })} />
         </div>
-        <button className="icon-btn danger" onClick={() => onDelete(entry)} aria-label={`Remove ${entry.name}`} title="Remove">
-          ✕
-        </button>
+        <Menu items={menuItems} title={entry.name} label={`Actions for ${entry.name}`} />
       </div>
 
       <div className="watch-actions">
-        {a?.trailer ? (
+        {a?.trailer && (
           <button className="btn ghost small-btn" onClick={onTrailer}>
             ▶ Trailer
           </button>
-        ) : (
-          <span className="muted tiny">{manga ? "" : "No trailer"}</span>
         )}
         <button className={`btn ghost small-btn ${showComments ? 'active' : ''}`} onClick={() => setShowComments((s) => !s)} aria-expanded={showComments}>
-          💬 {count > 0 ? count : 'Comment'}
+          💬 {count > 0 ? count : 'Chat'}
         </button>
         <div className="spacer" />
         <button className="btn primary small-btn" onClick={onWatched}>

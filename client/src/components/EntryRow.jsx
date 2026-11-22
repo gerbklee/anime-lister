@@ -5,6 +5,7 @@ import { useApp } from '../AppContext.jsx';
 import { STATUS_LABELS } from '../util.js';
 import { StatusBadge, VoteChips } from './ShipBits.jsx';
 import Avatar from './Avatar.jsx';
+import Menu from './Menu.jsx';
 import Reactions from './Reactions.jsx';
 import Thread from './Thread.jsx';
 
@@ -41,6 +42,7 @@ export function RankInput({ rank, total, onMove }) {
         aria-label="Rank"
         value={value}
         size={Math.max(String(total).length, 1)}
+        style={{ width: `calc(${Math.max(String(total).length, 1)}ch + 8px)` }}
         onChange={(e) => setValue(e.target.value.replace(/\D/g, ''))}
         onFocus={(e) => e.target.select()}
         onBlur={commit}
@@ -56,26 +58,23 @@ export function RankInput({ rank, total, onMove }) {
   );
 }
 
-export function NoteEditor({ note, noteBy, showAuthor, onSave }) {
-  const [editing, setEditing] = useState(false);
+// A note under an entry. Shown when there is one (tap to edit); a new note is
+// started from the row's ⋯ menu (`editing`).
+export function NoteEditor({ note, noteBy, showAuthor, onSave, editing, setEditing, readOnly = false }) {
   const [draft, setDraft] = useState(note);
   const cancelled = useRef(false);
 
-  const startEditing = () => {
-    setDraft(note);
-    setEditing(true);
-  };
+  useEffect(() => {
+    if (editing) setDraft(note);
+  }, [editing, note]);
 
   if (!editing) {
-    return note ? (
-      <p className="note" onClick={startEditing} title="Click to edit note">
+    if (!note) return null;
+    return (
+      <p className={`note ${readOnly ? 'read-only' : ''}`} onClick={readOnly ? undefined : () => setEditing(true)} title={readOnly ? undefined : 'Tap to edit note'}>
         {note}
-        {showAuthor && noteBy && <span className="note-author"> by {noteBy.username}</span>}
+        {showAuthor && noteBy && <span className="note-author"> · {noteBy.username}</span>}
       </p>
-    ) : (
-      <button className="link-btn" onClick={startEditing}>
-        + Add note
-      </button>
     );
   }
 
@@ -86,7 +85,7 @@ export function NoteEditor({ note, noteBy, showAuthor, onSave }) {
       rows={2}
       maxLength={1000}
       value={draft}
-      placeholder="Why is it ranked here? (Enter to save, Esc to cancel)"
+      placeholder="Why is it ranked here?"
       onChange={(e) => setDraft(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
@@ -103,7 +102,7 @@ export function NoteEditor({ note, noteBy, showAuthor, onSave }) {
           cancelled.current = false;
           return;
         }
-        if (draft.trim() !== note) onSave(draft.trim());
+        if ((draft ?? '').trim() !== (note ?? '')) onSave((draft ?? '').trim());
       }}
     />
   );
@@ -135,9 +134,6 @@ export function Portrait({ src, alt, onClick, label }) {
   return (
     <button type="button" className="portrait-btn" onClick={onClick} aria-label={label} title={label}>
       {img}
-      <span className="portrait-edit" aria-hidden="true">
-        🖼️
-      </span>
     </button>
   );
 }
@@ -164,22 +160,31 @@ export default function EntryRow({
   const style = { transform: CSS.Transform.toString(transform), transition };
   const isAnime = kind === 'anime' || kind === 'manga';
   const isShip = kind === 'ship';
+  const isCharacter = kind === 'character';
   const animeId = isAnime ? entry.anilistId : entry.seriesAnimeId;
-  const mediaLink = kind === 'manga' ? `#/manga/${entry.anilistId}` : `#/anime/${entry.anilistId}`;
+  const href = isShip ? `#/ship/${entry.anilistId}` : isAnime ? (kind === 'manga' ? `#/manga/${entry.anilistId}` : `#/anime/${entry.anilistId}`) : `#/character/${entry.anilistId}`;
   const [showThread, setShowThread] = useState(false);
+  const [editingNote, setEditingNote] = useState(false);
+  const [pickingSeries, setPickingSeries] = useState(false);
   const [commentCount, setCommentCount] = useState(entry.commentCount ?? 0);
   useEffect(() => setCommentCount(entry.commentCount ?? 0), [entry.commentCount]);
+
+  const canSwitchSeries = isCharacter && !readOnly && entry.seriesOptions.length > 1;
+  const menuItems = [
+    !readOnly && { icon: '📝', label: entry.note ? 'Edit note' : 'Add note', onSelect: () => setEditingNote(true) },
+    social && entry.thread && { icon: '💬', label: showThread ? 'Hide comments' : 'Comment', right: commentCount || null, onSelect: () => setShowThread((s) => !s) },
+    canSwitchSeries && { icon: '🎬', label: 'Change series shown', onSelect: () => setPickingSeries(true) },
+    isCharacter && !readOnly && { icon: '🖼️', label: 'Change picture', onSelect: onChangeImage },
+    isCharacter && { icon: '💕', label: `Ship ${entry.name.split(' ')[0]} with…`, href: `#/ships/new/${entry.anilistId}` },
+    isCharacter && animeId && { icon: '📺', label: 'Open anime', href: `#/anime/${animeId}` },
+    !readOnly && 'divider',
+    !readOnly && { icon: '🗑️', label: 'Remove from list', danger: true, onSelect: () => onDelete(entry) },
+  ];
 
   return (
     <li ref={setNodeRef} style={style} className={`entry ${isDragging ? 'dragging' : ''} ${readOnly ? 'read-only' : ''}`}>
       {!readOnly && (
-        <button
-          ref={setActivatorNodeRef}
-          className="drag-handle"
-          aria-label={`Drag to reorder ${entry.name}`}
-          {...attributes}
-          {...listeners}
-        >
+        <button ref={setActivatorNodeRef} className="drag-handle" aria-label={`Drag to reorder ${entry.name}`} {...attributes} {...listeners}>
           ⠿
         </button>
       )}
@@ -193,32 +198,29 @@ export default function EntryRow({
         <RankInput rank={rank} total={total} onMove={(target) => onMove(entry.id, target)} />
       )}
 
-      <Portrait
-        src={entry.image}
-        alt={entry.name}
-        onClick={!readOnly && kind === 'character' ? onChangeImage : undefined}
-        label={`Change picture of ${entry.name}`}
-      />
+      <a href={href} className="portrait-link" tabIndex={-1} aria-hidden="true">
+        <Portrait src={entry.image} alt="" />
+      </a>
 
       <div className="entry-info">
         <div className="entry-title">
-          <a
-            className="entry-name"
-            href={isShip ? `#/ship/${entry.anilistId}` : isAnime ? mediaLink : `#/character/${entry.anilistId}`}
-            title={isShip ? 'Open ship page' : isAnime ? 'Open page' : 'Open character page'}
-          >
+          <a className="entry-name" href={href}>
             {entry.name}
           </a>
           {showAuthors && entry.addedBy && <Avatar user={entry.addedBy} size={18} title={`Added by ${entry.addedBy.username}`} />}
         </div>
 
         <div className="series-line">
-          {kind === 'character' && !readOnly && entry.seriesOptions.length > 1 ? (
+          {pickingSeries ? (
             <select
               className="series-select"
+              autoFocus
               value={entry.seriesTitle ?? ''}
-              onChange={(e) => onUpdate(entry.id, { seriesTitle: e.target.value })}
-              title="Change which series is shown"
+              onChange={(e) => {
+                onUpdate(entry.id, { seriesTitle: e.target.value });
+                setPickingSeries(false);
+              }}
+              onBlur={() => setPickingSeries(false)}
               aria-label={`Series shown for ${entry.name}`}
             >
               {entry.seriesOptions.map((title) => (
@@ -230,29 +232,8 @@ export default function EntryRow({
           ) : (
             <span className="series">{entry.seriesTitle || 'Unknown series'}</span>
           )}
-          {kind === 'character' && (
-            <a className="anime-link ship-with" href={`#/ships/new/${entry.anilistId}`} title={`Ship ${entry.name} with…`}>
-              💕
-            </a>
-          )}
-          {animeId && (
-            <a className="anime-link" href={`#/anime/${animeId}`} title="Open anime page">
-              {isAnime ? null : '🎬'}
-              <CatalogueBadge animeId={animeId} />
-            </a>
-          )}
+          {animeId && <CatalogueBadge animeId={animeId} />}
         </div>
-
-        {readOnly ? (
-          entry.note && <p className="note read-only">{entry.note}</p>
-        ) : (
-          <NoteEditor
-            note={entry.note}
-            noteBy={entry.noteBy}
-            showAuthor={showAuthors}
-            onSave={(note) => onUpdate(entry.id, { note })}
-          />
-        )}
 
         {isShip && entry.ship && (
           <div className="ship-badges">
@@ -261,24 +242,32 @@ export default function EntryRow({
           </div>
         )}
 
+        <NoteEditor
+          note={entry.note}
+          noteBy={entry.noteBy}
+          showAuthor={showAuthors}
+          readOnly={readOnly}
+          editing={editingNote}
+          setEditing={setEditingNote}
+          onSave={(note) => onUpdate(entry.id, { note })}
+        />
+
         {extra}
 
         {social && entry.thread && (
           <div className="entry-social">
             <Reactions target={entry.thread} initial={entry.reactions} emojis={ENTRY_EMOJIS} />
-            <button type="button" className="link-btn small" onClick={() => setShowThread((s) => !s)} aria-expanded={showThread}>
-              💬 {commentCount > 0 ? commentCount : 'Comment'}
-            </button>
+            {commentCount > 0 && (
+              <button type="button" className="reaction comment-chip" onClick={() => setShowThread((s) => !s)} aria-expanded={showThread}>
+                💬 {commentCount}
+              </button>
+            )}
           </div>
         )}
-        {social && showThread && <Thread thread={entry.thread} onCount={setCommentCount} placeholder={`Say something about ${entry.name}…`} />}
+        {social && showThread && <Thread thread={entry.thread} onCount={setCommentCount} placeholder={`Say something about ${entry.name}…`} autoFocus />}
       </div>
 
-      {!readOnly && (
-        <button className="icon-btn danger" onClick={() => onDelete(entry)} aria-label={`Remove ${entry.name}`} title="Remove">
-          ✕
-        </button>
-      )}
+      <Menu items={menuItems} title={entry.name} label={`Actions for ${entry.name}`} />
     </li>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, characterSearch } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import Avatar from '../components/Avatar.jsx';
+import ThemeToggle from '../components/ThemeToggle.jsx';
 import ImagePicker from '../components/ImagePicker.jsx';
 import Modal from '../components/Modal.jsx';
 import SearchBox from '../components/SearchBox.jsx';
@@ -74,6 +75,10 @@ export default function SettingsPage({ onLogout }) {
 
   return (
     <section className="settings">
+      <div className="card settings-card">
+        <h3>🎨 Appearance</h3>
+        <ThemeToggle />
+      </div>
       <div className="card settings-card">
         <h3>Profile photo</h3>
         <div className="settings-user">

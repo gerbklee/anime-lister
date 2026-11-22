@@ -1,4 +1,4 @@
-# Anime Lister
+# Anime Hub
 
 A self-hosted web app for creating and maintaining numbered (ranked) lists of anime characters.
 

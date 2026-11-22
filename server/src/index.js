@@ -109,7 +109,7 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Anime Lister running on http://0.0.0.0:${PORT}`);
+  console.log(`Anime Hub running on http://0.0.0.0:${PORT}`);
   startAiringJob();
   retryMissingImages()
     .catch((err) => console.warn('Image retry failed:', err.message))

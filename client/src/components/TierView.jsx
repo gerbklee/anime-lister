@@ -102,7 +102,7 @@ async function exportImage(title, tiers) {
   }
   ctx.fillStyle = '#9298ad';
   ctx.font = '13px system-ui, sans-serif';
-  ctx.fillText('Anime Lister', W - 110, H - 10);
+  ctx.fillText('Anime Hub', W - 110, H - 10);
 
   const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
   const file = new File([blob], `${title.replace(/[^\w-]+/g, '_')}_tiers.png`, { type: 'image/png' });

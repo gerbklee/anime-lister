@@ -59,10 +59,10 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data.json();
   } catch {
-    data = { title: 'Anime Lister', body: event.data?.text() };
+    data = { title: 'Anime Hub', body: event.data?.text() };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Anime Lister', {
+    self.registration.showNotification(data.title || 'Anime Hub', {
       body: data.body || '',
       icon: '/icons/icon-192.png',
       badge: '/icons/badge.png',

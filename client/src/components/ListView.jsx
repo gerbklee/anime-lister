@@ -13,6 +13,7 @@ import ImagePicker from './ImagePicker.jsx';
 import TrailerModal from './TrailerModal.jsx';
 import WatchedDialog from './WatchedDialog.jsx';
 import Avatar from './Avatar.jsx';
+import Menu from './Menu.jsx';
 import BattleModal from './BattleModal.jsx';
 import TierView from './TierView.jsx';
 import CategoryPicker from './CategoryPicker.jsx';
@@ -120,6 +121,7 @@ export default function ListView({ listId, onListsChanged }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [sharing, setSharing] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [view, setView] = useState('mine'); // 'mine' | userId | 'combined'
   const [display, setDisplay] = useState('list'); // 'list' | 'tiers'
   const [picking, setPicking] = useState(null); // entry whose picture is being changed
@@ -447,47 +449,47 @@ export default function ListView({ listId, onListsChanged }) {
             {detail.name}
           </h2>
         )}
-        <span className="muted">{plural(entries.length, word, { anime: 'anime', manga: 'manga', entry: 'entries' }[word] ?? `${word}s`)}</span>
-        {detail.isShared && kind !== 'watchlist' && <span className="pill">👥 Shared</span>}
         <div className="spacer" />
-        {detail.isOwner && kind === 'character' && <CategoryPicker category={detail.category} emoji={detail.emoji} onChange={changeList} />}
-        {detail.isOwner && !detail.isShared && (
-          <button className="btn ghost" onClick={() => setSharing((s) => !s)} aria-expanded={sharing}>
-            Share
+        <Menu
+          title={detail.name}
+          label="List options"
+          items={[
+            detail.isOwner && kind === 'character' && { icon: listEmoji(detail) || '⭐', label: 'Category & emoji', onSelect: () => setCategoryOpen((o) => !o) },
+            detail.isOwner && { icon: '👥', label: detail.isShared ? 'Members & invite' : 'Share…', onSelect: () => setSharing((s) => !s) },
+            detail.isOwner && { icon: '✏️', label: 'Rename', onSelect: startRename },
+            detail.isShared && !detail.isOwner && { icon: '🚪', label: 'Leave list', onSelect: leave },
+            detail.isOwner && 'divider',
+            detail.isOwner && { icon: '🗑️', label: 'Delete list', danger: true, onSelect: deleteList },
+          ]}
+        />
+      </div>
+      <div className="list-subline">
+        <span className="muted small">{plural(entries.length, word, { anime: 'anime', manga: 'manga', entry: 'entries' }[word] ?? `${word}s`)}</span>
+        {detail.isShared && (
+          <button type="button" className="members-mini" onClick={() => detail.isOwner && setSharing((s) => !s)} title={detail.isOwner ? 'Members & invite' : 'Members'}>
+            <span className="avatar-stack" aria-hidden="true">
+              {[detail.owner, ...detail.members].filter(Boolean).map((p) => (
+                <Avatar key={p.id} user={p} size={20} />
+              ))}
+            </span>
+            <span className="muted small">
+              with{' '}
+              {[detail.owner, ...detail.members]
+                .filter((p) => p && p.id !== me.id)
+                .map((p) => p.username)
+                .join(', ') || 'nobody yet'}
+            </span>
           </button>
         )}
-        {detail.isOwner && (
-          <>
-            <button className="btn ghost" onClick={startRename}>
-              Rename
-            </button>
-            <button className="btn danger" onClick={deleteList}>
-              Delete
-            </button>
-          </>
-        )}
-        {detail.isShared && !detail.isOwner && (
-          <button className="btn ghost" onClick={leave}>
-            Leave
-          </button>
-        )}
+        {readOnly && <span className="pill tiny">👀 {detail.owner?.username ?? 'Someone'}'s list · view only</span>}
       </div>
 
-      {readOnly && (
-        <div className="banner info">
-          👀 This is {detail.owner?.username ?? 'someone'}'s personal list. You can look and react, but only they can edit it.
-        </div>
+      {categoryOpen && detail.isOwner && kind === 'character' && (
+        <CategoryPicker inline category={detail.category} emoji={detail.emoji} onChange={changeList} onClose={() => setCategoryOpen(false)} />
       )}
 
-      {(detail.isShared || sharing) && (
-        <MembersPanel
-          detail={detail}
-          me={me}
-          users={users}
-          onInvite={invite}
-          onRemove={removeMember}
-          startOpen={sharing && !detail.isShared}
-        />
+      {sharing && detail.isOwner && (
+        <MembersPanel detail={detail} me={me} users={users} onInvite={invite} onRemove={removeMember} startOpen manageOnly />
       )}
 
       {!readOnly && (
@@ -535,19 +537,23 @@ export default function ListView({ listId, onListsChanged }) {
               </button>
             </div>
           )}
-          <div className="segmented compact-seg" role="tablist" aria-label="Display">
-            <button type="button" className={display === 'list' ? 'active' : ''} onClick={() => setDisplay('list')}>
-              📋 List
+          <div className="toolbar-icons">
+            <button
+              type="button"
+              className={`icon-btn tool-btn ${display === 'tiers' ? 'active' : ''}`}
+              onClick={() => setDisplay(display === 'tiers' ? 'list' : 'tiers')}
+              aria-pressed={display === 'tiers'}
+              title={display === 'tiers' ? 'Show as list' : 'Show as tier list'}
+              aria-label="Tier view"
+            >
+              🏆
             </button>
-            <button type="button" className={display === 'tiers' ? 'active' : ''} onClick={() => setDisplay('tiers')}>
-              🏆 Tiers
-            </button>
+            {editableView && myOrder.length + tray.length > 1 && (
+              <button type="button" className="icon-btn tool-btn" onClick={() => setBattle({ mode: 'full' })} title="Battle sort: this or that" aria-label="Battle sort">
+                ⚔️
+              </button>
+            )}
           </div>
-          {editableView && myOrder.length + tray.length > 1 && (
-            <button type="button" className="btn ghost small-btn" onClick={() => setBattle({ mode: 'full' })}>
-              ⚔️ Battle sort
-            </button>
-          )}
         </div>
       )}
 

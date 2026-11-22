@@ -3,7 +3,7 @@ import Avatar from './Avatar.jsx';
 
 // Compact members row: overlapping avatars, plus (for the owner) an icon that
 // opens the member management (remove members, invite by username).
-export default function MembersPanel({ detail, me, users, onInvite, onRemove, startOpen = false }) {
+export default function MembersPanel({ detail, me, users, onInvite, onRemove, startOpen = false, manageOnly = false }) {
   const [open, setOpen] = useState(startOpen);
   const [username, setUsername] = useState('');
   const [error, setError] = useState(null);
@@ -32,7 +32,7 @@ export default function MembersPanel({ detail, me, users, onInvite, onRemove, st
 
   return (
     <div className="members">
-      <div className="members-row">
+      {!manageOnly && <div className="members-row">
         <span className="avatar-stack" aria-hidden="true">
           {people.map((p) => (
             <Avatar key={p.id} user={p} size={24} title={`${p.username}${p.id === detail.owner?.id ? ' (owner)' : ''}`} />
@@ -51,7 +51,7 @@ export default function MembersPanel({ detail, me, users, onInvite, onRemove, st
             👤＋
           </button>
         )}
-      </div>
+      </div>}
 
       {open && detail.isOwner && (
         <div className="members-manage card">

@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import { SHIP_STATUS, VOTES, compactCount, timeAgo } from '../util.js';
 import AddToListMenu from '../components/AddToListMenu.jsx';
+import Menu from '../components/Menu.jsx';
 import Avatar from '../components/Avatar.jsx';
 import Modal from '../components/Modal.jsx';
 import Reactions from '../components/Reactions.jsx';
@@ -209,9 +210,11 @@ export default function ShipPage({ id }) {
       </a>
       <div className="ship-hero card">
         <div className="ship-hero-cover">
-          <ShipCover ship={ship} className="large" />
-          <button type="button" className="btn ghost small-btn" onClick={() => setPicking(true)}>
-            🖼️ Change cover
+          <button type="button" className="cover-btn" onClick={() => setPicking(true)} title="Change cover" aria-label="Change cover">
+            <ShipCover ship={ship} className="large" />
+            <span className="cover-edit" aria-hidden="true">
+              🖼️
+            </span>
           </button>
         </div>
         <div className="ship-hero-text">
@@ -288,12 +291,24 @@ export default function ShipPage({ id }) {
           </div>
 
           <div className="char-actions">
-            <AddToListMenu kind="ship" itemId={ship.id} label="+ Add to OTP list" />
-            {canDelete && (
-              <button type="button" className="btn danger" onClick={deleteShip}>
-                Sink ship
-              </button>
-            )}
+            <AddToListMenu kind="ship" itemId={ship.id} label="+ OTP list" />
+            <Menu
+              title={ship.name}
+              className="icon-btn menu-trigger bordered"
+              items={[
+                { icon: '🖼️', label: 'Change cover', onSelect: () => setPicking(true) },
+                {
+                  icon: '✏️',
+                  label: 'Rename',
+                  onSelect: () => {
+                    setNameDraft(ship.name);
+                    setEditingName(true);
+                  },
+                },
+                canDelete && 'divider',
+                canDelete && { icon: '⚓', label: 'Sink ship (delete)', danger: true, onSelect: deleteShip },
+              ]}
+            />
           </div>
           {ship.createdBy && (
             <p className="muted tiny">

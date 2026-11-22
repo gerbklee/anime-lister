@@ -185,7 +185,7 @@ function togetherSlides(w, me) {
   if (w.games.played) {
     slides.push({ emoji: '🎮', kicker: 'Games this year', big: `${w.games.myWins} – ${w.games.theirWins}`, sub: `${me.username} vs ${other} · ${plural(w.games.played, 'challenge')}` });
   }
-  slides.push({ emoji: '✨', kicker: `That was ${w.year}`, big: 'Here’s to next year!', sub: 'Made with ⭐ Anime Lister' });
+  slides.push({ emoji: '✨', kicker: `That was ${w.year}`, big: 'Here’s to next year!', sub: 'Made with ✦ Anime Hub' });
   return slides;
 }
 
