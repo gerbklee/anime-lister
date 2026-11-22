@@ -22,6 +22,8 @@ function readRoute() {
   if ((m = h.match(/^\/anime\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[1]), suggest: !!m[2] };
   // Profile: your anime catalogue and settings, or someone else's anime.
   if ((m = h.match(/^\/(?:profile|anime)\/u\/(\d+)$/))) return { tab: 'profile', view: 'anime', userId: Number(m[1]) };
+  if ((m = h.match(/^\/profile\/u\/(\d+)\/type$/))) return { tab: 'profile', view: 'type', userId: Number(m[1]) };
+  if (h === '/profile/type') return { tab: 'profile', view: 'type' };
   if (h === '/profile' || h === '/anime') return { tab: 'profile', view: 'anime' };
   if (h === '/profile/settings' || h === '/settings') return { tab: 'profile', view: 'settings' };
   if ((m = h.match(/^\/watch\/(\d+)$/))) return { tab: 'watch', id: Number(m[1]) };

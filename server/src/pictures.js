@@ -217,4 +217,27 @@ router.put('/me/avatar', wrap(async (req, res) => {
   res.json(getUser(me));
 }));
 
-module.exports = { picturesRouter: router };
+// Tag counts over a character's solo pictures (for "My type" looks traits).
+// Requests are spaced out to be gentle with Safebooru.
+let sbQueue = Promise.resolve();
+function sbTagCounts(tag) {
+  const run = sbQueue.then(async () => {
+    try {
+      const rows = await sbJson(
+        `${SAFEBOORU}/index.php?page=dapi&s=post&q=index&json=1&limit=100&tags=${encodeURIComponent(`${tag} solo rating:general`)}`,
+      );
+      const counts = new Map();
+      const posts = Array.isArray(rows) ? rows : [];
+      for (const p of posts) {
+        for (const t of new Set(String(p.tags ?? '').split(/\s+/))) if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+      }
+      return { posts: posts.length, counts };
+    } finally {
+      await sleep(600);
+    }
+  });
+  sbQueue = run.catch(() => {});
+  return run;
+}
+
+module.exports = { picturesRouter: router, guessTag, sbTagCounts };

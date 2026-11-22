@@ -42,8 +42,9 @@ export const api = {
 
   // Lists
   getLists: () => request('GET', '/api/lists'),
-  createList: (name, shared, kind) => request('POST', '/api/lists', { name, shared, kind }),
+  createList: (name, shared, kind, category) => request('POST', '/api/lists', { name, shared, kind, category }),
   renameList: (id, name) => request('PATCH', `/api/lists/${id}`, { name }),
+  updateList: (id, patch) => request('PATCH', `/api/lists/${id}`, patch),
   deleteList: (id) => request('DELETE', `/api/lists/${id}`),
   getList: (id) => request('GET', `/api/lists/${id}`),
   listVersion: (id) => request('GET', `/api/lists/${id}/version`),
@@ -90,6 +91,10 @@ export const api = {
   discoverUpcoming: () => request('GET', '/api/discover/upcoming'),
   forYou: () => request('GET', '/api/discover/foryou'),
   similar: (animeId) => request('GET', `/api/discover/similar/${animeId}`),
+
+  // My type
+  types: (userId) => request('GET', `/api/types/${userId}`),
+  typeSuggest: (category) => request('GET', `/api/types/me/suggest?category=${category}`),
 
   // Compare
   compare: (userId, kind = 'character') => request('GET', `/api/compare?with=${userId}&kind=${kind}`),

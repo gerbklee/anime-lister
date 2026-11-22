@@ -52,8 +52,8 @@ export default function ListsPage({ route }) {
     navigate(first ? `#/list/${first.id}` : '#/lists');
   };
 
-  const handleCreate = async (name, shared) => {
-    const list = await api.createList(name, shared, kind);
+  const handleCreate = async (name, shared, category) => {
+    const list = await api.createList(name, shared, kind, category);
     await refreshLists();
     navigate(`#/list/${list.id}`);
   };
@@ -84,6 +84,7 @@ export default function ListsPage({ route }) {
         selectedId={selected?.id ?? null}
         hrefFor={(l) => `#/list/${l.id}`}
         onCreate={handleCreate}
+        withCategory={kind === 'character'}
         onPick={() => setMenuOpen(false)}
       />
       <main className="main">

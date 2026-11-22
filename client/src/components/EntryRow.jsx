@@ -4,6 +4,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { useApp } from '../AppContext.jsx';
 import { STATUS_LABELS } from '../util.js';
 import Avatar from './Avatar.jsx';
+import Reactions from './Reactions.jsx';
+import Thread from './Thread.jsx';
+
+const ENTRY_EMOJIS = ['😂', '😳', '🔥', '❤️'];
 
 export function RankInput({ rank, total, onMove }) {
   const [value, setValue] = useState(String(rank));
@@ -137,7 +141,20 @@ export function Portrait({ src, alt, onClick, label }) {
   );
 }
 
-export default function EntryRow({ kind, entry, rank, total, readOnly, showAuthors, onMove, onUpdate, onDelete, onChangeImage }) {
+export default function EntryRow({
+  kind,
+  entry,
+  rank,
+  total,
+  readOnly,
+  showAuthors,
+  onMove,
+  onUpdate,
+  onDelete,
+  onChangeImage,
+  social = false,
+  extra = null,
+}) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
     disabled: readOnly,
@@ -146,6 +163,9 @@ export default function EntryRow({ kind, entry, rank, total, readOnly, showAutho
   const style = { transform: CSS.Transform.toString(transform), transition };
   const isAnime = kind === 'anime';
   const animeId = isAnime ? entry.anilistId : entry.seriesAnimeId;
+  const [showThread, setShowThread] = useState(false);
+  const [commentCount, setCommentCount] = useState(entry.commentCount ?? 0);
+  useEffect(() => setCommentCount(entry.commentCount ?? 0), [entry.commentCount]);
 
   return (
     <li ref={setNodeRef} style={style} className={`entry ${isDragging ? 'dragging' : ''} ${readOnly ? 'read-only' : ''}`}>
@@ -225,6 +245,18 @@ export default function EntryRow({ kind, entry, rank, total, readOnly, showAutho
             onSave={(note) => onUpdate(entry.id, { note })}
           />
         )}
+
+        {extra}
+
+        {social && entry.thread && (
+          <div className="entry-social">
+            <Reactions target={entry.thread} initial={entry.reactions} emojis={ENTRY_EMOJIS} />
+            <button type="button" className="link-btn small" onClick={() => setShowThread((s) => !s)} aria-expanded={showThread}>
+              💬 {commentCount > 0 ? commentCount : 'Comment'}
+            </button>
+          </div>
+        )}
+        {social && showThread && <Thread thread={entry.thread} onCount={setCommentCount} placeholder={`Say something about ${entry.name}…`} />}
       </div>
 
       {!readOnly && (

@@ -22,6 +22,14 @@ const q = {
            (SELECT COUNT(*) FROM entries x WHERE x.list_id = l.id) AS list_size
     FROM entries e JOIN lists l ON l.id = e.list_id
     WHERE l.owner_id = ? AND l.is_shared = 0 AND l.kind = ?`),
+  // Shared lists count with each person's own ranking.
+  sharedRanked: db.prepare(`
+    SELECT e.anilist_id, e.name, e.image_file, e.image_url, e.series_title, r.position,
+           l.id AS list_id, l.name AS list_name,
+           (SELECT COUNT(*) FROM rankings r2 JOIN entries e2 ON e2.id = r2.entry_id
+             WHERE e2.list_id = l.id AND r2.user_id = r.user_id) AS list_size
+    FROM rankings r JOIN entries e ON e.id = r.entry_id JOIN lists l ON l.id = e.list_id
+    WHERE r.user_id = ? AND l.kind = ? AND l.is_shared = 1`),
   catalogue: db.prepare(`
     SELECT ua.anime_id, ua.status AS ua_status, ua.rating, a.*
     FROM user_anime ua JOIN anime a ON a.id = ua.anime_id WHERE ua.user_id = ?`),
@@ -35,7 +43,7 @@ function collect(userId, kind) {
   const series = new Map();
   const lists = new Set();
 
-  for (const r of q.personalEntries.all(userId, kind)) {
+  for (const r of [...q.personalEntries.all(userId, kind), ...q.sharedRanked.all(userId, kind)]) {
     lists.add(r.list_id);
     const placement = {
       rank: r.position,

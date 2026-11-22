@@ -28,7 +28,7 @@ const q = {
   deleteThread: db.prepare('DELETE FROM comments WHERE thread = ?'),
   deleteReactions: db.prepare('DELETE FROM reactions WHERE target = ?'),
   listCharacters: db.prepare(`
-    SELECT e.id AS entry_id, e.anilist_id, e.name, e.image_file, e.image_url, e.position,
+    SELECT e.id AS entry_id, e.anilist_id, e.name, e.image_file, e.image_url, COALESCE((SELECT rk.position FROM rankings rk WHERE rk.entry_id = e.id AND rk.user_id = @me), e.position) AS position,
            l.id AS list_id, l.name AS list_name, l.owner_id, l.is_shared,
            (SELECT COUNT(*) FROM entries x WHERE x.list_id = l.id) AS list_size
     FROM entries e
@@ -39,7 +39,7 @@ const q = {
       OR EXISTS (SELECT 1 FROM list_members m WHERE m.list_id = l.id AND m.user_id = @me))
     ORDER BY l.id, e.position`),
   animeRanks: db.prepare(`
-    SELECT e.position, l.id AS list_id, l.name AS list_name, l.owner_id, l.is_shared,
+    SELECT COALESCE((SELECT rk.position FROM rankings rk WHERE rk.entry_id = e.id AND rk.user_id = @me), e.position) AS position, l.id AS list_id, l.name AS list_name, l.owner_id, l.is_shared,
            (SELECT COUNT(*) FROM entries x WHERE x.list_id = l.id) AS list_size
     FROM entries e JOIN lists l ON l.id = e.list_id
     WHERE e.anilist_id = @anime AND l.kind = 'anime' AND (

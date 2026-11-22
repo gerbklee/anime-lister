@@ -13,7 +13,7 @@ const { toAnimeSummary } = require('./anime');
 
 const MERGE_MS = 10 * 60 * 1000;
 const MERGEABLE = new Set(['anime_status', 'anime_rating', 'anime_review']);
-const EMOJIS = ['❤️', '😂', '😮'];
+const EMOJIS = ['❤️', '😂', '😮', '😳', '🔥'];
 
 const q = {
   lastSimilar: db.prepare(`
@@ -42,6 +42,7 @@ const q = {
           OR EXISTS (SELECT 1 FROM list_members m WHERE m.list_id = l.id AND m.user_id = @me))))
     ORDER BY a.id DESC LIMIT @limit`),
   anime: db.prepare('SELECT * FROM anime WHERE id = ?'),
+  entryList: db.prepare('SELECT list_id FROM entries WHERE id = ?'),
   list: db.prepare('SELECT id, name, kind, is_shared FROM lists WHERE id = ?'),
   userAnime: db.prepare('SELECT * FROM user_anime WHERE user_id = ? AND anime_id = ?'),
   comment: db.prepare('SELECT * FROM comments WHERE id = ?'),
@@ -106,6 +107,11 @@ function canUseThread(key, me) {
     return !!list && list.kind === 'watchlist' && !!q.canEditList.get({ list: list.id, me });
   }
   if (k.kind === 'activity' && k.nums.length === 1) return canSeeActivity(q.get.get(k.nums[0]), me);
+  // Comments/reactions on a list entry: anyone who can see the list.
+  if (k.kind === 'entry' && k.nums.length === 1) {
+    const listId = q.entryList.get(k.nums[0])?.list_id;
+    return !!listId && !!q.canSeeList.get({ list: listId, me });
+  }
   return false;
 }
 

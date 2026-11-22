@@ -3,7 +3,7 @@ import { api } from '../api.js';
 
 const EMOJIS = ['❤️', '😂', '😮'];
 
-export default function Reactions({ target, initial }) {
+export default function Reactions({ target, initial, emojis = EMOJIS }) {
   const [summary, setSummary] = useState(initial ?? {});
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +25,7 @@ export default function Reactions({ target, initial }) {
 
   return (
     <span className="reactions">
-      {EMOJIS.map((e) => {
+      {emojis.map((e) => {
         const r = summary[e] ?? { count: 0, mine: false };
         return (
           <button

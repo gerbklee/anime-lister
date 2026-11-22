@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CATEGORIES, listEmoji } from '../util.js';
 
 function Section({ title, lists, selectedId, emptyText, showOwner, hrefFor }) {
   return (
@@ -16,9 +17,15 @@ function Section({ title, lists, selectedId, emptyText, showOwner, hrefFor }) {
                 aria-current={list.id === selectedId ? 'page' : undefined}
               >
                 <span className="list-link-name">
+                  {listEmoji(list) && <span className="list-emoji">{listEmoji(list)} </span>}
                   {list.name}
                   {showOwner && !list.isOwner && list.owner && <span className="muted small"> · {list.owner.username}</span>}
                 </span>
+                {list.unranked > 0 && (
+                  <span className="count to-rank" title={`${list.unranked} new, not ranked by you yet`}>
+                    +{list.unranked}
+                  </span>
+                )}
                 <span className="count">{list.count}</span>
               </a>
             </li>
@@ -31,9 +38,10 @@ function Section({ title, lists, selectedId, emptyText, showOwner, hrefFor }) {
 
 // Sidebar with list sections and a "new list" form.
 // `watchlists` mode shows a single section (watchlists are always shared).
-export default function ListSidebar({ open, lists, selectedId, onCreate, onPick, hrefFor, header, watchlists = false }) {
+export default function ListSidebar({ open, lists, selectedId, onCreate, onPick, hrefFor, header, watchlists = false, withCategory = false }) {
   const [name, setName] = useState('');
   const [shared, setShared] = useState(false);
+  const [category, setCategory] = useState('other');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -53,7 +61,7 @@ export default function ListSidebar({ open, lists, selectedId, onCreate, onPick,
     setBusy(true);
     setError(null);
     try {
-      await onCreate(trimmed, watchlists || shared);
+      await onCreate(trimmed, watchlists || shared, withCategory ? category : undefined);
       setName('');
     } catch (err) {
       setError(err.message);
@@ -116,6 +124,15 @@ export default function ListSidebar({ open, lists, selectedId, onCreate, onPick,
               👥 Shared
             </button>
           </div>
+        )}
+        {withCategory && (
+          <select value={category} onChange={(e) => setCategory(e.target.value)} aria-label="Category">
+            {Object.entries(CATEGORIES).map(([key, c]) => (
+              <option key={key} value={key}>
+                {c.emoji} {key === 'other' ? 'Other list' : `${c.label} list`}
+              </option>
+            ))}
+          </select>
         )}
       </form>
       {error && <p className="error-text">{error}</p>}

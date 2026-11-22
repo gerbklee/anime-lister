@@ -1,12 +1,18 @@
 // Lists, entries and list members.
 //
 // List kinds: 'character' (ranked characters), 'anime' (ranked anime) and
-// 'watchlist' (shared "to watch" list; always shared).
+// 'watchlist' (shared "to watch" list; always shared, one joint order).
+//
+// Rankings:
+//   personal list: one order (entries.position), owned by the owner
+//   shared character/anime list: a shared pool; every member ranks it in their
+//     own order (table `rankings`). Entries a member hasn't ranked yet are in
+//     their "to rank" tray.
 //
 // Permissions:
 //   personal list (is_shared = 0): owner edits; every logged-in user can view
 //   shared list   (is_shared = 1): owner + members edit; nobody else sees it
-//   rename / delete / manage members: owner only (members may leave)
+//   rename / delete / category / manage members: owner only (members may leave)
 const express = require('express');
 const { db } = require('./db');
 const { HttpError, wrap, parseId } = require('./http');
@@ -17,11 +23,14 @@ const { usersById } = require('./users');
 const activity = require('./activity');
 
 const KINDS = ['character', 'anime', 'watchlist'];
+const CATEGORIES = ['daddy', 'mommy', 'waifu', 'husbando', 'other'];
 
 const q = {
   visibleLists: db.prepare(`
-    SELECT l.id, l.name, l.kind, l.is_shared, l.owner_id,
-           (SELECT COUNT(*) FROM entries e WHERE e.list_id = l.id) AS count
+    SELECT l.id, l.name, l.kind, l.category, l.emoji, l.is_shared, l.owner_id,
+           (SELECT COUNT(*) FROM entries e WHERE e.list_id = l.id) AS count,
+           (SELECT COUNT(*) FROM entries e WHERE e.list_id = l.id
+              AND NOT EXISTS (SELECT 1 FROM rankings r WHERE r.entry_id = e.id AND r.user_id = @me)) AS unranked
     FROM lists l
     WHERE l.is_shared = 0
        OR l.owner_id = @me
@@ -30,8 +39,8 @@ const q = {
   getList: db.prepare('SELECT * FROM lists WHERE id = ?'),
   isMember: db.prepare('SELECT 1 FROM list_members WHERE list_id = ? AND user_id = ?'),
   memberIds: db.prepare('SELECT user_id FROM list_members WHERE list_id = ? ORDER BY added_at, user_id'),
-  insertList: db.prepare('INSERT INTO lists (name, owner_id, is_shared, kind) VALUES (?, ?, ?, ?)'),
-  renameList: db.prepare('UPDATE lists SET name = ? WHERE id = ?'),
+  insertList: db.prepare('INSERT INTO lists (name, owner_id, is_shared, kind, category, emoji) VALUES (?, ?, ?, ?, ?, ?)'),
+  updateList: db.prepare('UPDATE lists SET name = @name, category = @category, emoji = @emoji WHERE id = @id'),
   deleteList: db.prepare('DELETE FROM lists WHERE id = ?'),
   bump: db.prepare('UPDATE lists SET version = version + 1 WHERE id = ?'),
   makeShared: db.prepare('UPDATE lists SET is_shared = 1 WHERE id = ?'),
@@ -59,6 +68,24 @@ const q = {
     INSERT INTO user_anime (user_id, anime_id, status, progress) VALUES (?, ?, 'watched', ?)
     ON CONFLICT (user_id, anime_id) DO UPDATE SET
       status = 'watched', progress = MAX(user_anime.progress, excluded.progress), updated_at = datetime('now')`),
+  // Personal rankings
+  listRankings: db.prepare(`
+    SELECT r.entry_id, r.user_id, r.position FROM rankings r JOIN entries e ON e.id = r.entry_id
+    WHERE e.list_id = ?`),
+  userRanking: db.prepare(`
+    SELECT r.entry_id FROM rankings r JOIN entries e ON e.id = r.entry_id
+    WHERE e.list_id = ? AND r.user_id = ? ORDER BY r.position`),
+  maxUserRank: db.prepare(`
+    SELECT COALESCE(MAX(r.position), 0) AS max FROM rankings r JOIN entries e ON e.id = r.entry_id
+    WHERE e.list_id = ? AND r.user_id = ?`),
+  setRank: db.prepare('INSERT OR REPLACE INTO rankings (entry_id, user_id, position) VALUES (?, ?, ?)'),
+  clearUserRanks: db.prepare('DELETE FROM rankings WHERE user_id = ? AND entry_id IN (SELECT id FROM entries WHERE list_id = ?)'),
+  rankedUsers: db.prepare('SELECT DISTINCT r.user_id FROM rankings r JOIN entries e ON e.id = r.entry_id WHERE e.list_id = ?'),
+  seedOwnerRanks: db.prepare(`
+    INSERT OR IGNORE INTO rankings (entry_id, user_id, position)
+    SELECT id, ?, position FROM entries WHERE list_id = ?`),
+  deleteThread: db.prepare('DELETE FROM comments WHERE thread = ?'),
+  deleteReactions: db.prepare("DELETE FROM reactions WHERE target = ? OR target IN (SELECT 'comment:' || id FROM comments WHERE thread = ?)"),
 };
 
 // ---- Helpers ------------------------------------------------------------------
@@ -69,6 +96,15 @@ function cleanListName(value) {
   if (name.length > 100) throw new HttpError(400, 'List name must be 100 characters or fewer');
   return name;
 }
+
+function cleanEmoji(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || [...value].length > 4) throw new HttpError(400, 'Pick a single emoji.');
+  return value;
+}
+
+// Shared character/anime lists: every member ranks the pool in their own order.
+const perPersonRanking = (list) => !!list.is_shared && list.kind !== 'watchlist';
 
 // Series options were plain titles before anime support; now {id, type, title}.
 function parseSeries(raw) {
@@ -81,7 +117,8 @@ function animeMeta(a) {
   return [FORMATS[a.format] ?? a.format, a.season_year, a.episodes ? `${a.episodes} ep` : null].filter(Boolean).join(' · ');
 }
 
-function toEntry(row, kind, users) {
+function toEntry(row, list, users, me, ranks) {
+  const kind = list.kind;
   const ref = (id) => (id ? users.get(id) ?? { id, username: 'unknown', avatar: null } : null);
   const entry = {
     id: row.id,
@@ -103,9 +140,26 @@ function toEntry(row, kind, users) {
     entry.customImage = !!row.original_image_url && row.image_url !== row.original_image_url;
   } else {
     entry.anime = toAnimeSummary(q.anime.get(row.anilist_id));
-    if (kind === 'watchlist') entry.commentCount = activity.commentCount(`watch:${row.list_id}:${row.anilist_id}`);
   }
+  if (kind === 'watchlist') {
+    entry.commentCount = activity.commentCount(`watch:${row.list_id}:${row.anilist_id}`);
+  } else {
+    const thread = `entry:${row.id}`;
+    entry.thread = thread;
+    entry.commentCount = activity.commentCount(thread);
+    entry.reactions = activity.reactionSummary(thread, me);
+  }
+  if (ranks) entry.ranks = ranks.get(row.id) ?? {};
   return entry;
+}
+
+function rankMap(listId) {
+  const map = new Map();
+  for (const r of q.listRankings.all(listId)) {
+    if (!map.has(r.entry_id)) map.set(r.entry_id, {});
+    map.get(r.entry_id)[r.user_id] = r.position;
+  }
+  return map;
 }
 
 function summary(row, me, users) {
@@ -113,10 +167,13 @@ function summary(row, me, users) {
     id: row.id,
     name: row.name,
     kind: row.kind,
+    category: row.category,
+    emoji: row.emoji,
     isShared: !!row.is_shared,
     owner: users.get(row.owner_id) ?? null,
     isOwner: row.owner_id === me.id,
     count: row.count,
+    unranked: perPersonRanking(row) ? row.unranked : 0,
   };
 }
 
@@ -148,7 +205,10 @@ function detail(a, users) {
     id: list.id,
     name: list.name,
     kind: list.kind,
+    category: list.category,
+    emoji: list.emoji,
     isShared: !!list.is_shared,
+    personalRankings: perPersonRanking(list),
     owner: users.get(list.owner_id) ?? null,
     members: q.memberIds.all(list.id).map((r) => users.get(r.user_id)).filter(Boolean),
     isOwner: a.isOwner,
@@ -157,16 +217,32 @@ function detail(a, users) {
   };
 }
 
-const insertAtEnd = db.transaction((values) => {
+const insertAtEnd = db.transaction((values, rankFor) => {
   const position = q.maxPosition.get(values.listId).max + 1;
   const id = Number(q.insertEntry.run({ ...values, position }).lastInsertRowid);
+  let rank = position;
+  if (rankFor) {
+    rank = q.maxUserRank.get(values.listId, rankFor).max + 1;
+    q.setRank.run(id, rankFor, rank);
+  }
   q.bump.run(values.listId);
-  return { id, position };
+  return { id, position, rank };
 });
+
+// Renumbers every member's ranking 1..n (after an entry was removed).
+function renumberRanks(listId) {
+  for (const { user_id: uid } of q.rankedUsers.all(listId)) {
+    q.userRanking.all(listId, uid).forEach((r, i) => q.setRank.run(r.entry_id, uid, i + 1));
+  }
+}
 
 const removeEntry = db.transaction((entry) => {
   q.deleteEntry.run(entry.id);
   q.closeGap.run(entry.list_id, entry.position);
+  renumberRanks(entry.list_id);
+  const thread = `entry:${entry.id}`;
+  q.deleteReactions.run(thread, thread);
+  q.deleteThread.run(thread);
   q.bump.run(entry.list_id);
 });
 
@@ -175,10 +251,17 @@ const applyOrder = db.transaction((listId, entryIds) => {
   q.bump.run(listId);
 });
 
-const shareWith = db.transaction((listId, userId) => {
-  q.makeShared.run(listId);
-  q.addMember.run(listId, userId);
+const applyPersonalOrder = db.transaction((listId, userId, entryIds) => {
+  q.clearUserRanks.run(userId, listId);
+  entryIds.forEach((id, index) => q.setRank.run(id, userId, index + 1));
   q.bump.run(listId);
+});
+
+const shareWith = db.transaction((list, userId) => {
+  if (!list.is_shared && list.kind !== 'watchlist') q.seedOwnerRanks.run(list.owner_id, list.id);
+  q.makeShared.run(list.id);
+  q.addMember.run(list.id, userId);
+  q.bump.run(list.id);
 });
 
 // ---- Lists --------------------------------------------------------------------
@@ -194,8 +277,9 @@ router.post('/lists', (req, res) => {
   const name = cleanListName(req.body?.name);
   const kind = req.body?.kind ?? 'character';
   if (!KINDS.includes(kind)) throw new HttpError(400, 'Unknown list type');
+  const category = kind === 'character' && CATEGORIES.includes(req.body?.category) ? req.body.category : 'other';
   const shared = kind === 'watchlist' || req.body?.shared === true ? 1 : 0;
-  const id = Number(q.insertList.run(name, req.user.id, shared, kind).lastInsertRowid);
+  const id = Number(q.insertList.run(name, req.user.id, shared, kind, category, cleanEmoji(req.body?.emoji)).lastInsertRowid);
   activity.record({ userId: req.user.id, type: 'list_create', listId: id, data: { kind } });
   res.status(201).json(detail(access(id, req.user), usersById()));
 });
@@ -203,7 +287,11 @@ router.post('/lists', (req, res) => {
 router.get('/lists/:id', (req, res) => {
   const a = access(parseId(req.params.id), req.user);
   const users = usersById();
-  res.json({ ...detail(a, users), entries: q.listEntries.all(a.list.id).map((r) => toEntry(r, a.list.kind, users)) });
+  const ranks = perPersonRanking(a.list) ? rankMap(a.list.id) : null;
+  res.json({
+    ...detail(a, users),
+    entries: q.listEntries.all(a.list.id).map((r) => toEntry(r, a.list, users, req.user.id, ranks)),
+  });
 });
 
 // Cheap endpoint the browser polls to notice changes made by someone else.
@@ -212,9 +300,19 @@ router.get('/lists/:id/version', (req, res) => {
   res.json({ version: a.list.version });
 });
 
+// Rename, change category or emoji (owner only).
 router.patch('/lists/:id', (req, res) => {
   const a = requireOwner(access(parseId(req.params.id), req.user));
-  q.renameList.run(cleanListName(req.body?.name), a.list.id);
+  const body = req.body ?? {};
+  const name = body.name !== undefined ? cleanListName(body.name) : a.list.name;
+  let category = a.list.category;
+  if (body.category !== undefined) {
+    if (!CATEGORIES.includes(body.category)) throw new HttpError(400, 'Unknown category');
+    if (a.list.kind !== 'character' && body.category !== 'other') throw new HttpError(400, 'Only character lists have a category.');
+    category = body.category;
+  }
+  const emoji = body.emoji !== undefined ? cleanEmoji(body.emoji) : a.list.emoji;
+  q.updateList.run({ id: a.list.id, name, category, emoji });
   q.bump.run(a.list.id);
   res.json(detail(access(a.list.id, req.user), usersById()));
 });
@@ -223,6 +321,11 @@ router.delete('/lists/:id', (req, res) => {
   const a = requireOwner(access(parseId(req.params.id), req.user));
   const files = q.listImageFiles.all(a.list.id).map((r) => r.image_file);
   db.transaction(() => {
+    for (const { id } of q.listEntryIds.all(a.list.id)) {
+      const thread = `entry:${id}`;
+      q.deleteReactions.run(thread, thread);
+      q.deleteThread.run(thread);
+    }
     q.deleteList.run(a.list.id);
     activity.removeListActivities(a.list.id);
   })();
@@ -230,15 +333,24 @@ router.delete('/lists/:id', (req, res) => {
   res.status(204).end();
 });
 
+// Saves an order. Personal lists: the full order of all entries. Shared
+// character/anime lists: YOUR ranking, i.e. the entries you have ranked so far
+// (anything left out stays in your "to rank" tray).
 router.put('/lists/:id/order', (req, res) => {
   const a = requireEdit(access(parseId(req.params.id), req.user));
   const ids = req.body?.entryIds;
   const current = q.listEntryIds.all(a.list.id).map((r) => r.id);
-  const valid =
-    Array.isArray(ids) &&
-    ids.length === current.length &&
-    new Set(ids).size === ids.length &&
-    ids.every((id) => current.includes(id));
+  const known = new Set(current);
+  const unique = Array.isArray(ids) && new Set(ids).size === ids.length;
+
+  if (perPersonRanking(a.list)) {
+    // An entry someone else just deleted.
+    if (!unique || !ids.every((id) => known.has(id))) throw new HttpError(409, 'The list was changed by someone else.');
+    applyPersonalOrder(a.list.id, req.user.id, ids);
+    return res.json({ ok: true });
+  }
+
+  const valid = unique && ids.length === current.length && ids.every((id) => known.has(id));
   // Someone else added or removed an entry in the meantime.
   if (!valid) throw new HttpError(409, 'The list was changed by someone else.');
   applyOrder(a.list.id, ids);
@@ -253,7 +365,7 @@ router.post('/lists/:id/members', (req, res) => {
   const user = username && q.userByName.get(username);
   if (!user) throw new HttpError(404, `There is no user called "${username}".`);
   if (user.id === a.list.owner_id) throw new HttpError(400, 'You already own this list.');
-  shareWith(a.list.id, user.id);
+  shareWith(a.list, user.id);
   res.status(201).json(detail(access(a.list.id, req.user), usersById()));
 });
 
@@ -262,8 +374,11 @@ router.delete('/lists/:id/members/:userId', (req, res) => {
   const a = access(parseId(req.params.id), req.user);
   const userId = parseId(req.params.userId);
   if (!a.isOwner && userId !== req.user.id) throw new HttpError(403, 'Only the list owner can remove members.');
-  q.removeMember.run(a.list.id, userId);
-  q.bump.run(a.list.id);
+  db.transaction(() => {
+    q.removeMember.run(a.list.id, userId);
+    q.clearUserRanks.run(userId, a.list.id);
+    q.bump.run(a.list.id);
+  })();
   res.status(204).end();
 });
 
@@ -298,6 +413,12 @@ async function animeValues(animeId) {
   };
 }
 
+let onCharacterAdded = () => {};
+// Lets the traits module learn about new characters without a require cycle.
+function setCharacterAddedHook(fn) {
+  onCharacterAdded = fn;
+}
+
 router.post('/lists/:id/entries', wrap(async (req, res) => {
   const a = requireEdit(access(parseId(req.params.id), req.user));
   const itemId = parseId(req.body?.anilistId);
@@ -309,7 +430,10 @@ router.post('/lists/:id/entries', wrap(async (req, res) => {
 
   let inserted;
   try {
-    inserted = insertAtEnd({ ...values, listId: a.list.id, anilistId: itemId, addedBy: req.user.id });
+    inserted = insertAtEnd(
+      { ...values, listId: a.list.id, anilistId: itemId, addedBy: req.user.id },
+      perPersonRanking(a.list) ? req.user.id : null,
+    );
   } catch (err) {
     if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') throw new HttpError(409, already);
     throw err;
@@ -320,9 +444,11 @@ router.post('/lists/:id/entries', wrap(async (req, res) => {
     listId: a.list.id,
     itemId,
     animeId: kind === 'character' ? null : itemId,
-    data: { kind, name: values.name, image: values.imageFile ? `/images/${values.imageFile}` : values.imageUrl, rank: inserted.position },
+    data: { kind, name: values.name, image: values.imageFile ? `/images/${values.imageFile}` : values.imageUrl, rank: inserted.rank },
   });
-  res.status(201).json(toEntry(q.getEntry.get(inserted.id), kind, usersById()));
+  if (kind === 'character') onCharacterAdded(itemId);
+  const ranks = perPersonRanking(a.list) ? rankMap(a.list.id) : null;
+  res.status(201).json(toEntry(q.getEntry.get(inserted.id), a.list, usersById(), req.user.id, ranks));
 }));
 
 function entryWithAccess(req) {
@@ -372,7 +498,8 @@ router.patch('/entries/:id', wrap(async (req, res) => {
 
   q.updateEntry.run({ id: entry.id, note, noteBy, seriesTitle });
   q.bump.run(entry.list_id);
-  res.json(toEntry(q.getEntry.get(entry.id), a.list.kind, usersById()));
+  const ranks = perPersonRanking(a.list) ? rankMap(a.list.id) : null;
+  res.json(toEntry(q.getEntry.get(entry.id), a.list, usersById(), req.user.id, ranks));
 }));
 
 router.delete('/entries/:id', (req, res) => {
@@ -410,4 +537,4 @@ router.post('/entries/:id/watched', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-module.exports = { listsRouter: router };
+module.exports = { listsRouter: router, setCharacterAddedHook, CATEGORIES };

@@ -101,6 +101,15 @@ The app has five tabs (a bottom bar on phones): **Lists · Discover · Watchlist
 
 Character entries added before this version are linked to their anime in the background on the first start (about 1.5 seconds per character).
 
+## Joke lists, rankings and "My type"
+
+- **Categories**: character lists can be marked 👨 Daddy, 👩 Mommy, 💖 Waifu, 💙 Husbando or ⭐ Other, with an emoji (menu next to the list name). Existing lists were categorised from their names.
+- **Personal rankings in shared lists**: shared character and anime lists are a shared pool that every member ranks in their own order. Switch between *Mine*, the other person's ranking and *Combined* (average, with the biggest disagreements). Entries someone else added appear in your **To rank** tray until you place them. Watchlists keep one joint order.
+- **⚔️ Battle sort**: "this or that" questions sort your ranking with as few questions as possible (binary insertion). *Battle all in* places only the tray entries; a full sort can be stopped and continued later.
+- **🏆 Tiers**: any ranking as an S/A/B/C/D tier list (top 10% / 30% / 60% / 85% / rest), with *Save as image*.
+- **Reactions & comments** (😂 😳 🔥 ❤️) on entries in shared lists and other people's lists.
+- **💘 My type** (Profile): per category, your ideal type from your own rankings (higher ranks count more): looks from Safebooru fan-art tags (hair, eyes, features, style), profile facts from AniList (age, height, star sign, blood type), taste (series, genres, voice actor, popularity), a face collage, a comparison with someone else's type, and *Find your next Daddy/Waifu…*: matching characters from anime you've watched. Traits are worked out slowly in the background and cached; looks are approximate.
+
 ## Accounts and sharing
 
 - Anyone can sign up on the login page. Each device stays logged in (sessions last a year and extend while in use).

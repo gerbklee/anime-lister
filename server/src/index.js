@@ -4,19 +4,23 @@ const express = require('express');
 const { IMAGE_DIR } = require('./db');
 const { HttpError, wrap } = require('./http');
 const { authRouter, loadUser, requireUser } = require('./auth');
-const { listsRouter } = require('./lists');
+const { listsRouter, setCharacterAddedHook } = require('./lists');
 const { compareRouter } = require('./compare');
 const { catalogueRouter } = require('./catalogue');
 const { socialRouter } = require('./social');
 const { picturesRouter } = require('./pictures');
 const { discoverRouter } = require('./discover');
 const { charactersRouter } = require('./characters');
+const { traitsRouter, enqueueTraits, startTraitBackfill } = require('./traits');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
 const { backfillCharacterLinks } = require('./anime');
 const { allUsers } = require('./users');
 
 const PORT = Number(process.env.PORT) || 3000;
+
+// New characters in categorised lists get their traits worked out in the background.
+setCharacterAddedHook((id) => enqueueTraits([id]));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
 const app = express();
@@ -50,6 +54,7 @@ app.use('/api', socialRouter);
 app.use('/api', picturesRouter);
 app.use('/api', discoverRouter);
 app.use('/api', charactersRouter);
+app.use('/api', traitsRouter);
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -81,5 +86,6 @@ app.listen(PORT, '0.0.0.0', () => {
   retryMissingImages()
     .catch((err) => console.warn('Image retry failed:', err.message))
     .then(() => backfillCharacterLinks())
+    .then(() => startTraitBackfill())
     .catch((err) => console.warn('Character linking failed:', err.message));
 });

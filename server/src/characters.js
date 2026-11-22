@@ -30,7 +30,7 @@ const CHARACTER_DETAIL_QUERY = `
           characterRole
           node {
             id type format title { romaji english } coverImage { large color }
-            seasonYear episodes chapters popularity isAdult
+            seasonYear episodes chapters popularity isAdult genres
           }
           voiceActors(language: JAPANESE, sort: [RELEVANCE, ID]) { id name { full native } image { large } }
         }
@@ -50,7 +50,7 @@ const CHARACTER_DETAIL_QUERY = `
 const q = {
   link: db.prepare('INSERT OR IGNORE INTO character_media (character_id, anime_id) VALUES (?, ?)'),
   lists: db.prepare(`
-    SELECT e.id AS entry_id, e.position, e.note, e.image_file, e.image_url,
+    SELECT e.id AS entry_id, COALESCE((SELECT rk.position FROM rankings rk WHERE rk.entry_id = e.id AND rk.user_id = @me), e.position) AS position, e.note, e.image_file, e.image_url,
            l.id AS list_id, l.name AS list_name, l.owner_id, l.is_shared,
            (SELECT COUNT(*) FROM entries x WHERE x.list_id = l.id) AS list_size
     FROM entries e JOIN lists l ON l.id = e.list_id
@@ -110,6 +110,8 @@ async function fetchDetail(id) {
       type: e.node.type,
       format: e.node.format,
       title: titleOf(e.node.title) || 'Unknown',
+      romaji: e.node.title?.romaji ?? null,
+      genres: e.node.genres ?? [],
       cover: e.node.coverImage?.large ?? null,
       color: e.node.coverImage?.color ?? null,
       seasonYear: e.node.seasonYear ?? null,
@@ -168,4 +170,4 @@ router.get('/characters/:id', wrap(async (req, res) => {
   res.json({ ...detail, lists });
 }));
 
-module.exports = { charactersRouter: router };
+module.exports = { charactersRouter: router, fetchCharacterDetail: fetchDetail };

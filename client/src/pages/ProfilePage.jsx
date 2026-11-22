@@ -2,22 +2,36 @@ import { useApp } from '../AppContext.jsx';
 import Avatar from '../components/Avatar.jsx';
 import AnimePage from './AnimePage.jsx';
 import SettingsPage from './SettingsPage.jsx';
+import TypePage from './TypePage.jsx';
 
-// Your profile: "My anime" (catalogue) and Settings.
-// Other people's profiles show their anime (read-only).
+// Your profile: "My anime" (catalogue), "My type" and Settings.
+// Other people's profiles show their anime and type (read-only).
 export default function ProfilePage({ route, onLogout }) {
   const { me, users } = useApp();
   const userId = route.userId ?? me.id;
   const isMe = userId === me.id;
   const user = isMe ? me : users.find((u) => u.id === userId);
-  const view = isMe ? route.view ?? 'anime' : 'anime';
+  const name = user?.username ?? 'Someone';
+  const view = route.view === 'settings' && !isMe ? 'anime' : route.view ?? 'anime';
+  const base = isMe ? '#/profile' : `#/profile/u/${userId}`;
+
+  const tabs = [
+    ['anime', base, `🎬 ${isMe ? 'My anime' : `${name}'s anime`}`],
+    ['type', `${base}/type`, `💘 ${isMe ? 'My type' : `${name}'s type`}`],
+    ...(isMe ? [['settings', '#/profile/settings', '⚙️ Settings']] : []),
+  ];
+
+  let content;
+  if (view === 'type') content = <TypePage key={userId} userId={userId} />;
+  else if (view === 'settings') content = <SettingsPage onLogout={onLogout} />;
+  else content = <AnimePage key={userId} userId={userId} />;
 
   return (
     <section className="profile">
       <div className="profile-header">
         <Avatar user={user ?? { id: userId, username: '?' }} size={56} />
         <div>
-          <h2>{isMe ? 'My profile' : `${user?.username ?? 'Someone'}'s profile`}</h2>
+          <h2>{isMe ? 'My profile' : `${name}'s profile`}</h2>
           {isMe ? (
             <span className="muted small">{me.username}</span>
           ) : (
@@ -28,18 +42,15 @@ export default function ProfilePage({ route, onLogout }) {
         </div>
       </div>
 
-      <div className="tabs compact" role="tablist">
-        <a href={isMe ? '#/profile' : `#/profile/u/${userId}`} role="tab" aria-selected={view === 'anime'} className={`tab-link ${view === 'anime' ? 'active' : ''}`}>
-          🎬 {isMe ? 'My anime' : `${user?.username ?? 'Their'}'s anime`}
-        </a>
-        {isMe && (
-          <a href="#/profile/settings" role="tab" aria-selected={view === 'settings'} className={`tab-link ${view === 'settings' ? 'active' : ''}`}>
-            ⚙️ Settings
+      <div className="tabs compact profile-tabs" role="tablist">
+        {tabs.map(([key, href, label]) => (
+          <a key={key} href={href} role="tab" aria-selected={view === key} className={`tab-link ${view === key ? 'active' : ''}`}>
+            {label}
           </a>
-        )}
+        ))}
       </div>
 
-      {view === 'anime' ? <AnimePage key={userId} userId={userId} /> : <SettingsPage onLogout={onLogout} />}
+      {content}
     </section>
   );
 }

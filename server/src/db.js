@@ -189,6 +189,47 @@ const MIGRATIONS = {
       fetched_at  INTEGER NOT NULL
     );
   `,
+
+  // v5: list categories (Daddy/Mommy/Waifu/Husbando), personal rankings in
+  // shared lists, and cached character traits for "My type".
+  5: `
+    ALTER TABLE lists ADD COLUMN category TEXT NOT NULL DEFAULT 'other';
+    ALTER TABLE lists ADD COLUMN emoji TEXT;
+
+    UPDATE lists SET category = 'daddy'
+      WHERE kind = 'character' AND (lower(name) LIKE '%daddy%' OR lower(name) LIKE '%dadd%' OR lower(name) LIKE '%papa%');
+    UPDATE lists SET category = 'mommy'
+      WHERE kind = 'character' AND category = 'other'
+        AND (lower(name) LIKE '%mommy%' OR lower(name) LIKE '%momm%' OR lower(name) LIKE '%mama%' OR lower(name) LIKE '%mami%');
+    UPDATE lists SET category = 'husbando'
+      WHERE kind = 'character' AND category = 'other' AND lower(name) LIKE '%husband%';
+    UPDATE lists SET category = 'waifu'
+      WHERE kind = 'character' AND category = 'other' AND (lower(name) LIKE '%waifu%' OR lower(name) LIKE '%wife%');
+
+    -- Each member's own order in shared character/anime lists.
+    CREATE TABLE rankings (
+      entry_id  INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      position  INTEGER NOT NULL,
+      PRIMARY KEY (entry_id, user_id)
+    );
+    CREATE INDEX idx_rankings_user ON rankings (user_id);
+
+    -- The current joint order becomes everyone's starting ranking.
+    INSERT OR IGNORE INTO rankings (entry_id, user_id, position)
+      SELECT e.id, l.owner_id, e.position FROM entries e JOIN lists l ON l.id = e.list_id
+      WHERE l.is_shared = 1 AND l.kind IN ('character', 'anime') AND l.owner_id IS NOT NULL;
+    INSERT OR IGNORE INTO rankings (entry_id, user_id, position)
+      SELECT e.id, m.user_id, e.position FROM entries e
+      JOIN lists l ON l.id = e.list_id JOIN list_members m ON m.list_id = l.id
+      WHERE l.is_shared = 1 AND l.kind IN ('character', 'anime');
+
+    CREATE TABLE character_traits (
+      character_id  INTEGER PRIMARY KEY,
+      data          TEXT    NOT NULL,
+      fetched_at    INTEGER NOT NULL
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

@@ -29,3 +29,14 @@ export function parseDate(value) {
   if (!value) return 0;
   return Date.parse(value.includes('T') ? value : `${value.replace(' ', 'T')}Z`);
 }
+
+// Character list categories (used for "My type").
+export const CATEGORIES = {
+  daddy: { label: 'Daddy', emoji: '👨' },
+  mommy: { label: 'Mommy', emoji: '👩' },
+  waifu: { label: 'Waifu', emoji: '💖' },
+  husbando: { label: 'Husbando', emoji: '💙' },
+  other: { label: 'Other', emoji: '⭐' },
+};
+
+export const listEmoji = (l) => l.emoji || (l.kind === 'character' ? CATEGORIES[l.category]?.emoji : null) || '';
