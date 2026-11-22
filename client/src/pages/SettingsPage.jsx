@@ -66,21 +66,84 @@ function SpicySetting() {
   );
 }
 
-const BASIS = { anilist: 'AniList', description: 'description', myanimelist: 'MyAnimeList' };
+const BASIS = { anilist: 'AniList', description: 'description', myanimelist: 'MyAnimeList', manual: 'verified' };
+
+const adultLabel = (c) =>
+  `${Math.round(c.age)}${c.basis === 'manual' ? ` · verified by ${c.verifiedBy ?? 'someone'}` : c.basis && c.basis !== 'anilist' ? ` · ${BASIS[c.basis]}` : ''}`;
+
+// Verify a character with no known age as an adult, by hand.
+function VerifyAdult({ character, onClose, onDone }) {
+  const [age, setAge] = useState('');
+  const [sure, setSure] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const n = Number(age);
+  const valid = Number.isInteger(n) && n >= 18 && sure;
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.verifyAdult(character.id, n);
+      onDone();
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={`Verify ${character.name} as an adult`} onClose={onClose}>
+      <form onSubmit={submit} className="verify-adult">
+        <p className="muted small">
+          No age was found on AniList, in their description or on MyAnimeList. Only verify if you know from the source material that this character
+          is an adult (18+). This applies for everyone using this app, and shows that you verified it. If a source later gives an age, that age
+          wins.
+        </p>
+        <label>
+          Age in canon
+          <input type="number" min="18" step="1" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 24" required />
+        </label>
+        <label className="switch-row">
+          <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+          <span className="small">I've checked that {character.name} is an adult in canon, not a younger version.</span>
+        </label>
+        {error && <p className="error-text small">{error}</p>}
+        <button type="submit" className="primary" disabled={!valid || busy}>
+          {busy ? 'Checking…' : 'Verify as adult'}
+        </button>
+      </form>
+    </Modal>
+  );
+}
 
 // What the adults-only rule knows about the characters in your lists.
 function AgeOverview() {
   const [data, setData] = useState(null);
+  const [verifying, setVerifying] = useState(null);
+  const [error, setError] = useState(null);
+  const load = () => api.spicyAges().then(setData).catch(() => setData(null));
   useEffect(() => {
-    api.spicyAges().then(setData).catch(() => setData(null));
+    load();
   }, []);
   if (!data) return null;
-  const chip = (c, label) => (
-    <a key={c.id} className="age-chip" href={`#/character/${c.id}`} title={label}>
-      {c.image && <img src={c.image} alt="" />}
-      <span>{c.name.split(' ')[0]}</span>
-      {label && <span className="muted tiny">{label}</span>}
-    </a>
+  const unverify = async (c) => {
+    setError(null);
+    try {
+      await api.unverifyAdult(c.id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const chip = (c, label, action) => (
+    <span key={c.id} className="age-chip">
+      <a href={`#/character/${c.id}`} title={label}>
+        {c.image && <img src={c.image} alt="" />}
+        <span>{c.name.split(' ')[0]}</span>
+        {label && <span className="muted tiny">{label}</span>}
+      </a>
+      {action}
+    </span>
   );
   return (
     <div className="age-overview">
@@ -88,16 +151,52 @@ function AgeOverview() {
         ✓ <b>{data.adults.length}</b> adults · 🚫 <b>{data.minors.length}</b> under 18 · ❓ <b>{data.unknown.length}</b> no known age
       </p>
       {data.adults.length > 0 && (
-        <div className="age-chips">{data.adults.map((c) => chip(c, `${Math.round(c.age)}${c.basis && c.basis !== 'anilist' ? ` · ${BASIS[c.basis]}` : ''}`))}</div>
+        <div className="age-chips">
+          {data.adults.map((c) =>
+            chip(
+              c,
+              adultLabel(c),
+              c.basis === 'manual' && (
+                <button type="button" className="age-chip-action" title="Undo verification" onClick={() => unverify(c)}>
+                  ✕
+                </button>
+              ),
+            ),
+          )}
+        </div>
       )}
+      {error && <p className="error-text small">{error}</p>}
       {data.unknown.length > 0 && (
         <>
           <p className="muted small">
             No age found on AniList, in the description or on MyAnimeList yet, so these get normal art only. They're checked again every few days
-            {data.unknown.some((c) => !c.checked) ? ' (some are still being checked right now)' : ''}.
+            {data.unknown.some((c) => !c.checked) ? ' (some are still being checked right now)' : ''}. If you know one is an adult, tap ✓ to verify
+            them.
           </p>
-          <div className="age-chips">{data.unknown.map((c) => chip(c, c.checked ? null : 'checking…'))}</div>
+          <div className="age-chips">
+            {data.unknown.map((c) =>
+              chip(
+                c,
+                c.checked ? null : 'checking…',
+                c.checked && (
+                  <button type="button" className="age-chip-action" title="Verify as adult" onClick={() => setVerifying(c)}>
+                    ✓
+                  </button>
+                ),
+              ),
+            )}
+          </div>
         </>
+      )}
+      {verifying && (
+        <VerifyAdult
+          character={verifying}
+          onClose={() => setVerifying(null)}
+          onDone={() => {
+            setVerifying(null);
+            load();
+          }}
+        />
       )}
     </div>
   );

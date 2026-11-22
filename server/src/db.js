@@ -488,6 +488,11 @@ const MIGRATIONS = {
   13: `
     ALTER TABLE character_age ADD COLUMN basis TEXT;
   `,
+  // v14: who verified a character as an adult by hand (basis 'manual'), for
+  // characters no source gives an age for.
+  14: `
+    ALTER TABLE character_age ADD COLUMN verified_by INTEGER REFERENCES users(id);
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

@@ -4,9 +4,15 @@
 // Firm rule: spicy pictures are only ever shown for characters the app KNOWS
 // are adults (AniList age 18+), never with tags that indicate minors, and never
 // questionable/explicit content. Characters without a known age get safe art.
+//
+// Manual verification: when no source gives an age, a person can verify a
+// character as an adult by hand (basis 'manual'). This is only possible while
+// no source gives an age; whenever a source later finds one, that age wins, so
+// a character found to be under 18 loses the manual verification. Minor tags on
+// a picture still block it either way.
 const express = require('express');
 const { db } = require('./db');
-const { HttpError } = require('./http');
+const { HttpError, wrap, parseId } = require('./http');
 
 const AGE_FRESH_MS = 30 * 24 * 3600 * 1000;
 // Unknown ages are looked up again sooner (sources fill in, MAL comes back).
@@ -28,7 +34,15 @@ const q = {
   myCharacters: db.prepare(`
     SELECT DISTINCT e.anilist_id AS id, e.name, e.image_file, e.image_url FROM entries e JOIN lists l ON l.id = e.list_id
     WHERE l.kind = 'character' AND (l.owner_id = @me OR EXISTS (SELECT 1 FROM list_members m WHERE m.list_id = l.id AND m.user_id = @me))`),
-  ageRow: db.prepare('SELECT age, basis FROM character_age WHERE character_id = ?'),
+  ageRow: db.prepare(`
+    SELECT a.age, a.basis, u.username AS verified_by FROM character_age a LEFT JOIN users u ON u.id = a.verified_by
+    WHERE a.character_id = ?`),
+  touchAge: db.prepare('UPDATE character_age SET fetched_at = ? WHERE character_id = ?'),
+  verify: db.prepare(`
+    INSERT OR REPLACE INTO character_age (character_id, age, fetched_at, basis, verified_by) VALUES (?, ?, ?, 'manual', ?)`),
+  unverify: db.prepare(`
+    UPDATE character_age SET age = NULL, basis = NULL, verified_by = NULL, fetched_at = 0
+    WHERE character_id = ? AND basis = 'manual'`),
   adultTags: db.prepare(`
     SELECT t.tag FROM fanart_tags t JOIN character_age a ON a.character_id = t.character_id
     WHERE t.source = 'danbooru' AND t.tag IS NOT NULL AND a.age >= 18`),
@@ -61,41 +75,54 @@ function ageFromText(text) {
   return found.length ? Math.min(...found) : null;
 }
 
+// The age the sources give (AniList, description, MyAnimeList). Throws when
+// AniList can't be reached.
+async function lookupAge(id) {
+  let age = null;
+  let basis = null;
+  const traits = require('./traits').getCharacterTraits(id);
+  let detail = null;
+  if (traits?.facts?.age != null) {
+    age = traits.facts.age;
+    basis = 'anilist';
+  } else {
+    detail = await require('./characters').fetchCharacterDetail(id);
+    age = parseAge(detail.age);
+    if (age != null) basis = 'anilist';
+  }
+  // AniList has no age: look for one in the description.
+  if (age == null) {
+    detail = detail ?? (await require('./characters').fetchCharacterDetail(id));
+    age = ageFromText(detail.description);
+    if (age != null) basis = 'description';
+  }
+  // Still nothing: MyAnimeList's character profile (when Jikan is reachable).
+  if (age == null) {
+    const about = await require('./pictures').malAbout(id).catch(() => null);
+    age = ageFromText(about);
+    if (age != null) basis = 'myanimelist';
+  }
+  return { age, basis };
+}
+
 async function characterAge(id) {
   const cached = q.age.get(id);
   const fresh = cached && Date.now() - cached.fetched_at < (cached.age == null ? UNKNOWN_FRESH_MS : AGE_FRESH_MS);
   if (fresh) return cached.age;
-  let age = null;
-  let basis = null;
+  let found;
   try {
-    const traits = require('./traits').getCharacterTraits(id);
-    let detail = null;
-    if (traits?.facts?.age != null) {
-      age = traits.facts.age;
-      basis = 'anilist';
-    } else {
-      detail = await require('./characters').fetchCharacterDetail(id);
-      age = parseAge(detail.age);
-      if (age != null) basis = 'anilist';
-    }
-    // AniList has no age: look for one in the description.
-    if (age == null) {
-      detail = detail ?? (await require('./characters').fetchCharacterDetail(id));
-      age = ageFromText(detail.description);
-      if (age != null) basis = 'description';
-    }
-    // Still nothing: MyAnimeList's character profile (when Jikan is reachable).
-    if (age == null) {
-      const about = await require('./pictures').malAbout(id).catch(() => null);
-      age = ageFromText(about);
-      if (age != null) basis = 'myanimelist';
-    }
+    found = await lookupAge(id);
   } catch {
     return cached?.age ?? null; // AniList down: use what we had (or treat as unknown)
   }
-  q.saveAge.run(id, age, Date.now(), basis);
+  // Still no source age: a manual verification stays.
+  if (found.age == null && cached?.basis === 'manual') {
+    q.touchAge.run(Date.now(), id);
+    return cached.age;
+  }
+  q.saveAge.run(id, found.age, Date.now(), found.basis);
   adultCache = null;
-  return age;
+  return found.age;
 }
 
 async function allAdults(ids) {
@@ -157,7 +184,10 @@ const router = express.Router();
 router.get('/me/spicy/ages', (req, res) => {
   const rows = q.myCharacters.all({ me: req.user.id }).map((c) => {
     const a = q.ageRow.get(c.id);
-    return { id: c.id, name: c.name, image: c.image_file ? `/images/${c.image_file}` : c.image_url, age: a?.age ?? null, basis: a?.basis ?? null, checked: !!a };
+    return {
+      id: c.id, name: c.name, image: c.image_file ? `/images/${c.image_file}` : c.image_url,
+      age: a?.age ?? null, basis: a?.basis ?? null, verifiedBy: a?.verified_by ?? null, checked: !!a,
+    };
   });
   res.json({
     adults: rows.filter((r) => r.age != null && r.age >= 18),
@@ -165,6 +195,43 @@ router.get('/me/spicy/ages', (req, res) => {
     unknown: rows.filter((r) => r.age == null),
     checking: warming,
   });
+});
+
+const SOURCE_NAME = { anilist: 'AniList', description: 'Their description', myanimelist: 'MyAnimeList' };
+
+// Verify a character in your lists as an adult, when no source gives an age.
+router.put('/me/spicy/ages/:id', wrap(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!isSpicy(req.user.id)) throw new HttpError(403, 'Switch on spicy art first');
+  if (!q.myCharacters.all({ me: req.user.id }).some((c) => c.id === id)) throw new HttpError(404, 'Not a character in your lists');
+  const age = Number(req.body?.age);
+  if (!Number.isInteger(age) || age < 18 || age > 100000) throw new HttpError(400, 'Enter their age (18 or older)');
+  if (req.body?.confirm !== true) throw new HttpError(400, 'Confirm that the character is an adult in canon');
+  // Check the sources right now: a known age can't be overridden.
+  let found;
+  try {
+    found = await lookupAge(id);
+  } catch {
+    throw new HttpError(503, "Couldn't check AniList right now, try again in a moment");
+  }
+  if (found.age != null) {
+    q.saveAge.run(id, found.age, Date.now(), found.basis);
+    adultCache = null;
+    throw new HttpError(409, found.age < 18
+      ? `${SOURCE_NAME[found.basis] ?? 'A source'} gives an age under 18, so this character can't be verified as an adult`
+      : 'An age was just found for this character, no need to verify');
+  }
+  q.verify.run(id, age, Date.now(), req.user.id);
+  adultCache = null;
+  res.json({ ok: true });
+}));
+
+// Undo a manual verification (the character goes back to "no known age").
+router.delete('/me/spicy/ages/:id', (req, res) => {
+  q.unverify.run(parseId(req.params.id));
+  adultCache = null;
+  warmAges().catch(() => {});
+  res.json({ ok: true });
 });
 
 router.put('/me/spicy', (req, res) => {
