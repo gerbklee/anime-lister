@@ -8,7 +8,7 @@ const TABS = [
   { key: 'fanart', label: 'Fan art' },
 ];
 
-function Grid({ images, selected, onSelect }) {
+export function Grid({ images, selected, onSelect }) {
   if (!images.length) return <p className="muted small">No pictures found here.</p>;
   return (
     <div className="picker-grid">
@@ -26,7 +26,7 @@ function Grid({ images, selected, onSelect }) {
   );
 }
 
-function FanartTab({ characterId, selected, onSelect }) {
+export function FanartTab({ characterId, selected, onSelect }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [tagInput, setTagInput] = useState('');
@@ -111,7 +111,7 @@ function FanartTab({ characterId, selected, onSelect }) {
   );
 }
 
-function SimpleTab({ load, selected, onSelect }) {
+export function SimpleTab({ load, selected, onSelect }) {
   const [images, setImages] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {

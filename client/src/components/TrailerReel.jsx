@@ -69,7 +69,7 @@ export default function TrailerReel({ items, startIndex = 0, title, onClose }) {
   if (!current) return null;
 
   return (
-    <Modal title={title} onClose={onClose} wide>
+    <Modal title={title} onClose={onClose} wide center>
       <div className="video-frame">
         <iframe
           key={current.id}

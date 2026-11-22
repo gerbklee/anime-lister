@@ -63,6 +63,7 @@ export const api = {
 
   // Anime & catalogue
   anime: (id) => request('GET', `/api/anime/${id}`),
+  character: (id) => request('GET', `/api/characters/${id}`),
   animeCharacters: (id, page) => request('GET', `/api/anime/${id}/characters?page=${page}`),
   catalogueSummary: () => request('GET', '/api/catalogue/summary'),
   catalogue: (userId) => request('GET', `/api/users/${userId}/catalogue`),

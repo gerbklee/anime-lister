@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function Modal({ title, onClose, children, wide = false }) {
+// `center` keeps the dialog in the middle of the screen on phones too
+// (other dialogs slide up from the bottom there).
+export default function Modal({ title, onClose, children, wide = false, center = false }) {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
@@ -17,7 +19,7 @@ export default function Modal({ title, onClose, children, wide = false }) {
   }, []);
 
   return createPortal(
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className={`modal-backdrop ${center ? 'center' : ''}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h3>{title}</h3>

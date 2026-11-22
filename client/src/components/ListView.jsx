@@ -337,7 +337,7 @@ export default function ListView({ listId, onListsChanged }) {
       )}
 
       {(detail.isShared || sharing) && (
-        <MembersPanel detail={detail} me={me} users={users} onInvite={invite} onRemove={removeMember} />
+        <MembersPanel detail={detail} me={me} users={users} onInvite={invite} onRemove={removeMember} startOpen={sharing && !detail.isShared} />
       )}
 
       {!readOnly && (

@@ -194,6 +194,7 @@ function feedItem(a, me, users) {
     createdAt: a.created_at,
     updatedAt: a.updated_at,
     user: users.get(a.user_id) ?? null,
+    itemId: a.item_id,
     data,
   };
   if (a.anime_id) item.anime = toAnimeSummary(q.anime.get(a.anime_id));

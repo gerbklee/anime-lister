@@ -164,7 +164,7 @@ function MyEntry({ anime, mine, onSaved }) {
 
 function CharacterChip({ c, showOwner, me }) {
   return (
-    <a className="char-chip" href={`#/list/${c.list.id}`} title={`${c.name} in ${c.list.name}`}>
+    <a className="char-chip" href={`#/character/${c.characterId}`} title={`${c.name}: #${c.rank} in ${c.list.name}`}>
       {c.image && <img src={c.image} alt="" loading="lazy" />}
       <span>
         <b>{c.name}</b>
@@ -236,9 +236,13 @@ function Cast({ animeId, initial, ranked }) {
       <ul className="cast">
         {shown.map((c) => (
           <li key={c.id}>
-            {c.image && <img src={c.image} alt="" loading="lazy" />}
+            <a href={`#/character/${c.id}`} className="cast-img">
+              {c.image && <img src={c.image} alt="" loading="lazy" />}
+            </a>
             <div className="cast-info">
-              <b>{c.name}</b>
+              <a href={`#/character/${c.id}`} className="cast-name">
+                <b>{c.name}</b>
+              </a>
               <span className="muted tiny">
                 <span className={`role-tag ${c.role?.toLowerCase()}`}>{ROLE_LABELS[c.role] ?? c.role}</span>
                 {c.favourites > 0 && ` · ❤ ${formatPopularity(c.favourites)}`}

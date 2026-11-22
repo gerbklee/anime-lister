@@ -41,7 +41,7 @@ function Sentence({ item, me }) {
       return data.kind === 'anime' ? (
         <>added <AnimeLink anime={anime} /> to <ListLink list={list} /> at #{data.rank}</>
       ) : (
-        <>added <b>{data.name}</b> to <ListLink list={list} /> at #{data.rank}</>
+        <>added <a href={`#/character/${item.itemId}`}>{data.name}</a> to <ListLink list={list} /> at #{data.rank}</>
       );
     case 'list_create':
       return data.kind === 'watchlist' ? (

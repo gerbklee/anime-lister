@@ -32,7 +32,9 @@ function BothRow({ c, otherName, isAnime }) {
     <li className="compare-row">
       <Portrait src={c.image} name={c.name} />
       <div className="compare-info">
-        <div className="entry-name">{isAnime ? <a href={`#/anime/${c.anilistId}`}>{c.name}</a> : c.name}</div>
+        <div className="entry-name">
+          <a href={isAnime ? `#/anime/${c.anilistId}` : `#/character/${c.anilistId}`}>{c.name}</a>
+        </div>
         <div className="series">{c.seriesTitle || ''}</div>
         <div className="placements">
           <span>
@@ -48,7 +50,7 @@ function BothRow({ c, otherName, isAnime }) {
   );
 }
 
-function MiniList({ title, items, emptyText }) {
+function MiniList({ title, items, emptyText, isAnime }) {
   return (
     <div className="card compare-card">
       <h3>
@@ -62,7 +64,9 @@ function MiniList({ title, items, emptyText }) {
             <li key={c.anilistId}>
               <Portrait src={c.image} name={c.name} small />
               <div className="compare-info">
-                <div className="mini-name">{c.name}</div>
+                <a className="mini-name" href={isAnime ? `#/anime/${c.anilistId}` : `#/character/${c.anilistId}`}>
+                  {c.name}
+                </a>
                 <div className="muted small">{placementText(c.placement)}</div>
               </div>
             </li>
@@ -187,8 +191,8 @@ function ListComparison({ data, me, other, kind }) {
       </div>
 
       <div className="compare-grid">
-        <MiniList title="Only you ranked" items={data.onlyMine} emptyText="Nothing: they have all of yours." />
-        <MiniList title={`Only ${otherName} ranked`} items={data.onlyTheirs} emptyText="Nothing: you have all of theirs." />
+        <MiniList title="Only you ranked" items={data.onlyMine} emptyText="Nothing: they have all of yours." isAnime={isAnime} />
+        <MiniList title={`Only ${otherName} ranked`} items={data.onlyTheirs} emptyText="Nothing: you have all of theirs." isAnime={isAnime} />
       </div>
     </>
   );

@@ -181,10 +181,8 @@ export default function EntryRow({ kind, entry, rank, total, readOnly, showAutho
         <div className="entry-title">
           <a
             className="entry-name"
-            href={isAnime ? `#/anime/${entry.anilistId}` : `https://anilist.co/character/${entry.anilistId}`}
-            target={isAnime ? undefined : '_blank'}
-            rel={isAnime ? undefined : 'noreferrer'}
-            title={isAnime ? 'Open anime page' : 'Open on AniList'}
+            href={isAnime ? `#/anime/${entry.anilistId}` : `#/character/${entry.anilistId}`}
+            title={isAnime ? 'Open anime page' : 'Open character page'}
           >
             {entry.name}
           </a>
