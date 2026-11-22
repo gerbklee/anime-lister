@@ -30,17 +30,26 @@ function AvatarPicker({ onClose, onPicked }) {
   );
 }
 
-// Per person: suggestive (not explicit) fan art, only for known adult characters.
+const SPICY_LEVELS = [
+  { level: 0, label: 'Off' },
+  { level: 1, label: '🌶️ Spicy' },
+  { level: 2, label: '🔞 Explicit' },
+];
+
+// Per person: suggestive or explicit fan art, only for known adult characters.
 function SpicySetting() {
   const { me, setMe } = useApp();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const on = !!me.spicyArt;
-  const toggle = async () => {
+  const level = Number(me.spicyArt) || 0;
+  const on = level > 0;
+  const choose = async (next) => {
+    if (next === level) return;
+    if (next === 2 && !window.confirm('Explicit shows nudity and sexual fan art of adult characters. Only switch this on if you are 18 or older.')) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await api.setSpicy(!on);
+      const r = await api.setSpicy(next);
       setMe({ ...me, spicyArt: r.spicyArt });
     } catch (err) {
       setError(err.message);
@@ -52,14 +61,26 @@ function SpicySetting() {
     <div className="card settings-card">
       <h3>🌶️ Spicy art</h3>
       <p className="muted small">
-        Adds suggestive fan art (fanservice, swimsuits, lingerie, suggestive poses) from Danbooru, Zerochan and Wallhaven. Never nudity or explicit
-        content. Only for characters the app knows are adults (18+ on AniList, in their description or on MyAnimeList); everyone else keeps the normal art. This only changes your account;
-        spicy pictures you save stay hidden for anyone who has this switched off.
+        <b>Spicy</b> adds suggestive fan art (fanservice, swimsuits, lingerie, suggestive poses) from Danbooru, Zerochan and Wallhaven, without nudity.{' '}
+        <b>Explicit</b> also adds nudity and sexual fan art (Danbooru questionable/explicit, Zerochan nudity). Both are only for characters the app
+        knows are adults (18+ on AniList, in their description, on MyAnimeList, or verified below), never with tags that suggest a minor; everyone
+        else keeps the normal art. This only changes your account; pictures you save stay hidden for anyone on a lower level.
       </p>
-      <label className="switch-row">
-        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} />
-        <span>{on ? 'On' : 'Off'}</span>
-      </label>
+      <div className="segmented" role="radiogroup" aria-label="Spicy art level">
+        {SPICY_LEVELS.map((l) => (
+          <button
+            key={l.level}
+            type="button"
+            role="radio"
+            aria-checked={level === l.level}
+            className={level === l.level ? 'active' : ''}
+            onClick={() => choose(l.level)}
+            disabled={busy}
+          >
+            {l.label}
+          </button>
+        ))}
+      </div>
       {error && <p className="error-text small">{error}</p>}
       {on && <AgeOverview />}
     </div>

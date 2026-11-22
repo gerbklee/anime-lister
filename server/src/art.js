@@ -51,8 +51,8 @@ const q = {
   items: db.prepare('SELECT * FROM art_board_items WHERE board_id = ? ORDER BY created_at DESC'),
   item: db.prepare('SELECT * FROM art_board_items WHERE id = ?'),
   itemByPost: db.prepare('SELECT * FROM art_board_items WHERE board_id = ? AND source = ? AND post_id = ?'),
-  covers: db.prepare('SELECT thumb_file, thumb_url, source FROM art_board_items WHERE board_id = ? AND (spicy = 0 OR ?) ORDER BY created_at DESC LIMIT 4'),
-  count: db.prepare('SELECT COUNT(*) AS n FROM art_board_items WHERE board_id = ? AND (spicy = 0 OR ?)'),
+  covers: db.prepare('SELECT thumb_file, thumb_url, source FROM art_board_items WHERE board_id = ? AND spicy <= ? ORDER BY created_at DESC LIMIT 4'),
+  count: db.prepare('SELECT COUNT(*) AS n FROM art_board_items WHERE board_id = ? AND spicy <= ?'),
   insertItem: db.prepare(`
     INSERT INTO art_board_items (board_id, source, post_id, image_url, thumb_url, image_file, thumb_file, source_url, post_url, artist, width, height, added_by, created_at, spicy)
     VALUES (@boardId, @source, @postId, @imageUrl, @thumbUrl, @imageFile, @thumbFile, @sourceUrl, @postUrl, @artist, @width, @height, @addedBy, @now, @spicy)`),
@@ -221,7 +221,7 @@ const fileUrl = (file, remote, source) => (file ? `/images/${file}` : source ===
 
 function boardView(b, me, users) {
   const members = q.members.all(b.id).map((m) => users.get(m.user_id)).filter(Boolean);
-  const spicyOn = isSpicy(me) ? 1 : 0;
+  const spicyOn = isSpicy(me);
   return {
     id: b.id,
     name: b.name,
@@ -252,7 +252,7 @@ function itemView(r, users) {
     addedBy: users.get(r.added_by) ?? null,
     savedBy: users.get(r.added_by) ?? null,
     addedAt: r.created_at,
-    spicy: !!r.spicy,
+    spicy: r.spicy || 0,
   };
 }
 
@@ -281,7 +281,7 @@ const shuffle = (arr) => {
 
 async function forYou(me) {
   const spicy = isSpicy(me);
-  return forYouCache(`foryou|${me}|${spicy ? 's' : 'g'}`, async () => {
+  return forYouCache(`foryou|${me}|${spicy}`, async () => {
     forYouFresh.set(me, Date.now());
     const { chars, ships } = await subjectsFor(me);
     // Favour higher-ranked characters, with some variety.
@@ -320,7 +320,7 @@ async function copyrightTag(anime) {
 async function trending(me) {
   const spicy = isSpicy(me);
   const allowed = fanart.spicyFilter(spicy);
-  return cache(`trending|${me}|${spicy ? 's' : 'g'}`, async () => {
+  return cache(`trending|${me}|${spicy}`, async () => {
     const anime = q.watching.all(me);
     const lists = [];
     for (const a of anime) {
@@ -598,7 +598,7 @@ router.get('/art/boards/:id', (req, res) => {
   const { board } = boardAccess(parseId(req.params.id), req.user.id);
   const users = usersById();
   const spicyOn = isSpicy(req.user.id);
-  res.json({ ...boardView(board, req.user.id, users), items: q.items.all(board.id).filter((r) => !r.spicy || spicyOn).map((r) => itemView(r, users)) });
+  res.json({ ...boardView(board, req.user.id, users), items: q.items.all(board.id).filter((r) => r.spicy <= spicyOn).map((r) => itemView(r, users)) });
 });
 
 router.patch('/art/boards/:id', (req, res) => {
@@ -655,7 +655,7 @@ router.post('/art/boards/:id/items', wrap(async (req, res) => {
   let spicy = isSpicy(req.user.id);
   if (spicy && source !== 'danbooru') {
     const info = subject ? await fanart.subjectInfo(subject).catch(() => null) : null;
-    spicy = !!info && (await allAdults(info.memberIds));
+    spicy = info && (await allAdults(info.memberIds)) ? spicy : 0;
   }
   const post = await fanart.fetchPost(source, id, { spicy });
   if (!post) throw new HttpError(400, 'That picture is no longer available or not allowed here.');
@@ -683,7 +683,7 @@ router.post('/art/boards/:id/items', wrap(async (req, res) => {
       height: post.height,
       addedBy: req.user.id,
       now: Date.now(),
-      spicy: post.spicy ? 1 : 0,
+      spicy: Number(post.spicy) || 0,
     }).lastInsertRowid,
   );
   q.touchBoard.run(Date.now(), board.id);

@@ -143,9 +143,9 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
       </div>
 
       <div className="viewer-bottom">
-        {(item.popularity || item.spicy) && (
+        {(item.popularity || item.spicy > 0) && (
           <div className="viewer-popularity">
-            {item.spicy && <span className="spicy-tag">🌶️ Spicy</span>} {item.popularity && <>🔥 {item.popularity}</>}
+            {item.spicy > 0 && <span className="spicy-tag">{item.spicy > 1 ? '🔞 Explicit' : '🌶️ Spicy'}</span>} {item.popularity && <>🔥 {item.popularity}</>}
           </div>
         )}
         <div className="viewer-credit">

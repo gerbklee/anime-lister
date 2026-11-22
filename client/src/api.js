@@ -174,7 +174,7 @@ export const api = {
   removeBoardMember: (id, userId) => request('DELETE', `/api/art/boards/${id}/members/${userId}`),
   boardsWith: (item) => request('GET', `/api/art/boards-with?source=${enc(item.source)}&id=${enc(item.id)}`),
   addToBoard: (id, item) => request('POST', `/api/art/boards/${id}/items`, { item: { source: item.source, id: item.id, subject: item.subject } }),
-  setSpicy: (on) => request('PUT', '/api/me/spicy', { on }),
+  setSpicy: (level) => request('PUT', '/api/me/spicy', { level }),
   spicyAges: () => request('GET', '/api/me/spicy/ages'),
   verifyAdult: (id, age) => request('PUT', `/api/me/spicy/ages/${id}`, { age, confirm: true }),
   unverifyAdult: (id) => request('DELETE', `/api/me/spicy/ages/${id}`),

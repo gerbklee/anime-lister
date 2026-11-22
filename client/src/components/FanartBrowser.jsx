@@ -19,9 +19,9 @@ export function FanartGrid({ items, onOpen, selected, emptyText = 'No pictures h
         >
           <img src={it.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
           {it.savedId && <span className="fanart-badge" aria-label="Saved">💖</span>}
-          {it.spicy && (
-            <span className="fanart-badge spicy" aria-label="Spicy">
-              🌶️
+          {it.spicy > 0 && (
+            <span className="fanart-badge spicy" aria-label={it.spicy > 1 ? 'Explicit' : 'Spicy'}>
+              {it.spicy > 1 ? '🔞' : '🌶️'}
             </span>
           )}
           {!it.savedId && it.sources?.length > 1 && (

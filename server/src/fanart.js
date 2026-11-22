@@ -21,10 +21,12 @@ const activity = require('./activity');
 const { zerochanResults, wallhavenResults, zerochanPost, wallhavenPost, rankAcrossSources } = require('./fanart-sources');
 const { isSpicy, allAdults, danbooruSpicyOk } = require('./adult');
 
-// Danbooru rating filter: "general", plus "sensitive" (suggestive, no nudity)
-// when spicy art is allowed. Never questionable or explicit.
-const ratingFor = (spicy) => (spicy ? 'rating:g,s' : 'rating:g');
-const spicyFilter = (spicy) => (i) => !i.spicy || (spicy && danbooruSpicyOk(i));
+// Spicy levels: 0 safe, 1 spicy (suggestive, no nudity), 2 explicit (nudity).
+// Danbooru rating filter per level: general; + sensitive; + questionable/explicit.
+// Anything above general must pass the adults-only check (adult.js).
+const DB_LEVEL = { g: 0, s: 1, q: 2, e: 2 };
+const ratingFor = (level) => ['rating:g', 'rating:g,s', 'rating:g,s,q,e'][Math.max(0, Math.min(2, Number(level) || 0))];
+const spicyFilter = (level) => (i) => !i.spicy || (i.spicy <= Number(level || 0) && danbooruSpicyOk(i));
 
 const DANBOORU = 'https://danbooru.donmai.us';
 const SAFEBOORU = 'https://safebooru.org';
@@ -136,10 +138,10 @@ const clean = (s) => String(s ?? '').replace(/_/g, ' ').trim();
 // fetched through the NAS (see /fanart/img below).
 const proxied = (url) => (url ? `/api/fanart/img?u=${encodeURIComponent(url)}` : null);
 
-// Accepts "general" and "sensitive" posts; sensitive ones are marked `spicy`
-// and must pass the adults-only check before they are shown (see adult.js).
+// Accepts posts of every rating; `spicy` is the picture's level (0-2), and
+// anything above 0 must pass the adults-only check before it is shown.
 function fromDanbooru(p) {
-  if (!p || !['g', 's'].includes(p.rating) || !OK_EXT.has(p.file_ext) || !p.large_file_url) return null;
+  if (!p || !(p.rating in DB_LEVEL) || !OK_EXT.has(p.file_ext) || !p.large_file_url) return null;
   const variants = Object.fromEntries((p.media_asset?.variants ?? []).map((v) => [v.type, v.url]));
   const artist = p.tag_string_artist ? clean(p.tag_string_artist.split(' ')[0]) : null;
   const thumbUrl = variants['360x360'] ?? p.preview_file_url;
@@ -159,7 +161,7 @@ function fromDanbooru(p) {
     postUrl: `${DANBOORU}/posts/${p.id}`,
     tags: `${p.tag_string_general ?? ''} ${p.tag_string_meta ?? ''}`,
     characters: (p.tag_string_character ?? '').split(' ').filter(Boolean),
-    spicy: p.rating === 's',
+    spicy: DB_LEVEL[p.rating],
   };
 }
 
@@ -345,7 +347,7 @@ function savedView(row, users, me) {
     postUrl: row.post_url,
     savedBy: users.get(row.saved_by) ?? null,
     savedAt: row.created_at,
-    spicy: !!row.spicy,
+    spicy: row.spicy || 0,
     reactions: activity.reactionSummary(`fanart:${row.id}`, me),
   };
 }
@@ -395,8 +397,8 @@ const poolCache = memo(3 * 3600 * 1000, 200);
 // `spicy` here means: the person wants spicy art. It only takes effect when
 // every member of the subject is a known adult.
 async function rankedPool(info, { sort, solo, spicy: wanted = false }) {
-  const spicy = wanted && (await allAdults(info.memberIds));
-  return poolCache(`${info.kind}:${info.id}|${sort}|${solo ? 1 : 0}|${spicy ? 's' : 'g'}`, async () => {
+  const spicy = wanted && (await allAdults(info.memberIds)) ? Number(wanted) : 0;
+  return poolCache(`${info.kind}:${info.id}|${sort}|${solo ? 1 : 0}|${spicy}`, async () => {
     const [db, zc, wh] = await Promise.allSettled([
       searchDanbooru(info, { sort, solo, spicy }),
       zerochanResults(info, { sort, solo, spicy }),
@@ -442,7 +444,7 @@ router.get('/fanart', wrap(async (req, res) => {
   const spicyOn = isSpicy(me);
   const { ranked, sources, notice } = await rankedPool(info, { sort, solo, spicy: spicyOn });
   const hidden = new Set(q.hiddenKeys.all().map((h) => `${h.source}:${h.post_id}`));
-  const savedRows = q.saved.all(subject).filter((r) => !r.spicy || spicyOn);
+  const savedRows = q.saved.all(subject).filter((r) => r.spicy <= spicyOn);
   const savedKeys = new Set(savedRows.map((r) => `${r.source}:${r.post_id}`));
   const keysOf = (i) => (i.sources ?? [{ source: i.source, id: i.id }]).map((s) => `${s.source}:${s.id}`);
   const visible = ranked.filter((i) => !keysOf(i).some((k) => hidden.has(k) || savedKeys.has(k)));
@@ -468,7 +470,7 @@ router.post('/fanart/saved', wrap(async (req, res) => {
   const existing = q.savedByPost.get(subject, source, String(id));
   if (existing) return res.json(savedView(q.savedOne.get(existing.id), usersById(), me));
 
-  const post = await fetchPost(source, id, { spicy: isSpicy(me) && (await allAdults(info.memberIds)) });
+  const post = await fetchPost(source, id, { spicy: isSpicy(me) && (await allAdults(info.memberIds)) ? isSpicy(me) : 0 });
   if (!post) throw new HttpError(400, 'That picture is no longer available or not allowed here.');
   let imageFile = null;
   let thumbFile = null;
@@ -496,7 +498,7 @@ router.post('/fanart/saved', wrap(async (req, res) => {
       score: post.score,
       savedBy: me,
       now: Date.now(),
-      spicy: post.spicy ? 1 : 0,
+      spicy: Number(post.spicy) || 0,
     }).lastInsertRowid,
   );
   q.unhide.run(post.source, post.id);
@@ -602,7 +604,7 @@ router.get('/gallery', (req, res) => {
   });
   const spicyOn = isSpicy(me);
   res.json({
-    items: rows.filter((r) => !r.spicy || spicyOn).map((r) => savedView(r, users, me)),
+    items: rows.filter((r) => r.spicy <= spicyOn).map((r) => savedView(r, users, me)),
     nextBefore: rows.length === limit ? rows[rows.length - 1].id : null,
     subjects: q.gallerySubjects.all().map((s) => ({ subject: s.subject, name: s.subject_name, count: s.n })),
   });
@@ -625,7 +627,7 @@ function pictureOfYear(year, me) {
 const feedPictures = (ids, viewerId) =>
   (ids ?? [])
     .map((id) => q.savedOne.get(id))
-    .filter((r) => r && (!r.spicy || (viewerId && isSpicy(viewerId))))
+    .filter((r) => r && r.spicy <= (viewerId ? isSpicy(viewerId) : 0))
     .map((r) => ({ savedId: r.id, thumb: r.thumb_file ? `/images/${r.thumb_file}` : r.source === 'danbooru' ? proxied(r.thumb_url) : r.thumb_url, subject: r.subject }));
 
 module.exports = {

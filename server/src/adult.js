@@ -1,9 +1,11 @@
-// "Spicy art": suggestive but not explicit fan art (Danbooru "sensitive",
-// Zerochan ecchi/fanservice, Wallhaven "sketchy"). Off by default, per person.
+// "Spicy art", per person, off by default. Levels: 0 off; 1 spicy = suggestive
+// but no nudity (Danbooru "sensitive", Zerochan ecchi/fanservice, Wallhaven
+// "sketchy"); 2 explicit = also nudity (Danbooru "questionable"/"explicit",
+// Zerochan nudity tags).
 //
-// Firm rule: spicy pictures are only ever shown for characters the app KNOWS
-// are adults (AniList age 18+), never with tags that indicate minors, and never
-// questionable/explicit content. Characters without a known age get safe art.
+// Firm rule, for every level above 0: such pictures are only ever shown for
+// characters the app KNOWS are adults (AniList age 18+), never with tags that
+// indicate minors. Characters without a known age get safe art.
 //
 // Manual verification: when no source gives an age, a person can verify a
 // character as an adult by hand (basis 'manual'). This is only possible while
@@ -53,7 +55,8 @@ const q = {
     ) WHERE id NOT IN (SELECT character_id FROM character_age WHERE age IS NOT NULL OR fetched_at > @cutoff) LIMIT 40`),
 };
 
-const isSpicy = (userId) => !!q.spicy.get(userId)?.spicy_art;
+// The person's spicy level (0-2).
+const isSpicy = (userId) => Math.max(0, Math.min(2, Number(q.spicy.get(userId)?.spicy_art) || 0));
 
 // Same parsing as "My type": "28" -> 28, "17-18" -> 17.5, "Unknown" -> null.
 function parseAge(age) {
@@ -235,10 +238,12 @@ router.delete('/me/spicy/ages/:id', (req, res) => {
 });
 
 router.put('/me/spicy', (req, res) => {
-  if (typeof req.body?.on !== 'boolean') throw new HttpError(400, 'Expected on: true/false');
-  q.setSpicy.run(req.body.on ? 1 : 0, req.user.id);
-  if (req.body.on) warmAges().catch(() => {});
-  res.json({ spicyArt: req.body.on });
+  // { level: 0 | 1 | 2 }, or the older { on: true/false } (= level 1 / 0).
+  const level = typeof req.body?.on === 'boolean' ? (req.body.on ? 1 : 0) : req.body?.level;
+  if (![0, 1, 2].includes(level)) throw new HttpError(400, 'Expected level: 0, 1 or 2');
+  q.setSpicy.run(level, req.user.id);
+  if (level) warmAges().catch(() => {});
+  res.json({ spicyArt: level });
 });
 
 const invalidateAdultTags = () => {
