@@ -273,4 +273,12 @@ function sbCoTags(tag) {
   });
 }
 
-module.exports = { picturesRouter: router, guessTag, sbTagCounts, sbPosts, sbCount, sbCoTags, character };
+// The "about" text of the matching MyAnimeList character (null if unknown).
+async function malAbout(characterId) {
+  const { malId } = await malPictures(characterId);
+  if (!malId) return null;
+  const r = await jikan(`/characters/${malId}`);
+  return r?.data?.about ?? null;
+}
+
+module.exports = { malAbout, picturesRouter: router, guessTag, sbTagCounts, sbPosts, sbCount, sbCoTags, character };

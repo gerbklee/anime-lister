@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, characterSearch } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import Avatar from '../components/Avatar.jsx';
@@ -53,7 +53,7 @@ function SpicySetting() {
       <h3>🌶️ Spicy art</h3>
       <p className="muted small">
         Adds suggestive fan art (fanservice, swimsuits, lingerie, suggestive poses) from Danbooru, Zerochan and Wallhaven. Never nudity or explicit
-        content. Only for characters the app knows are adults (age 18+ on AniList); everyone else keeps the normal art. This only changes your account;
+        content. Only for characters the app knows are adults (18+ on AniList, in their description or on MyAnimeList); everyone else keeps the normal art. This only changes your account;
         spicy pictures you save stay hidden for anyone who has this switched off.
       </p>
       <label className="switch-row">
@@ -61,6 +61,44 @@ function SpicySetting() {
         <span>{on ? 'On' : 'Off'}</span>
       </label>
       {error && <p className="error-text small">{error}</p>}
+      {on && <AgeOverview />}
+    </div>
+  );
+}
+
+const BASIS = { anilist: 'AniList', description: 'description', myanimelist: 'MyAnimeList' };
+
+// What the adults-only rule knows about the characters in your lists.
+function AgeOverview() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    api.spicyAges().then(setData).catch(() => setData(null));
+  }, []);
+  if (!data) return null;
+  const chip = (c, label) => (
+    <a key={c.id} className="age-chip" href={`#/character/${c.id}`} title={label}>
+      {c.image && <img src={c.image} alt="" />}
+      <span>{c.name.split(' ')[0]}</span>
+      {label && <span className="muted tiny">{label}</span>}
+    </a>
+  );
+  return (
+    <div className="age-overview">
+      <p className="small">
+        ✓ <b>{data.adults.length}</b> adults · 🚫 <b>{data.minors.length}</b> under 18 · ❓ <b>{data.unknown.length}</b> no known age
+      </p>
+      {data.adults.length > 0 && (
+        <div className="age-chips">{data.adults.map((c) => chip(c, `${Math.round(c.age)}${c.basis && c.basis !== 'anilist' ? ` · ${BASIS[c.basis]}` : ''}`))}</div>
+      )}
+      {data.unknown.length > 0 && (
+        <>
+          <p className="muted small">
+            No age found on AniList, in the description or on MyAnimeList yet, so these get normal art only. They're checked again every few days
+            {data.unknown.some((c) => !c.checked) ? ' (some are still being checked right now)' : ''}.
+          </p>
+          <div className="age-chips">{data.unknown.map((c) => chip(c, c.checked ? null : 'checking…'))}</div>
+        </>
+      )}
     </div>
   );
 }

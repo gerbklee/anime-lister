@@ -484,6 +484,10 @@ const MIGRATIONS = {
     ALTER TABLE fanart_saved ADD COLUMN spicy INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE art_board_items ADD COLUMN spicy INTEGER NOT NULL DEFAULT 0;
   `,
+  // v13: where a character's age came from (AniList field, description, MyAnimeList).
+  13: `
+    ALTER TABLE character_age ADD COLUMN basis TEXT;
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

@@ -175,6 +175,7 @@ export const api = {
   boardsWith: (item) => request('GET', `/api/art/boards-with?source=${enc(item.source)}&id=${enc(item.id)}`),
   addToBoard: (id, item) => request('POST', `/api/art/boards/${id}/items`, { item: { source: item.source, id: item.id, subject: item.subject } }),
   setSpicy: (on) => request('PUT', '/api/me/spicy', { on }),
+  spicyAges: () => request('GET', '/api/me/spicy/ages'),
   removeFromBoard: (id, itemId) => request('DELETE', `/api/art/boards/${id}/items/${itemId}`),
   makeWallpaper: (url, crop, target) => request('POST', '/api/art/wallpaper', { url, crop, target }),
   follows: () => request('GET', '/api/art/follows'),
