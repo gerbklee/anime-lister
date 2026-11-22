@@ -157,6 +157,31 @@ export const api = {
   deleteMoment: (id) => request('DELETE', `/api/moments/${id}`),
   setAnthem: (id, anthem) => request('PUT', `/api/ships/${id}/anthem`, { anthem }),
   shipMap: () => request('GET', '/api/ships/map'),
+
+  // Art area
+  artAutocomplete: (q, signal) => request('GET', `/api/art/autocomplete?q=${enc(q)}`, undefined, { signal }),
+  artSearch: (params) => request('GET', `/api/art/search?${new URLSearchParams(params)}`),
+  artSimilar: (id, mode) => request('GET', `/api/art/similar?id=${enc(id)}&mode=${mode}`),
+  artForYou: () => request('GET', '/api/art/foryou'),
+  artTrending: () => request('GET', '/api/art/trending'),
+  artDaily: () => request('GET', '/api/art/daily'),
+  boards: () => request('GET', '/api/art/boards'),
+  board: (id) => request('GET', `/api/art/boards/${id}`),
+  createBoard: (name, emoji) => request('POST', '/api/art/boards', { name, emoji }),
+  updateBoard: (id, patch) => request('PATCH', `/api/art/boards/${id}`, patch),
+  deleteBoard: (id) => request('DELETE', `/api/art/boards/${id}`),
+  shareBoard: (id, username) => request('POST', `/api/art/boards/${id}/members`, { username }),
+  removeBoardMember: (id, userId) => request('DELETE', `/api/art/boards/${id}/members/${userId}`),
+  boardsWith: (item) => request('GET', `/api/art/boards-with?source=${enc(item.source)}&id=${enc(item.id)}`),
+  addToBoard: (id, item) => request('POST', `/api/art/boards/${id}/items`, { item: { source: item.source, id: item.id } }),
+  removeFromBoard: (id, itemId) => request('DELETE', `/api/art/boards/${id}/items/${itemId}`),
+  makeWallpaper: (url, crop, target) => request('POST', '/api/art/wallpaper', { url, crop, target }),
+  follows: () => request('GET', '/api/art/follows'),
+  follow: (artist, name) => request('POST', '/api/art/follows', { artist, name }),
+  unfollow: (artist) => request('DELETE', `/api/art/follows/${enc(artist)}`),
+  artistFeed: () => request('GET', '/api/art/artists/feed'),
+  whatIs: (url) => request('POST', '/api/art/whatis', { url }),
+  whatIsResult: (id) => request('GET', `/api/art/whatis/${id}`),
 };
 
 // Link to the page of a fan art subject ('character:1' / 'ship:2').

@@ -6,7 +6,6 @@ import Avatar from '../components/Avatar.jsx';
 import Wrapped from '../components/Wrapped.jsx';
 import ComparePage from './ComparePage.jsx';
 import GamePlay from './GamePlay.jsx';
-import GalleryPage from './GalleryPage.jsx';
 
 const GAME_INFO = {
   opening: { emoji: '🎵', text: 'An opening or ending plays; pick the anime. Sound on!' },
@@ -279,7 +278,6 @@ export default function UsPage({ route }) {
   const tabs = [
     ['compare', '#/us', '📊 Compare'],
     ['games', '#/us/games', '🎮 Games'],
-    ['gallery', '#/us/gallery', '🖼️ Gallery'],
     ['wrapped', '#/us/wrapped', '🎁 Our Wrapped'],
   ];
   return (
@@ -293,7 +291,6 @@ export default function UsPage({ route }) {
       </div>
       {view === 'compare' && <ComparePage />}
       {view === 'games' && (route.gameId ? <GamePlay key={route.gameId} id={route.gameId} /> : <GamesHome />)}
-      {view === 'gallery' && <GalleryPage />}
       {view === 'wrapped' && <OurWrapped />}
     </section>
   );

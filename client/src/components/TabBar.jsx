@@ -2,7 +2,7 @@ const TABS = [
   { key: 'home', href: '#/', icon: '🏠', label: 'Home' },
   { key: 'lists', href: '#/lists', icon: '📋', label: 'Lists' },
   { key: 'discover', href: '#/discover', icon: '🧭', label: 'Discover' },
-  { key: 'watch', href: '#/watch', icon: '🍿', label: 'Watchlists' },
+  { key: 'art', href: '#/art', icon: '🎨', label: 'Art' },
   { key: 'us', href: '#/us', icon: '💞', label: 'Us' },
 ];
 

@@ -9,6 +9,7 @@ import Modal from '../components/Modal.jsx';
 import { CatalogueBadge } from '../components/EntryRow.jsx';
 import FanartBrowser from '../components/FanartBrowser.jsx';
 import CropDialog from '../components/CropDialog.jsx';
+import { AddToBoardDialog, WallpaperMaker } from '../components/ArtTools.jsx';
 
 // Use a picture as this character's portrait in one or more of your lists.
 function UseInListsDialog({ url, lists, onClose, onDone }) {
@@ -163,6 +164,8 @@ function Gallery({ characterId, name, lists, onListsChanged }) {
   const { me, setMe, refreshLists } = useApp();
   const [status, setStatus] = useState(null);
   const [useIn, setUseIn] = useState(null); // picture URL being used in lists
+  const [board, setBoard] = useState(null);
+  const [wallpaper, setWallpaper] = useState(null);
   const editable = lists.filter((l) => l.owner?.id === me.id || l.list.isShared);
   const official = useMemo(
     () => ({
@@ -175,6 +178,8 @@ function Gallery({ characterId, name, lists, onListsChanged }) {
     [characterId],
   );
   const actions = [
+    { icon: '📌', label: 'Add to board…', onSelect: (item) => setBoard(item) },
+    { icon: '📱', label: 'Make wallpaper', onSelect: (item) => setWallpaper(item) },
     {
       icon: '📋',
       label: editable.length ? 'Use in my lists…' : 'Use in my lists (add to a list first)',
@@ -199,6 +204,8 @@ function Gallery({ characterId, name, lists, onListsChanged }) {
     <div className="card">
       <FanartBrowser title="🖼️ Pictures" subject={`character:${characterId}`} subjectName={name} official={official} actions={actions} allowSolo />
       {status && <p className="muted small">{status}</p>}
+      {board && <AddToBoardDialog item={board} onClose={() => setBoard(null)} />}
+      {wallpaper && <WallpaperMaker item={wallpaper} onClose={() => setWallpaper(null)} />}
       {useIn && (
         <UseInListsDialog
           url={useIn}

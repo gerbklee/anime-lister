@@ -597,4 +597,23 @@ const feedPictures = (ids) =>
     .filter(Boolean)
     .map((r) => ({ savedId: r.id, thumb: r.thumb_file ? `/images/${r.thumb_file}` : r.source === 'danbooru' ? proxied(r.thumb_url) : r.thumb_url, subject: r.subject }));
 
-module.exports = { fanartRouter: router, savedImageFor, pictureOfYear, feedPictures };
+module.exports = {
+  fanartRouter: router,
+  savedImageFor,
+  pictureOfYear,
+  feedPictures,
+  // shared with the Art area
+  danbooru,
+  posts,
+  fromDanbooru,
+  goodQuality,
+  publicItem,
+  danbooruTag,
+  subjectInfo,
+  rankedPool,
+  fetchPost,
+  proxied,
+  memo,
+  hiddenKeys: () => new Set(q.hiddenKeys.all().map((h) => `${h.source}:${h.post_id}`)),
+  DB_FIELDS,
+};

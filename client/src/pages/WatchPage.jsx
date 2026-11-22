@@ -3,6 +3,17 @@ import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import ListSidebar from '../components/ListSidebar.jsx';
 import ListView from '../components/ListView.jsx';
+import KindToggle from '../components/KindToggle.jsx';
+
+// Watchlists live in the Lists tab now (next to characters, anime, manga, ships).
+function switchTo(kind, navigate) {
+  try {
+    localStorage.setItem('lists-kind', kind);
+  } catch {
+    // not important
+  }
+  navigate(kind === 'ship' ? '#/ships' : '#/lists');
+}
 
 // Shared "to watch" lists.
 export default function WatchPage({ route }) {
@@ -34,6 +45,7 @@ export default function WatchPage({ route }) {
       <ListSidebar
         open={menuOpen}
         watchlists
+        header={<KindToggle active="watchlist" onSwitch={(k) => k !== 'watchlist' && switchTo(k, navigate)} />}
         lists={watchlists}
         selectedId={selected?.id ?? null}
         hrefFor={(l) => `#/watch/${l.id}`}

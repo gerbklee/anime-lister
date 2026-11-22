@@ -58,7 +58,8 @@ const isImageUsed = db.prepare(`
               OR EXISTS (SELECT 1 FROM users WHERE avatar_file = @f)
               OR EXISTS (SELECT 1 FROM anime WHERE cover_file = @f)
               OR EXISTS (SELECT 1 FROM ships WHERE cover_file = @f)
-              OR EXISTS (SELECT 1 FROM fanart_saved WHERE image_file = @f OR thumb_file = @f)`);
+              OR EXISTS (SELECT 1 FROM fanart_saved WHERE image_file = @f OR thumb_file = @f)
+              OR EXISTS (SELECT 1 FROM art_board_items WHERE image_file = @f OR thumb_file = @f)`);
 
 // Deletes a cached image once nothing references it anymore.
 function removeImageIfUnused(file) {
@@ -102,10 +103,10 @@ function cleanCrop(crop) {
   return Object.fromEntries(Object.entries(c).map(([k, v]) => [k, Math.round(v * 10000) / 10000]));
 }
 
-async function cropImage(file, crop) {
+async function cropImage(file, crop, { width = 500, height = 700, prefix = 'crop', quality = 86 } = {}) {
   const sharp = require('sharp');
   const src = path.join(IMAGE_DIR, file);
-  const name = `crop-${crypto.createHash('sha1').update(`${file}|${JSON.stringify(crop)}`).digest('hex').slice(0, 16)}.jpg`;
+  const name = `${prefix}-${crypto.createHash('sha1').update(`${file}|${JSON.stringify(crop)}|${width}x${height}`).digest('hex').slice(0, 16)}.jpg`;
   const dest = path.join(IMAGE_DIR, name);
   if (fs.existsSync(dest)) return name;
   const img = sharp(src, { failOn: 'none' }).rotate();
@@ -114,14 +115,14 @@ async function cropImage(file, crop) {
   const H = meta.height;
   const left = Math.max(0, Math.min(W - 1, Math.round(crop.x * W)));
   const top = Math.max(0, Math.min(H - 1, Math.round(crop.y * H)));
-  const width = Math.max(1, Math.min(W - left, Math.round(crop.w * W)));
-  const height = Math.max(1, Math.min(H - top, Math.round(crop.h * H)));
+  const areaW = Math.max(1, Math.min(W - left, Math.round(crop.w * W)));
+  const areaH = Math.max(1, Math.min(H - top, Math.round(crop.h * H)));
   const tmp = `${dest}.${process.pid}.tmp`;
   await img
-    .extract({ left, top, width, height })
-    .resize({ width: 500, height: 700, fit: 'cover', withoutEnlargement: true })
+    .extract({ left, top, width: areaW, height: areaH })
+    .resize({ width, height, fit: 'cover', withoutEnlargement: true })
     .flatten({ background: '#ffffff' })
-    .jpeg({ quality: 86, mozjpeg: true })
+    .jpeg({ quality, mozjpeg: true })
     .toFile(tmp);
   await fs.promises.rename(tmp, dest);
   return name;

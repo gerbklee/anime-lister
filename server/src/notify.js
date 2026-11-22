@@ -29,6 +29,7 @@ const TYPES = {
   lists: 'Additions to shared lists and watchlists',
   games: 'Game challenges and results',
   ships: 'New ships, votes and headcanons',
+  art: 'Art of the day and artists you follow',
 };
 
 const q = {

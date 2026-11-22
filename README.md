@@ -132,6 +132,16 @@ Character entries added before this version are linked to their anime in the bac
 - **🕸️ Ship map**: characters as nodes, ships as lines (colour = canon/fanon/crack, thickness = how hard you ship it, red dashes = ship wars); pinch/drag, tap a character or a line.
 - Also: **🎵 ship anthem** (an opening/ending as theme song), **📈 vote history** ("🤷 → 💍"; Wrapped: *the ship that won you over*), **📚 fanfics on AO3** link.
 
+## 🎨 Art area (tab bar → Art)
+
+- **✨ Home**: Art of the day (picked each morning from your characters and ships, with an optional push notification), **💘 For you** (best art of your favourite characters and ships across all sources; prepared in the background), **🔥 Trending in your series** (Danbooru's "hot" ranking for anime you watch), your boards, recent saves and artists you follow.
+- **🔍 Search**: combine chips for characters, ships, series, artists and things in the picture ("rain", "kimono", "smile") with suggestions as you type; colour dots (red … pastel); filters for shape (portrait, landscape, 📱 phone wallpaper), size (HD, 4K), Best/Newest and Solo. **More like this** (same artist, same characters, or similar contents) from any Danbooru picture.
+- **❓ What is this?**: reverse image search for pictures from other sources or a pasted link (IQDB; can take 1–2 minutes when busy) → artist, characters, series and the original.
+- **📌 Boards**: your own collections (Pinterest-style); share a board to add pictures together. Pictures are stored on the NAS.
+- **📱 Wallpaper maker**: crop any picture to phone or desktop shape with a lock-screen clock preview, then save it to Photos.
+- **🖌️ Artists**: follow artists and get a notification when they post new art (checked every 3 hours).
+- Watchlists moved into **Lists** (🍿 Watch, next to Characters, Anime, Manga and Ships); the gallery moved from Us to Art.
+
 ## 🎨 Fan art & gallery
 
 - **Three sources, ranked together**: [Danbooru](https://danbooru.donmai.us) (fan score), [Zerochan](https://www.zerochan.net) (favourites) and [Wallhaven](https://wallhaven.cc) (favourites; single characters with a full name). All are searched in parallel and cached for a few hours; Safebooru steps in if Danbooru is down.

@@ -10,7 +10,7 @@ const SOURCE_NAMES = { danbooru: 'Danbooru', safebooru: 'Safebooru', zerochan: '
 // Full-screen picture viewer: swipe left/right, double-tap to save.
 // items: fan art items (saved ones have `savedId`).
 // actions: [{ icon, label, onSelect(item) }] for the ⋯ menu.
-export default function FanartViewer({ items, index, onIndex, onClose, onSave, onUnsave, onHide, actions = [], showSubject = false }) {
+export default function FanartViewer({ items, index, onIndex, onClose, onSave, onUnsave, onHide, actions = [], showSubject = false, primary = null }) {
   const item = items[index];
   const [burst, setBurst] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -172,11 +172,16 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
               💖 Saved
             </button>
           ) : (
-            onSave && (
+            (onSave && (
               <button type="button" className="btn primary small-btn" onClick={save} disabled={busy}>
                 {busy ? 'Saving…' : '♡ Save'}
               </button>
-            )
+            )) ||
+            (primary && (
+              <button type="button" className="btn primary small-btn" onClick={() => primary.onSelect(item)}>
+                {primary.label}
+              </button>
+            ))
           )}
           {item.savedId && <Reactions target={`fanart:${item.savedId}`} initial={item.reactions} emojis={['❤️', '😂', '😳', '🔥']} />}
           <div className="spacer" />
@@ -188,7 +193,7 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
           <Menu
             title="Picture"
             className="icon-btn menu-trigger viewer-more"
-            items={actions.map((a) => ({ icon: a.icon, label: a.label, onSelect: () => a.onSelect(item) }))}
+            items={actions.filter((a) => !a.show || a.show(item)).map((a) => ({ icon: a.icon, label: typeof a.label === 'function' ? a.label(item) : a.label, onSelect: () => a.onSelect(item) }))}
           />
         </div>
       </div>

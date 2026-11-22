@@ -9,6 +9,7 @@ import Modal from '../components/Modal.jsx';
 import Reactions from '../components/Reactions.jsx';
 import Thread from '../components/Thread.jsx';
 import FanartBrowser from '../components/FanartBrowser.jsx';
+import { AddToBoardDialog, WallpaperMaker } from '../components/ArtTools.jsx';
 import { PopularityBadge, ShipCover, ShipOMeter, isWar } from '../components/ShipBits.jsx';
 import { AnthemCard, MomentsCard, TropeEditor, VoteHistory } from '../components/ShipExtras.jsx';
 
@@ -74,7 +75,11 @@ function FanartPicker({ ship, onClose, onPicked }) {
 }
 
 function FanartGallery({ ship, onCover }) {
+  const [board, setBoard] = useState(null);
+  const [wallpaper, setWallpaper] = useState(null);
   const actions = [
+    { icon: '📌', label: 'Add to board…', onSelect: (item) => setBoard(item) },
+    { icon: '📱', label: 'Make wallpaper', onSelect: (item) => setWallpaper(item) },
     { icon: "🖼️", label: "Use as ship cover", onSelect: async (item, url) => onCover(await api.updateShip(ship.id, { coverUrl: url })) },
     { icon: "↗️", label: "Open full size", onSelect: (item, url) => window.open(url, "_blank", "noopener") },
   ];
@@ -86,6 +91,8 @@ function FanartGallery({ ship, onCover }) {
         subjectName={ship.name}
         actions={actions}
       />
+      {board && <AddToBoardDialog item={board} onClose={() => setBoard(null)} />}
+      {wallpaper && <WallpaperMaker item={wallpaper} onClose={() => setWallpaper(null)} />}
     </div>
   );
 }

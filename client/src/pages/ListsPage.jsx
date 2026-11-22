@@ -4,6 +4,7 @@ import { useApp } from '../AppContext.jsx';
 import ListSidebar from '../components/ListSidebar.jsx';
 import ListView from '../components/ListView.jsx';
 import ShipBoard from './ShipBoard.jsx';
+import KindToggle from '../components/KindToggle.jsx';
 import ShipSwipe from './ShipSwipe.jsx';
 import ShipMap from './ShipMap.jsx';
 
@@ -79,22 +80,7 @@ export default function ListsPage({ route }) {
     navigate(`#/list/${list.id}`);
   };
 
-  const kindToggle = (
-    <div className="segmented kind-toggle" role="tablist" aria-label="List type">
-      <button type="button" role="tab" aria-selected={kind === 'character'} className={kind === 'character' ? 'active' : ''} onClick={() => switchKind('character')}>
-        👤 Characters
-      </button>
-      <button type="button" role="tab" aria-selected={kind === 'anime'} className={kind === 'anime' ? 'active' : ''} onClick={() => switchKind('anime')}>
-        🎬 Anime
-      </button>
-      <button type="button" role="tab" aria-selected={kind === 'manga'} className={kind === 'manga' ? 'active' : ''} onClick={() => switchKind('manga')}>
-        📖 Manga
-      </button>
-      <button type="button" role="tab" aria-selected={kind === 'ship'} className={kind === 'ship' ? 'active' : ''} onClick={() => switchKind('ship')}>
-        💕 Ships
-      </button>
-    </div>
-  );
+  const kindToggle = <KindToggle active={kind} onSwitch={(k) => (k === 'watchlist' ? navigate('#/watch') : switchKind(k))} />;
   const header =
     kind === 'ship' ? (
       <>

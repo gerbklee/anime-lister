@@ -17,7 +17,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // Choose which part of a picture becomes the portrait: drag to move,
 // pinch / scroll / slider to zoom. The frame has the portrait's shape.
 // crop (in and out): { x, y, w, h } as fractions of the picture.
-export default function ImageCropper({ src, aspect = 5 / 7, initialCrop = null, onChange }) {
+export default function ImageCropper({ src, aspect = 5 / 7, initialCrop = null, onChange, overlay = null, maxWidth = 280 }) {
   const frameRef = useRef(null);
   const [frame, setFrame] = useState({ w: 250, h: 350 });
   const [img, setImg] = useState(null); // natural size
@@ -32,7 +32,7 @@ export default function ImageCropper({ src, aspect = 5 / 7, initialCrop = null, 
       // Fit the width of the dialog and leave room for buttons on short screens.
       const byWidth = (frameRef.current?.parentElement?.clientWidth ?? 280) - 8;
       const byHeight = window.innerHeight * 0.45 * aspect;
-      const w = Math.round(Math.max(160, Math.min(280, byWidth, byHeight)));
+      const w = Math.round(Math.max(140, Math.min(maxWidth, byWidth, byHeight)));
       setFrame({ w, h: Math.round(w / aspect) });
     };
     measure();
@@ -173,6 +173,7 @@ export default function ImageCropper({ src, aspect = 5 / 7, initialCrop = null, 
           />
         )}
         <div className="cropper-guides" aria-hidden="true" />
+        {overlay}
       </div>
       <label className="cropper-zoom">
         <span aria-hidden="true">−</span>

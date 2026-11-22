@@ -422,6 +422,56 @@ const MIGRATIONS = {
 
     ALTER TABLE ships ADD COLUMN anthem TEXT;
   `,
+  // v11: Art area: boards (personal, can be shared), followed artists, art of the day.
+  11: `
+    CREATE TABLE art_boards (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      name        TEXT    NOT NULL,
+      emoji       TEXT,
+      owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL
+    );
+    CREATE TABLE art_board_members (
+      board_id    INTEGER NOT NULL REFERENCES art_boards(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (board_id, user_id)
+    );
+    CREATE TABLE art_board_items (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      board_id    INTEGER NOT NULL REFERENCES art_boards(id) ON DELETE CASCADE,
+      source      TEXT    NOT NULL,
+      post_id     TEXT    NOT NULL,
+      image_url   TEXT    NOT NULL,
+      thumb_url   TEXT,
+      image_file  TEXT,
+      thumb_file  TEXT,
+      source_url  TEXT,
+      post_url    TEXT,
+      artist      TEXT,
+      width       INTEGER,
+      height      INTEGER,
+      added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  INTEGER NOT NULL,
+      UNIQUE (board_id, source, post_id)
+    );
+    CREATE INDEX idx_art_board_items_board ON art_board_items (board_id, created_at);
+
+    CREATE TABLE art_follows (
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      artist      TEXT    NOT NULL,
+      name        TEXT    NOT NULL,
+      last_seen   INTEGER NOT NULL DEFAULT 0,
+      created_at  INTEGER NOT NULL,
+      PRIMARY KEY (user_id, artist)
+    );
+
+    CREATE TABLE art_daily (
+      day         TEXT    PRIMARY KEY,
+      data        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));
