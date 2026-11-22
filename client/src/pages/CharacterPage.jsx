@@ -7,7 +7,7 @@ import Menu from '../components/Menu.jsx';
 import Avatar from '../components/Avatar.jsx';
 import Modal from '../components/Modal.jsx';
 import { CatalogueBadge } from '../components/EntryRow.jsx';
-import { FanartTab, SimpleTab } from '../components/ImagePicker.jsx';
+import FanartBrowser from '../components/FanartBrowser.jsx';
 import { formatPopularity } from '../components/AnimeTile.jsx';
 import { RichText, splitFacts } from '../components/RichText.jsx';
 import { ShipCover, StatusBadge, VoteChips } from '../components/ShipBits.jsx';
@@ -116,89 +116,40 @@ function SpoilerChip({ text }) {
   );
 }
 
-function Lightbox({ url, name, onClose }) {
+// Pictures: our saved picks, fan art sorted by fan score, official pictures.
+function Gallery({ characterId, name }) {
   const { setMe, refreshLists } = useApp();
   const [status, setStatus] = useState(null);
-  const usePhoto = async () => {
-    setStatus('Saving…');
-    try {
-      setMe(await api.setAvatar(url));
-      refreshLists();
-      setStatus('✓ Set as your profile photo');
-    } catch (err) {
-      setStatus(err.message);
-    }
-  };
-  return (
-    <Modal title={name} onClose={onClose} wide center>
-      <div className="lightbox">
-        <img src={url} alt={name} referrerPolicy="no-referrer" />
-      </div>
-      <div className="modal-actions">
-        <button type="button" className="btn ghost" onClick={usePhoto}>
-          👤 Use as profile photo
-        </button>
-        <a className="btn ghost" href={url} target="_blank" rel="noreferrer">
-          Open original ↗
-        </a>
-        {status && <span className="muted small">{status}</span>}
-      </div>
-    </Modal>
-  );
-}
-
-// Inline gallery with the same sources as the picture picker.
-function Gallery({ characterId, name }) {
-  const [tab, setTab] = useState('anilist');
-  const [visited, setVisited] = useState({ anilist: true });
-  const [open, setOpen] = useState(null);
-  const loaders = useMemo(
-    () => ({ anilist: () => api.anilistImages(characterId), mal: () => api.malImages(characterId) }),
+  const official = useMemo(
+    () => ({
+      load: async () => {
+        const a = await api.anilistImages(characterId).catch(() => ({ images: [] }));
+        const m = await api.malImages(characterId).catch(() => ({ images: [] }));
+        return { images: [...new Set([...a.images, ...m.images])] };
+      },
+    }),
     [characterId],
   );
-  const tabs = [
-    ['anilist', 'AniList'],
-    ['mal', 'MyAnimeList'],
-    ['fanart', 'Fan art'],
+  const actions = [
+    {
+      icon: "👤",
+      label: "Use as profile photo",
+      onSelect: async (item, url) => {
+        try {
+          setMe(await api.setAvatar(url));
+          refreshLists();
+          setStatus("✓ Profile photo updated");
+        } catch (err) {
+          setStatus(err.message);
+        }
+      },
+    },
+    { icon: "↗️", label: "Open full size", onSelect: (item, url) => window.open(url, "_blank", "noopener") },
   ];
   return (
     <div className="card">
-      <h3>🖼️ Pictures</h3>
-      <div className="tabs compact" role="tablist">
-        {tabs.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={tab === key}
-            className={tab === key ? 'active' : ''}
-            onClick={() => {
-              setTab(key);
-              setVisited((v) => ({ ...v, [key]: true }));
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="gallery-body">
-        {visited.anilist && (
-          <div hidden={tab !== 'anilist'}>
-            <SimpleTab load={loaders.anilist} onSelect={setOpen} />
-          </div>
-        )}
-        {visited.mal && (
-          <div hidden={tab !== 'mal'}>
-            <SimpleTab load={loaders.mal} onSelect={setOpen} />
-          </div>
-        )}
-        {visited.fanart && (
-          <div hidden={tab !== 'fanart'}>
-            <FanartTab characterId={characterId} onSelect={setOpen} />
-          </div>
-        )}
-      </div>
-      {open && <Lightbox url={open} name={name} onClose={() => setOpen(null)} />}
+      <FanartBrowser title="🖼️ Pictures" subject={`character:${characterId}`} subjectName={name} official={official} actions={actions} allowSolo />
+      {status && <p className="muted small">{status}</p>}
     </div>
   );
 }

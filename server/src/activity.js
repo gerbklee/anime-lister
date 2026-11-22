@@ -29,6 +29,7 @@ const q = {
   update: db.prepare('UPDATE activities SET data = ?, updated_at = ? WHERE id = ?'),
   ship: db.prepare('SELECT * FROM ships WHERE id = ?'),
   headcanon: db.prepare('SELECT * FROM headcanons WHERE id = ?'),
+  fanart: db.prepare('SELECT id FROM fanart_saved WHERE id = ?'),
   get: db.prepare('SELECT * FROM activities WHERE id = ?'),
   canSeeList: db.prepare(`
     SELECT 1 FROM lists l WHERE l.id = @list AND (
@@ -118,6 +119,8 @@ function canUseThread(key, me) {
   // Ships and their headcanons are shared by everyone.
   if (k.kind === 'ship' && k.nums.length === 1) return !!q.ship.get(k.nums[0]);
   if (k.kind === 'headcanon' && k.nums.length === 1) return !!q.headcanon.get(k.nums[0]);
+  // Saved fan art is shared by everyone.
+  if (k.kind === 'fanart' && k.nums.length === 1) return !!q.fanart.get(k.nums[0]);
   // Comments/reactions on a list entry: anyone who can see the list.
   if (k.kind === 'entry' && k.nums.length === 1) {
     const listId = q.entryList.get(k.nums[0])?.list_id;
@@ -275,6 +278,12 @@ function feedItem(a, me, users) {
     const row = q.ship.get(shipId);
     if (!row) return null;
     item.ship = shipSummary(row, users, me);
+  }
+  if (a.type === 'fanart_save') {
+    // Lazy require: fanart.js depends on this module.
+    const { feedPictures } = require('./fanart');
+    item.pictures = feedPictures(data.ids);
+    if (!item.pictures.length) return null;
   }
   if (a.type === 'watchlist_watched') {
     item.watchers = (data.userIds ?? []).map((id) => users.get(id)).filter(Boolean);

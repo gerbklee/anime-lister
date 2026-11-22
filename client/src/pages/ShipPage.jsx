@@ -8,7 +8,7 @@ import Avatar from '../components/Avatar.jsx';
 import Modal from '../components/Modal.jsx';
 import Reactions from '../components/Reactions.jsx';
 import Thread from '../components/Thread.jsx';
-import { Grid } from '../components/ImagePicker.jsx';
+import FanartBrowser from '../components/FanartBrowser.jsx';
 import { PopularityBadge, ShipCover, ShipOMeter, isWar } from '../components/ShipBits.jsx';
 
 const HC_EMOJIS = ['❤️', '😂', '😳', '🔥'];
@@ -42,19 +42,11 @@ function Headcanon({ h, onDelete }) {
   );
 }
 
+// Cover picker: saved picks and fan art of the ship, tap one to select it.
 function FanartPicker({ ship, onClose, onPicked }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    api
-      .shipFanart(ship.id)
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [ship.id]);
-
+  const [error, setError] = useState(null);
   const save = async () => {
     setBusy(true);
     try {
@@ -64,67 +56,35 @@ function FanartPicker({ ship, onClose, onPicked }) {
       setBusy(false);
     }
   };
-
   return (
     <Modal title="Pick a cover" onClose={onClose} wide>
+      <FanartBrowser subject={`ship:${ship.id}`} subjectName={ship.name} selected={selected} onSelect={setSelected} />
       {error && <div className="banner error">{error}</div>}
-      {!data && !error && <p className="muted">Looking for fan art of {ship.name}…</p>}
-      {data && !data.tags && <p className="muted">No fan art tags found for one of the characters.</p>}
-      {data?.tags && (
-        <>
-          <p className="muted tiny">Safebooru: {data.tags.join(' + ')}</p>
-          <Grid images={data.images} selected={selected} onSelect={setSelected} />
-        </>
-      )}
       <div className="modal-actions">
         <button type="button" className="btn ghost" onClick={onClose}>
           Cancel
         </button>
         <button type="button" className="btn primary" disabled={!selected || busy} onClick={save}>
-          {busy ? 'Saving…' : 'Use as cover'}
+          {busy ? "Saving…" : "Use as cover"}
         </button>
       </div>
     </Modal>
   );
 }
 
-function FanartGallery({ ship }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [open, setOpen] = useState(null);
-  useEffect(() => {
-    api
-      .shipFanart(ship.id)
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [ship.id]);
+function FanartGallery({ ship, onCover }) {
+  const actions = [
+    { icon: "🖼️", label: "Use as ship cover", onSelect: async (item, url) => onCover(await api.updateShip(ship.id, { coverUrl: url })) },
+    { icon: "↗️", label: "Open full size", onSelect: (item, url) => window.open(url, "_blank", "noopener") },
+  ];
   return (
     <div className="card">
-      <h3>
-        🎨 Fan art {ship.fanartCount != null && <span className="muted small">({compactCount(ship.fanartCount)} on Safebooru)</span>}
-      </h3>
-      {error ? (
-        <p className="muted small">{error}</p>
-      ) : !data ? (
-        <p className="muted small">Loading…</p>
-      ) : !data.images.length ? (
-        <p className="muted small">No fan art of this ship yet. A true rarepair.</p>
-      ) : (
-        <div className="picker-grid gallery-grid">
-          {data.images.slice(0, 24).map((img) => (
-            <button key={img.full} type="button" className="picker-item" onClick={() => setOpen(img.full)}>
-              <img src={img.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
-            </button>
-          ))}
-        </div>
-      )}
-      {open && (
-        <Modal title={ship.name} onClose={() => setOpen(null)} wide center>
-          <div className="lightbox">
-            <img src={open} alt={ship.name} referrerPolicy="no-referrer" />
-          </div>
-        </Modal>
-      )}
+      <FanartBrowser
+        title={`🎨 Fan art${ship.fanartCount != null ? ` · ${compactCount(ship.fanartCount)}` : ""}`}
+        subject={`ship:${ship.id}`}
+        subjectName={ship.name}
+        actions={actions}
+      />
     </div>
   );
 }
@@ -353,7 +313,7 @@ export default function ShipPage({ id }) {
         </div>
 
         <div className="anime-col">
-          <FanartGallery ship={ship} />
+          <FanartGallery ship={ship} onCover={merge} />
           {ship.lists.length > 0 && (
             <div className="card">
               <h3>In OTP lists</h3>

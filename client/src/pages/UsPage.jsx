@@ -6,6 +6,7 @@ import Avatar from '../components/Avatar.jsx';
 import Wrapped from '../components/Wrapped.jsx';
 import ComparePage from './ComparePage.jsx';
 import GamePlay from './GamePlay.jsx';
+import GalleryPage from './GalleryPage.jsx';
 
 const GAME_INFO = {
   opening: { emoji: '🎵', text: 'An opening or ending plays; pick the anime. Sound on!' },
@@ -182,6 +183,15 @@ function togetherSlides(w, me) {
       image: w.shipFight.ship.cover ?? w.shipFight.ship.members[0]?.image,
     });
   }
+  if (w.pictureOfYear) {
+    slides.push({
+      emoji: '🖼️',
+      kicker: 'Picture of the year',
+      big: w.pictureOfYear.subjectName,
+      sub: `saved by ${w.pictureOfYear.savedBy?.username ?? 'one of you'}${w.pictureOfYear.reactionCount ? ` · ${plural(w.pictureOfYear.reactionCount, 'reaction')}` : ''}${w.pictureOfYear.artist ? ` · art by ${w.pictureOfYear.artist}` : ''}`,
+      image: w.pictureOfYear.full,
+    });
+  }
   if (w.games.played) {
     slides.push({ emoji: '🎮', kicker: 'Games this year', big: `${w.games.myWins} – ${w.games.theirWins}`, sub: `${me.username} vs ${other} · ${plural(w.games.played, 'challenge')}` });
   }
@@ -269,6 +279,7 @@ export default function UsPage({ route }) {
   const tabs = [
     ['compare', '#/us', '📊 Compare'],
     ['games', '#/us/games', '🎮 Games'],
+    ['gallery', '#/us/gallery', '🖼️ Gallery'],
     ['wrapped', '#/us/wrapped', '🎁 Our Wrapped'],
   ];
   return (
@@ -282,6 +293,7 @@ export default function UsPage({ route }) {
       </div>
       {view === 'compare' && <ComparePage />}
       {view === 'games' && (route.gameId ? <GamePlay key={route.gameId} id={route.gameId} /> : <GamesHome />)}
+      {view === 'gallery' && <GalleryPage />}
       {view === 'wrapped' && <OurWrapped />}
     </section>
   );

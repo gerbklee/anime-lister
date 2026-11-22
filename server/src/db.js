@@ -338,6 +338,50 @@ const MIGRATIONS = {
       fetched_at    INTEGER NOT NULL
     );
   `,
+  // v8: fan art gallery (saved and hidden pictures), Danbooru tag cache.
+  8: `
+    CREATE TABLE fanart_saved (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      subject       TEXT    NOT NULL,           -- 'character:<id>' or 'ship:<id>'
+      subject_name  TEXT    NOT NULL,
+      source        TEXT    NOT NULL,           -- 'danbooru' | 'safebooru'
+      post_id       TEXT    NOT NULL,
+      image_url     TEXT    NOT NULL,
+      thumb_url     TEXT,
+      image_file    TEXT,
+      thumb_file    TEXT,
+      source_url    TEXT,
+      post_url      TEXT,
+      artist        TEXT,
+      width         INTEGER,
+      height        INTEGER,
+      score         INTEGER,
+      saved_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at    INTEGER NOT NULL,
+      UNIQUE (subject, source, post_id)
+    );
+    CREATE INDEX idx_fanart_saved_subject ON fanart_saved (subject, created_at);
+    CREATE INDEX idx_fanart_saved_created ON fanart_saved (created_at);
+
+    CREATE TABLE fanart_hidden (
+      source        TEXT    NOT NULL,
+      post_id       TEXT    NOT NULL,
+      thumb_url     TEXT,
+      subject_name  TEXT,
+      hidden_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at    INTEGER NOT NULL,
+      PRIMARY KEY (source, post_id)
+    );
+
+    CREATE TABLE fanart_tags (
+      character_id  INTEGER NOT NULL,
+      source        TEXT    NOT NULL,
+      tag           TEXT,
+      post_count    INTEGER,
+      fetched_at    INTEGER NOT NULL,
+      PRIMARY KEY (character_id, source)
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

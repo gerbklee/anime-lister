@@ -9,7 +9,7 @@ const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
 const MAX_BYTES = 10 * 1024 * 1024;
 
 // Only images from these sites are downloaded (AniList, MyAnimeList, Safebooru).
-const ALLOWED_HOSTS = ['anilist.co', 'myanimelist.net', 'safebooru.org'];
+const ALLOWED_HOSTS = ['anilist.co', 'myanimelist.net', 'safebooru.org', 'donmai.us'];
 
 function isAllowedImageUrl(url) {
   try {
@@ -27,7 +27,7 @@ function isAllowedImageUrl(url) {
 // omitted) and returns the file name, or null if there is no URL.
 async function cacheImage(url, baseName) {
   if (!url) return null;
-  if (!isAllowedImageUrl(url)) throw new Error('Images can only come from AniList, MyAnimeList or Safebooru.');
+  if (!isAllowedImageUrl(url)) throw new Error('Images can only come from AniList, MyAnimeList, Safebooru or Danbooru.');
 
   let ext = path.extname(new URL(url).pathname).toLowerCase();
   if (!ALLOWED_EXT.has(ext)) ext = '.jpg';
@@ -57,7 +57,8 @@ const isImageUsed = db.prepare(`
   SELECT 1 WHERE EXISTS (SELECT 1 FROM entries WHERE image_file = @f)
               OR EXISTS (SELECT 1 FROM users WHERE avatar_file = @f)
               OR EXISTS (SELECT 1 FROM anime WHERE cover_file = @f)
-              OR EXISTS (SELECT 1 FROM ships WHERE cover_file = @f)`);
+              OR EXISTS (SELECT 1 FROM ships WHERE cover_file = @f)
+              OR EXISTS (SELECT 1 FROM fanart_saved WHERE image_file = @f OR thumb_file = @f)`);
 
 // Deletes a cached image once nothing references it anymore.
 function removeImageIfUnused(file) {

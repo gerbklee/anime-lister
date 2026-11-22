@@ -9,6 +9,7 @@ const { getUser } = require('./users');
 const { compareCatalogues } = require('./compare');
 const { rankedByCategory } = require('./traits');
 const { otpOfYear, shipFight } = require('./ships');
+const { pictureOfYear } = require('./fanart');
 
 const q = {
   catalogue: db.prepare(`
@@ -228,6 +229,7 @@ function wrappedTogether(meId, otherId, year) {
     favouriteTogether,
     games: { myWins, theirWins, played: games.size },
     shipFight: shipFight(meId, otherId, year),
+    pictureOfYear: pictureOfYear(year, meId),
   };
 }
 

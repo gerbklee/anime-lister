@@ -133,6 +133,23 @@ export const api = {
   pairings: (characterId) => request('GET', `/api/characters/${characterId}/pairings`),
   compareShips: (userId) => request('GET', `/api/compare/ships?with=${userId}`),
   shippingType: (userId) => request('GET', `/api/types/${userId}/ships`),
+
+  // Fan art & gallery
+  fanart: (subject, { sort = 'best', solo = false, page = 1 } = {}) =>
+    request('GET', `/api/fanart?subject=${enc(subject)}&sort=${sort}&solo=${solo ? 1 : 0}&page=${page}`),
+  saveFanart: (subject, item) => request('POST', '/api/fanart/saved', { subject, item: { source: item.source, id: item.id } }),
+  unsaveFanart: (savedId) => request('DELETE', `/api/fanart/saved/${savedId}`),
+  hideFanart: (item, subjectName) =>
+    request('POST', '/api/fanart/hidden', { item: { source: item.source, id: item.id, thumb: item.thumb, subjectName } }),
+  unhideFanart: (source, id) => request('DELETE', `/api/fanart/hidden/${source}/${id}`),
+  hiddenFanart: () => request('GET', '/api/fanart/hidden'),
+  gallery: (params = {}) => request('GET', `/api/gallery?${new URLSearchParams(params)}`),
+};
+
+// Link to the page of a fan art subject ('character:1' / 'ship:2').
+export const subjectHref = (subject) => {
+  const [kind, id] = String(subject).split(':');
+  return kind === 'ship' ? `#/ship/${id}` : `#/character/${id}`;
 };
 
 // Existing ships (for OTP lists).

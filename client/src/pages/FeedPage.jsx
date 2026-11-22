@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { STATUS_LABELS, mediaHref, timeAgo, voteText } from '../util.js';
+import { STATUS_LABELS, mediaHref, plural, timeAgo, voteText } from '../util.js';
+import { subjectHref } from '../api.js';
 import Avatar from '../components/Avatar.jsx';
 import Stars from '../components/Stars.jsx';
 import Thread from '../components/Thread.jsx';
@@ -33,6 +34,8 @@ function Sentence({ item, me }) {
       return <>voted {voteText(data.vote)} on <ShipLink ship={item.ship} /></>;
     case 'headcanon':
       return <>shared a headcanon about <ShipLink ship={item.ship} /></>;
+    case 'fanart_save':
+      return <>saved {plural(item.pictures?.length ?? 1, 'picture')} of <a href={subjectHref(data.subject)}>{data.name}</a></>;
     case 'anime_status':
       const manga = anime?.type === 'MANGA';
       if (data.status === 'watching') return <>started {manga ? 'reading' : 'watching'} <AnimeLink anime={anime} /></>;
@@ -99,6 +102,14 @@ export function FeedItem({ item, me }) {
           )}
           {item.comment && <p className="feed-quote">“{item.comment.body}”</p>}
           {item.headcanon && <p className="feed-quote">💭 {item.headcanon.body}</p>}
+          {item.pictures?.length > 0 && (
+            <a className="feed-pictures" href={`#/us/gallery`}>
+              {item.pictures.slice(0, 4).map((p) => (
+                <img key={p.savedId} src={p.thumb} alt="" loading="lazy" />
+              ))}
+              {item.pictures.length > 4 && <span className="feed-more">+{item.pictures.length - 4}</span>}
+            </a>
+          )}
         </div>
         {thumb && thumbHref && (
           <a href={thumbHref} className="feed-thumb">

@@ -5962,3 +5962,316 @@ h3 {
     width: 100%;
   }
 }
+
+/* ======================================================================
+   v8.1: fan art 2.0 (browser, viewer, gallery)
+   ====================================================================== */
+
+.fanart-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.fanart-browser h3 {
+  margin: 0;
+}
+.fanart-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fanart-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 6px;
+}
+.fanart-cell {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.fanart-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+  display: block;
+  transition: transform 0.2s;
+}
+.fanart-cell:hover img {
+  transform: scale(1.04);
+}
+.fanart-cell.selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+.fanart-cell.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fanart-badge {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 3px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.hidden-cell img {
+  filter: grayscale(1) brightness(0.6);
+}
+.load-more {
+  margin-top: 4px;
+}
+.fanart-credit {
+  margin: 0;
+}
+
+/* Full-screen viewer */
+.viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  background: #07070b;
+  color: #f2f2f7;
+  display: flex;
+  flex-direction: column;
+  animation: sheet-fade 0.15s ease-out;
+}
+.viewer-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: calc(10px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 8px max(14px, env(safe-area-inset-left));
+}
+.viewer-count {
+  font-size: 0.85rem;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+.viewer-subject {
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewer-close {
+  margin-left: auto;
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+.viewer-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  -webkit-user-drag: none;
+}
+.viewer-img.placeholder {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  filter: blur(14px);
+  opacity: 0.6;
+}
+.viewer-img.loading {
+  opacity: 0;
+}
+.viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 64px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.viewer-nav.prev {
+  left: 8px;
+}
+.viewer-nav.next {
+  right: 8px;
+}
+@keyframes heart-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  25% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+.heart-burst {
+  position: absolute;
+  font-size: 6rem;
+  pointer-events: none;
+  animation: heart-pop 0.9s ease-out forwards;
+  filter: drop-shadow(0 6px 20px rgba(255, 60, 120, 0.5));
+}
+.viewer-bottom {
+  padding: 10px max(14px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6), transparent);
+}
+.viewer-credit {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+.viewer-credit a {
+  color: #c9b8ff;
+}
+.viewer-saved-by {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.viewer .btn.ghost {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.viewer .btn.saved {
+  background: rgba(255, 94, 154, 0.2);
+  border-color: rgba(255, 94, 154, 0.5);
+}
+.viewer .icon-btn {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.viewer .reaction {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.viewer .reaction-picker {
+  background: rgba(255, 255, 255, 0.1);
+}
+.viewer .reaction-picker .reaction {
+  background: rgba(255, 255, 255, 0.08);
+}
+.viewer .menu {
+  bottom: calc(100% + 6px);
+  top: auto;
+  color: var(--text);
+}
+@media (max-width: 760px) {
+  .viewer-nav {
+    display: none;
+  }
+  .fanart-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+  }
+}
+
+/* Feed: saved pictures strip */
+.feed-pictures {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  text-decoration: none;
+}
+.feed-pictures img {
+  width: 64px;
+  height: 84px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 8px;
+}
+.feed-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* Gallery page */
+.gallery-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.gallery-head h3 {
+  margin: 0 0 2px;
+}
+.gallery-head p {
+  margin: 0;
+}
+.gallery-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+@media (max-width: 760px) {
+  .gallery-filters select {
+    width: 100%;
+  }
+}

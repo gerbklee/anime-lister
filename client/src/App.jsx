@@ -37,7 +37,7 @@ function readRoute() {
   if ((m = h.match(/^\/character\/(\d+)$/))) return { tab: 'character', id: Number(m[1]) };
   if (h === '/feed') return { tab: 'home', view: 'feed' };
   if ((m = h.match(/^\/us\/games\/(\d+)$/))) return { tab: 'us', view: 'games', gameId: Number(m[1]) };
-  if ((m = h.match(/^\/us\/(compare|games|wrapped)$/))) return { tab: 'us', view: m[1] };
+  if ((m = h.match(/^\/us\/(compare|games|wrapped|gallery)$/))) return { tab: 'us', view: m[1] };
   if (h === '/us' || h === '/compare') return { tab: 'us', view: 'compare' };
   if (h === '/lists') return { tab: 'lists' };
   if (h === '/ships') return { tab: 'lists', ships: true };

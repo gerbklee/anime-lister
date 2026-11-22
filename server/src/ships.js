@@ -11,6 +11,7 @@ const { usersById, getUser } = require('./users');
 const { getCharacterTraits } = require('./traits');
 const activity = require('./activity');
 const { notify } = require('./notify');
+const { savedImageFor } = require('./fanart');
 
 const STATUSES = ['canon', 'fanon', 'crack'];
 const VOTE_LABELS = ['🚫 No way', '🤷 Meh', '🙂 Cute', '💕 Ship it', '💍 OTP'];
@@ -321,7 +322,7 @@ const shuffle = (arr) => {
 
 // Guess the ship: blurred fan art of a ship, pick its name.
 function guessShipQuestions(count) {
-  const pool = q.all.all().filter((s) => s.cover_url || s.cover_file);
+  const pool = q.all.all().filter((s) => s.cover_url || s.cover_file || savedImageFor(`ship:${s.id}`));
   if (pool.length < 4) throw new HttpError(400, 'You need at least 4 ships with a cover picture for this game.');
   return shuffle(pool)
     .slice(0, count)
@@ -331,7 +332,7 @@ function guessShipQuestions(count) {
       return {
         kind: 'character',
         prompt: 'Which ship is this?',
-        image: s.cover_file ? `/images/${s.cover_file}` : s.cover_url,
+        image: savedImageFor(`ship:${s.id}`) ?? (s.cover_file ? `/images/${s.cover_file}` : s.cover_url),
         options: shuffle([s, ...wrong]).map((o) => ({ id: o.id, label: label(o) })),
         answer: s.id,
         reveal: label(s),

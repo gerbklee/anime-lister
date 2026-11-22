@@ -18,6 +18,7 @@ const { getUser, usersById } = require('./users');
 const { fetchThemes } = require('./themes');
 const { notify } = require('./notify');
 const { guessShipQuestions, shipHarderQuestions } = require('./ships');
+const { savedImageFor } = require('./fanart');
 
 const TYPES = {
   opening: { label: 'Guess the opening', count: 8 },
@@ -113,6 +114,8 @@ function characterQuestions(a, b) {
       if (c.role === 'MAIN' && c.image && !chars.has(c.id)) chars.set(c.id, { id: c.id, name: c.name, image: c.image });
     }
   }
+  // Prefer pictures you saved in the gallery.
+  for (const c of chars.values()) c.image = savedImageFor(`character:${c.id}`) ?? c.image;
   const pool = [...chars.values()];
   if (pool.length < 5) throw new HttpError(400, 'Not enough characters yet. Add characters to your lists or anime to your catalogues.');
   return shuffle(pool)

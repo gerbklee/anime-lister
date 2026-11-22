@@ -127,6 +127,15 @@ Character entries added before this version are linked to their anime in the bac
 - **Creating ships**: *+ New ship*, *💕 Ship with…* on character pages and the 💕 next to characters in lists. Character pages also show **who fans ship them with** (most fan art together, e.g. "Levi × Erwin: 208 pictures").
 - Also in: **My type** (your shipping type: canon vs crack, crossovers, rarepairs, age and height gaps), **Compare → 💕 Ships** (shipping match, ship wars), **Wrapped** (OTP of the year; Our Wrapped: the ship you fought about), **Games** (*Guess the ship* from blurred fan art, *Who ships it harder?*), the feed and push notifications (new *Ships* type in Settings).
 
+## 🎨 Fan art & gallery
+
+- **Fan art from [Danbooru](https://danbooru.donmai.us)**, work-safe only (rating *general*, checked again on the NAS), sorted by fan score (⭐ Best) or 🆕 Newest, with artist credit and a link to the original. Comics, sketches, monochrome, low-resolution and crowd pictures are filtered out; *Solo only* on character pages. Ship fan art is found among the best-scored pictures of the rarer character. Safebooru is the fallback if Danbooru is down.
+- Danbooru's image server refuses browsers, so pictures are loaded through the NAS (`/api/fanart/img`).
+- **💖 Our picks**: save pictures (♡ Save, or double-tap in the viewer). They are shared, stored on the NAS and shown first on character and ship pages and in the picture pickers.
+- **🙈 Hide** a picture for both of you, everywhere (undo via the 🙈 counter).
+- **Viewer**: swipe between pictures, credits, reactions on saved pictures, use as profile photo or ship cover.
+- **Us → 🖼️ Gallery**: everything you both saved, by person and character/ship. Saving shows up in the feed; Our Wrapped has a "Picture of the year". Games prefer your saved pictures.
+
 ## Install as app & outside access (Tailscale)
 
 Installing to the home screen and push notifications need HTTPS. [Tailscale](https://tailscale.com) (free for personal use) gives the NAS a private HTTPS address that works from anywhere, without opening ports on your router.
