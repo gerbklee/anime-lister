@@ -5,7 +5,7 @@ import Avatar from './Avatar.jsx';
 import Menu from './Menu.jsx';
 import Reactions from './Reactions.jsx';
 
-const SOURCE_NAMES = { danbooru: 'Danbooru', safebooru: 'Safebooru' };
+const SOURCE_NAMES = { danbooru: 'Danbooru', safebooru: 'Safebooru', zerochan: 'Zerochan', wallhaven: 'Wallhaven' };
 
 // Full-screen picture viewer: swipe left/right, double-tap to save.
 // items: fan art items (saved ones have `savedId`).
@@ -85,7 +85,7 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
     }
   };
 
-  const credit = [item.artist ? `🎨 ${item.artist}` : null, SOURCE_NAMES[item.source]].filter(Boolean).join(' · ');
+  const copies = item.sources?.length ? item.sources : [{ source: item.source, id: item.id, postUrl: item.postUrl }];
 
   return createPortal(
     <div className="viewer" role="dialog" aria-modal="true" aria-label="Picture viewer">
@@ -120,6 +120,10 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
           alt=""
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
+          onError={(e) => {
+            // Fall back to the thumbnail if the large version isn't there.
+            if (e.currentTarget.src !== new URL(item.thumb, window.location.href).href) e.currentTarget.src = item.thumb;
+          }}
         />
         {burst > 0 && (
           <span key={burst} className="heart-burst" aria-hidden="true">
@@ -139,18 +143,22 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
       </div>
 
       <div className="viewer-bottom">
+        {item.popularity && <div className="viewer-popularity">🔥 {item.popularity}</div>}
         <div className="viewer-credit">
-          <span>{credit}</span>
-          {item.sourceUrl ? (
+          {item.artist && <span>🎨 {item.artist}</span>}
+          {copies.map((c) =>
+            c.postUrl ? (
+              <a key={`${c.source}:${c.id}`} href={c.postUrl} target="_blank" rel="noreferrer">
+                {SOURCE_NAMES[c.source] ?? c.source} ↗
+              </a>
+            ) : (
+              <span key={`${c.source}:${c.id}`}>{SOURCE_NAMES[c.source] ?? c.source}</span>
+            ),
+          )}
+          {item.sourceUrl && (
             <a href={item.sourceUrl} target="_blank" rel="noreferrer">
               Original ↗
             </a>
-          ) : (
-            item.postUrl && (
-              <a href={item.postUrl} target="_blank" rel="noreferrer">
-                Source ↗
-              </a>
-            )
           )}
           {item.savedBy && (
             <span className="viewer-saved-by">

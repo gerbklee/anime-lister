@@ -3,6 +3,8 @@ import { api } from '../api.js';
 import FanartViewer from './FanartViewer.jsx';
 import Modal from './Modal.jsx';
 
+const SOURCE_NAMES = { danbooru: 'Danbooru', zerochan: 'Zerochan', wallhaven: 'Wallhaven', safebooru: 'Safebooru' };
+
 // Thumbnails; saved ones get a heart badge.
 export function FanartGrid({ items, onOpen, selected, emptyText = 'No pictures here yet.' }) {
   if (!items.length) return <p className="muted small">{emptyText}</p>;
@@ -17,6 +19,11 @@ export function FanartGrid({ items, onOpen, selected, emptyText = 'No pictures h
         >
           <img src={it.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
           {it.savedId && <span className="fanart-badge" aria-label="Saved">💖</span>}
+          {!it.savedId && it.sources?.length > 1 && (
+            <span className="fanart-badge multi" title={it.popularity}>
+              ×{it.sources.length}
+            </span>
+          )}
         </button>
       ))}
     </div>
@@ -88,7 +95,7 @@ export default function FanartBrowser({ subject, subjectName, official, actions 
       setItems(d.items);
       setHasMore(d.hasMore);
       setPage(1);
-      setMeta({ source: d.source, notice: d.notice, hiddenCount: d.hiddenCount, name: d.name });
+      setMeta({ sources: d.sources, notice: d.notice, hiddenCount: d.hiddenCount, name: d.name });
       setTab((t) => t ?? (d.saved.length ? 'picks' : 'fanart'));
     } catch (err) {
       setError(err.message);
@@ -228,8 +235,12 @@ export default function FanartBrowser({ subject, subjectName, official, actions 
                   </button>
                 )}
                 <p className="muted tiny fanart-credit">
-                  Work-safe fan art from {meta.source === 'safebooru' ? 'Safebooru' : 'Danbooru'}
-                  {sort === 'best' ? ', most loved first' : ', newest first'}. Tap a picture for the artist and source.
+                  Work-safe fan art from{' '}
+                  {Object.entries(meta.sources ?? {})
+                    .filter(([, n]) => n > 0)
+                    .map(([s]) => SOURCE_NAMES[s] ?? s)
+                    .join(', ') || 'nowhere yet'}
+                  , {sort === 'best' ? 'ranked by popularity across all of them' : 'newest first'}. Pictures on several sites (×2) rank higher.
                 </p>
               </>
             )

@@ -6275,3 +6275,17 @@ h3 {
     width: 100%;
   }
 }
+
+/* v8.2: multi-source fan art */
+.fanart-badge.multi {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #fff;
+  padding: 3px 6px;
+  background: linear-gradient(135deg, rgba(124, 77, 255, 0.85), rgba(255, 94, 154, 0.85));
+}
+.viewer-popularity {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ffd27a;
+}

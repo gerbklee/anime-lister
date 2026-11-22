@@ -140,7 +140,7 @@ export const api = {
   saveFanart: (subject, item) => request('POST', '/api/fanart/saved', { subject, item: { source: item.source, id: item.id } }),
   unsaveFanart: (savedId) => request('DELETE', `/api/fanart/saved/${savedId}`),
   hideFanart: (item, subjectName) =>
-    request('POST', '/api/fanart/hidden', { item: { source: item.source, id: item.id, thumb: item.thumb, subjectName } }),
+    request('POST', '/api/fanart/hidden', { item: { source: item.source, id: item.id, thumb: item.thumb, subjectName, sources: item.sources } }),
   unhideFanart: (source, id) => request('DELETE', `/api/fanart/hidden/${source}/${id}`),
   hiddenFanart: () => request('GET', '/api/fanart/hidden'),
   gallery: (params = {}) => request('GET', `/api/gallery?${new URLSearchParams(params)}`),

@@ -18,6 +18,7 @@ const { cacheImage, isAllowedImageUrl, removeImageIfUnused } = require('./images
 const { guessTag, character } = require('./pictures');
 const { usersById } = require('./users');
 const activity = require('./activity');
+const { zerochanResults, wallhavenResults, zerochanPost, wallhavenPost, rankAcrossSources } = require('./fanart-sources');
 
 const DANBOORU = 'https://danbooru.donmai.us';
 const SAFEBOORU = 'https://safebooru.org';
@@ -141,6 +142,7 @@ function fromDanbooru(p) {
     full: proxied(p.large_file_url),
     remoteUrl: p.large_file_url,
     remoteThumb: thumbUrl,
+    md5: p.md5 ?? null,
     width: p.image_width,
     height: p.image_height,
     score: p.score,
@@ -245,7 +247,7 @@ async function subjectInfo(subject) {
   return { kind: 'ship', id, name: ship.name, memberIds: q.members.all(id).map((r) => r.character_id) };
 }
 
-const DB_FIELDS = 'id,rating,score,image_width,image_height,file_ext,tag_string_artist,tag_string_character,tag_string_general,tag_string_meta,source,large_file_url,preview_file_url,media_asset';
+const DB_FIELDS = 'id,md5,rating,score,image_width,image_height,file_ext,tag_string_artist,tag_string_character,tag_string_general,tag_string_meta,source,large_file_url,preview_file_url,media_asset';
 const posts = (tags, page, limit = 100) =>
   danbooru(`/posts.json?limit=${limit}&page=${page}&only=${DB_FIELDS}&tags=${encodeURIComponent(tags)}`).then((rows) =>
     (Array.isArray(rows) ? rows : []).map(fromDanbooru).filter(Boolean),
@@ -253,7 +255,7 @@ const posts = (tags, page, limit = 100) =>
 
 // Returns { items, hasMore, source } for one page (Danbooru), before filtering
 // out hidden/saved pictures.
-async function searchDanbooru(info, { sort, solo, page }) {
+async function searchDanbooru(info, { sort, solo }) {
   const tags = [];
   for (const id of info.memberIds) {
     const t = await danbooruTag(id);
@@ -261,8 +263,8 @@ async function searchDanbooru(info, { sort, solo, page }) {
     tags.push(t);
   }
   if (tags.length === 1) {
-    const raw = await posts(`${tags[0].tag} rating:g${sort === 'best' ? ' order:score' : ''}`, page, 200);
-    return { items: raw.filter((i) => goodQuality(i, { solo, maxCharacters: 3 })), hasMore: raw.length >= 150, source: 'danbooru', tags: [tags[0].tag] };
+    const raw = await posts(`${tags[0].tag} rating:g${sort === 'best' ? ' order:score' : ''}`, 1, 200);
+    return { items: raw.filter((i) => goodQuality(i, { solo, maxCharacters: 3 })), source: 'danbooru', tags: [tags[0].tag] };
   }
 
   // Ships: collect a pool once (cached), then page through it locally.
@@ -290,19 +292,18 @@ async function searchDanbooru(info, { sort, solo, page }) {
     const list = [...seen.values()].filter((i) => goodQuality(i, { solo: false, maxCharacters: names.length + 2 }));
     return sort === 'best' ? list.sort((a, b) => b.score - a.score) : list;
   });
-  const start = (page - 1) * PAGE_SIZE;
-  return { items: pool.slice(start, start + PAGE_SIZE), hasMore: pool.length > start + PAGE_SIZE, source: 'danbooru', tags: names };
+  return { items: pool, source: 'danbooru', tags: names };
 }
 
-async function searchSafebooru(info, { sort, solo, page }) {
+async function searchSafebooru(info, { sort, solo }) {
   const tags = [];
   for (const id of info.memberIds) {
     const { tag } = await guessTag(await character(id));
     if (!tag) return { items: [], hasMore: false, source: 'safebooru', tags: null };
     tags.push(tag);
   }
-  const raw = (await safebooru(`${tags.join(' ')}${sort === 'best' ? ' sort:score:desc' : ''}`, page)).map(fromSafebooru).filter(Boolean);
-  return { items: raw.filter((i) => goodQuality(i, { solo })), hasMore: raw.length >= 60, source: 'safebooru', tags };
+  const raw = (await safebooru(`${tags.join(' ')}${sort === 'best' ? ' sort:score:desc' : ''}`, 1)).map(fromSafebooru).filter(Boolean);
+  return { items: raw.filter((i) => goodQuality(i, { solo })), source: 'safebooru', tags };
 }
 
 function savedView(row, users, me) {
@@ -331,11 +332,13 @@ function savedView(row, users, me) {
 
 // Looks the post up again at the source, so only real work-safe pictures are saved.
 async function fetchPost(source, postId) {
-  if (!/^\d+$/.test(String(postId))) throw new HttpError(400, 'Invalid picture');
+  if (!/^[a-z0-9]+$/i.test(String(postId))) throw new HttpError(400, 'Invalid picture');
   if (source === 'danbooru') {
     const p = await danbooru(`/posts/${postId}.json?only=${DB_FIELDS}`).catch(() => null);
     return fromDanbooru(p);
   }
+  if (source === 'zerochan') return zerochanPost(postId);
+  if (source === 'wallhaven') return wallhavenPost(postId);
   if (source === 'safebooru') {
     const res = await fetch(`${SAFEBOORU}/index.php?page=dapi&s=post&q=index&json=1&id=${postId}`, { headers: UA, signal: AbortSignal.timeout(15_000) });
     const rows = await res.json().catch(() => []);
@@ -362,6 +365,43 @@ function recordSave(userId, info, savedId) {
 
 const router = express.Router();
 
+// All sources in parallel, ranked together by popularity (cached per subject).
+const poolCache = memo(3 * 3600 * 1000, 200);
+async function rankedPool(info, { sort, solo }) {
+  return poolCache(`${info.kind}:${info.id}|${sort}|${solo ? 1 : 0}`, async () => {
+    const [db, zc, wh] = await Promise.allSettled([
+      searchDanbooru(info, { sort, solo }),
+      zerochanResults(info, { sort, solo }),
+      wallhavenResults(info, { sort, solo }),
+    ]);
+    const lists = {};
+    const failed = [];
+    if (db.status === 'fulfilled' && db.value) lists.danbooru = db.value.items;
+    else if (db.status === 'rejected') failed.push('Danbooru');
+    if (zc.status === 'fulfilled') lists.zerochan = zc.value;
+    else failed.push('Zerochan');
+    if (wh.status === 'fulfilled') lists.wallhaven = wh.value;
+    else failed.push('Wallhaven');
+    if (!lists.danbooru) {
+      // Danbooru down or no tag: Safebooru steps in.
+      try {
+        lists.safebooru = (await searchSafebooru(info, { sort, solo })).items;
+      } catch {
+        failed.push('Safebooru');
+      }
+    }
+    const sources = Object.fromEntries(Object.entries(lists).map(([k, v]) => [k, v.length]));
+    if (!Object.values(sources).some((n) => n > 0) && failed.length) {
+      throw new HttpError(503, `Fan art is unavailable right now (${failed.join(', ')} not reachable).`);
+    }
+    return {
+      ranked: rankAcrossSources(lists),
+      sources,
+      notice: failed.length ? `${failed.join(' and ')} ${failed.length > 1 ? 'are' : 'is'} unavailable right now.` : null,
+    };
+  });
+}
+
 router.get('/fanart', wrap(async (req, res) => {
   const me = req.user.id;
   const info = await subjectInfo(req.query.subject);
@@ -371,34 +411,22 @@ router.get('/fanart', wrap(async (req, res) => {
   const subject = `${info.kind}:${info.id}`;
   const users = usersById();
 
-  let result = null;
-  let notice = null;
-  try {
-    result = await searchDanbooru(info, { sort, solo, page });
-    if (!result) notice = 'Not found on Danbooru, showing Safebooru instead.';
-  } catch (err) {
-    notice = `Danbooru is unavailable right now (${err.message}), showing Safebooru instead.`;
-  }
-  if (!result) {
-    try {
-      result = await searchSafebooru(info, { sort, solo, page });
-    } catch (err) {
-      throw new HttpError(503, `Fan art is unavailable right now (${err.message}).`);
-    }
-  }
-
+  const { ranked, sources, notice } = await rankedPool(info, { sort, solo });
   const hidden = new Set(q.hiddenKeys.all().map((h) => `${h.source}:${h.post_id}`));
   const savedRows = q.saved.all(subject);
-  const savedKeys = new Map(savedRows.map((r) => [`${r.source}:${r.post_id}`, r.id]));
+  const savedKeys = new Set(savedRows.map((r) => `${r.source}:${r.post_id}`));
+  const keysOf = (i) => (i.sources ?? [{ source: i.source, id: i.id }]).map((s) => `${s.source}:${s.id}`);
+  const visible = ranked.filter((i) => !keysOf(i).some((k) => hidden.has(k) || savedKeys.has(k)));
+  const start = (page - 1) * PAGE_SIZE;
   res.json({
     subject,
     name: info.name,
-    source: result.source,
-    tags: result.tags,
+    sources,
     notice,
     saved: page === 1 ? savedRows.map((r) => savedView(r, users, me)) : undefined,
-    items: result.items.filter((i) => !hidden.has(`${i.source}:${i.id}`) && !savedKeys.has(`${i.source}:${i.id}`)).map(publicItem),
-    hasMore: result.hasMore,
+    items: visible.slice(start, start + PAGE_SIZE).map(publicItem),
+    hasMore: visible.length > start + PAGE_SIZE,
+    total: visible.length,
     hiddenCount: hidden.size,
   });
 }));
@@ -459,13 +487,16 @@ router.delete('/fanart/saved/:id', (req, res) => {
 
 // Hiding works everywhere, for everyone; a hidden picture is also unsaved.
 router.post('/fanart/hidden', (req, res) => {
-  const { source, id, thumb, subjectName } = req.body?.item ?? {};
-  if (!['danbooru', 'safebooru'].includes(source) || !/^\d+$/.test(String(id))) throw new HttpError(400, 'Invalid picture');
+  const { source, id, thumb, subjectName, sources: copies } = req.body?.item ?? {};
+  const valid = (s, i) => ['danbooru', 'safebooru', 'zerochan', 'wallhaven'].includes(s) && /^[a-z0-9]+$/i.test(String(i));
+  if (!valid(source, id)) throw new HttpError(400, 'Invalid picture');
+  const extra = (Array.isArray(copies) ? copies : []).filter((c) => valid(c?.source, c?.id) && !(c.source === source && String(c.id) === String(id))).slice(0, 5);
   const thumbUrl =
     typeof thumb === 'string' && (isAllowedImageUrl(thumb) || thumb.startsWith('/images/') || thumb.startsWith('/api/fanart/img?')) ? thumb : null;
   const removed = q.savedSamePost.all(source, String(id));
   db.transaction(() => {
     q.hide.run(source, String(id), thumbUrl, typeof subjectName === 'string' ? subjectName.slice(0, 100) : null, req.user.id, Date.now());
+    for (const c of extra) q.hide.run(c.source, String(c.id), null, typeof subjectName === 'string' ? subjectName.slice(0, 100) : null, req.user.id, Date.now());
     for (const r of removed) {
       q.deleteSaved.run(r.id);
       q.deleteReactions.run(`fanart:${r.id}`);

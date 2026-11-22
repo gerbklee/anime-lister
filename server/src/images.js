@@ -6,10 +6,10 @@ const path = require('path');
 const { db, IMAGE_DIR } = require('./db');
 
 const ALLOWED_EXT = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
-const MAX_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = 20 * 1024 * 1024;
 
 // Only images from these sites are downloaded (AniList, MyAnimeList, Safebooru).
-const ALLOWED_HOSTS = ['anilist.co', 'myanimelist.net', 'safebooru.org', 'donmai.us'];
+const ALLOWED_HOSTS = ['anilist.co', 'myanimelist.net', 'safebooru.org', 'donmai.us', 'zerochan.net', 'wallhaven.cc'];
 
 function isAllowedImageUrl(url) {
   try {
@@ -27,7 +27,7 @@ function isAllowedImageUrl(url) {
 // omitted) and returns the file name, or null if there is no URL.
 async function cacheImage(url, baseName) {
   if (!url) return null;
-  if (!isAllowedImageUrl(url)) throw new Error('Images can only come from AniList, MyAnimeList, Safebooru or Danbooru.');
+  if (!isAllowedImageUrl(url)) throw new Error('Images can only come from AniList, MyAnimeList or the supported fan art sites.');
 
   let ext = path.extname(new URL(url).pathname).toLowerCase();
   if (!ALLOWED_EXT.has(ext)) ext = '.jpg';

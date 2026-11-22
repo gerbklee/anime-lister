@@ -129,8 +129,10 @@ Character entries added before this version are linked to their anime in the bac
 
 ## 🎨 Fan art & gallery
 
-- **Fan art from [Danbooru](https://danbooru.donmai.us)**, work-safe only (rating *general*, checked again on the NAS), sorted by fan score (⭐ Best) or 🆕 Newest, with artist credit and a link to the original. Comics, sketches, monochrome, low-resolution and crowd pictures are filtered out; *Solo only* on character pages. Ship fan art is found among the best-scored pictures of the rarer character. Safebooru is the fallback if Danbooru is down.
-- Danbooru's image server refuses browsers, so pictures are loaded through the NAS (`/api/fanart/img`).
+- **Three sources, ranked together**: [Danbooru](https://danbooru.donmai.us) (fan score), [Zerochan](https://www.zerochan.net) (favourites) and [Wallhaven](https://wallhaven.cc) (favourites; single characters with a full name). All are searched in parallel and cached for a few hours; Safebooru steps in if Danbooru is down.
+- **Ranking is popularity only**: each picture's position within its own source becomes a 0–100 rating (pulled towards 50 when a source has few results). The same picture on several sites (same file MD5, or the same original X/Pixiv post) is merged into one entry with all links and gets +10 per extra site (badge ×2). The viewer shows why: "Top 3% on Zerochan" or "On Danbooru & Zerochan".
+- **Work-safe only**: Danbooru rating *general* (checked again on the NAS), Wallhaven SFW, Zerochan with ecchi/underwear-type tags filtered out. Comics, sketches, monochrome, low-resolution and crowd pictures are filtered too; *Solo only* on character pages. Ship fan art comes from the best-scored pictures of the rarer character.
+- Danbooru's image server refuses browsers, so its pictures are loaded through the NAS (`/api/fanart/img`).
 - **💖 Our picks**: save pictures (♡ Save, or double-tap in the viewer). They are shared, stored on the NAS and shown first on character and ship pages and in the picture pickers.
 - **🙈 Hide** a picture for both of you, everywhere (undo via the 🙈 counter).
 - **Viewer**: swipe between pictures, credits, reactions on saved pictures, use as profile photo or ship cover.
