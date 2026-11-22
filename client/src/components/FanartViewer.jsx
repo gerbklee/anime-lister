@@ -143,7 +143,11 @@ export default function FanartViewer({ items, index, onIndex, onClose, onSave, o
       </div>
 
       <div className="viewer-bottom">
-        {item.popularity && <div className="viewer-popularity">🔥 {item.popularity}</div>}
+        {(item.popularity || item.spicy) && (
+          <div className="viewer-popularity">
+            {item.spicy && <span className="spicy-tag">🌶️ Spicy</span>} {item.popularity && <>🔥 {item.popularity}</>}
+          </div>
+        )}
         <div className="viewer-credit">
           {item.artist && <span>🎨 {item.artist}</span>}
           {copies.map((c) =>

@@ -20,6 +20,7 @@ const { shipsRouter } = require('./ships');
 const { fanartRouter } = require('./fanart');
 const { shipsExtraRouter } = require('./ships-extra');
 const { artRouter, startArtJobs } = require('./art');
+const { adultRouter, startAgeWarm } = require('./adult');
 const { pushRouter } = require('./notify');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
@@ -64,6 +65,7 @@ app.use('/api', shipsExtraRouter); // before shipsRouter: /ships/swipe, /ships/m
 app.use('/api', shipsRouter);
 app.use('/api', fanartRouter);
 app.use('/api', artRouter);
+app.use('/api', adultRouter);
 app.use('/api', compareRouter);
 app.use('/api', themesRouter);
 app.use('/api', catalogueRouter);
@@ -118,6 +120,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Anime Hub running on http://0.0.0.0:${PORT}`);
   startAiringJob();
   startArtJobs();
+  startAgeWarm();
   retryMissingImages()
     .catch((err) => console.warn('Image retry failed:', err.message))
     .then(() => backfillCharacterLinks())

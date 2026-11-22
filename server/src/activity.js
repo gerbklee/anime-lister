@@ -288,7 +288,7 @@ function feedItem(a, me, users) {
   if (a.type === 'fanart_save') {
     // Lazy require: fanart.js depends on this module.
     const { feedPictures } = require('./fanart');
-    item.pictures = feedPictures(data.ids);
+    item.pictures = feedPictures(data.ids, me);
     if (!item.pictures.length) return null;
   }
   if (a.type === 'watchlist_watched') {

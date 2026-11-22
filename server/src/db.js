@@ -472,6 +472,18 @@ const MIGRATIONS = {
       created_at  INTEGER NOT NULL
     );
   `,
+  // v12: per-person "spicy art" switch, known character ages (adults-only rule),
+  // and which saved/board pictures are spicy.
+  12: `
+    ALTER TABLE users ADD COLUMN spicy_art INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE character_age (
+      character_id  INTEGER PRIMARY KEY,
+      age           REAL,
+      fetched_at    INTEGER NOT NULL
+    );
+    ALTER TABLE fanart_saved ADD COLUMN spicy INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE art_board_items ADD COLUMN spicy INTEGER NOT NULL DEFAULT 0;
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

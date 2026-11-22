@@ -17,12 +17,15 @@ const WALLHAVEN = 'https://wallhaven.cc/api/v1';
 const UA = { 'User-Agent': 'AnimeHub/1.0 (self-hosted fan art viewer)' };
 const TAG_FRESH_MS = 30 * 24 * 3600 * 1000;
 
-// Zerochan has no content rating, so these are filtered out (plus the usual
-// low-quality tags). Wallhaven is limited to its SFW purity level.
+// Zerochan has no content rating. Nudity tags are always filtered out (as are
+// low-quality tags); suggestive tags only pass with spicy art on, for subjects
+// that are known adults. Wallhaven: SFW, plus "sketchy" with spicy art.
 const ZC_BAD = new Set([
-  'Ecchi', 'Fanservice', 'Underwear', 'Lingerie', 'Nudity', 'Partially Nude', 'Panties', 'Bra', 'Nipples', 'Cleavage',
+  'Nudity', 'Partially Nude', 'Nude', 'Nipples', 'Topless', 'Bottomless', 'Sex', 'Hentai',
   'Comic', '4-Koma', 'Doujinshi', 'Sketch', 'Monochrome', 'Lineart', 'Screenshot', 'Character Sheet', 'Text',
 ]);
+const ZC_SPICY = new Set(['Ecchi', 'Fanservice', 'Underwear', 'Lingerie', 'Panties', 'Bra', 'Cleavage', 'Swimsuit', 'Bikini', 'Seductive']);
+const { MINOR_TAGS } = require('./adult');
 
 const q = {
   tag: db.prepare('SELECT tag, post_count, fetched_at FROM fanart_tags WHERE character_id = ? AND source = ?'),
@@ -146,10 +149,12 @@ async function zerochanTag(characterId) {
   return tag;
 }
 
-function fromZerochan(p) {
+function fromZerochan(p, { spicy = false } = {}) {
   if (!p?.id) return null;
   const tags = Array.isArray(p.tags) ? p.tags : [];
   if (tags.some((t) => ZC_BAD.has(t))) return null;
+  const isSpicy = tags.some((t) => ZC_SPICY.has(t));
+  if (isSpicy && (!spicy || tags.some((t) => MINOR_TAGS.has(t)))) return null;
   const width = Number(p.width) || 0;
   const height = Number(p.height) || 0;
   if (Math.max(width, height) < 600) return null;
@@ -169,10 +174,11 @@ function fromZerochan(p) {
     postUrl: `${ZEROCHAN}/${p.id}`,
     md5: p.md5 ?? null,
     solo: tags.includes('Solo'),
+    spicy: isSpicy,
   };
 }
 
-async function zerochanResults(info, { sort, solo }) {
+async function zerochanResults(info, { sort, solo, spicy = false }) {
   const tags = [];
   for (const id of info.memberIds) {
     const t = await zerochanTag(id);
@@ -181,16 +187,18 @@ async function zerochanResults(info, { sort, solo }) {
   }
   const path = `/${encodeURI(tags.map(zcPath).join(','))}?json&l=100&s=${sort === 'best' ? 'fav' : 'id'}`;
   const r = await cache(`zc|${path}`, () => zerochan(path));
-  return (r.data?.items ?? []).map(fromZerochan).filter((i) => i && (!solo || i.solo));
+  return (r.data?.items ?? []).map((p) => fromZerochan(p, { spicy })).filter((i) => i && (!solo || i.solo));
 }
 
 // Exact post details (for saving).
-async function zerochanPost(id) {
+async function zerochanPost(id, { spicy = false } = {}) {
   const r = await zerochan(`/${id}?json`);
   const p = r.data;
   if (!p?.id) return null;
   const tags = Array.isArray(p.tags) ? p.tags : [];
   if (tags.some((t) => ZC_BAD.has(t))) return null;
+  const isSpicy = tags.some((t) => ZC_SPICY.has(t));
+  if (isSpicy && (!spicy || tags.some((t) => MINOR_TAGS.has(t)))) return null;
   return {
     source: 'zerochan',
     id: String(p.id),
@@ -204,13 +212,15 @@ async function zerochanPost(id) {
     artist: null,
     sourceUrl: /^https?:\/\//.test(p.source ?? '') ? p.source : null,
     postUrl: `${ZEROCHAN}/${p.id}`,
+    spicy: isSpicy,
   };
 }
 
 // ---- Wallhaven ---------------------------------------------------------------------------
 
-function fromWallhaven(p) {
-  if (!p?.id || p.purity !== 'sfw' || p.category !== 'anime' || !p.path) return null;
+function fromWallhaven(p, { spicy = false } = {}) {
+  if (!p?.id || p.category !== 'anime' || !p.path) return null;
+  if (!(p.purity === 'sfw' || (spicy && p.purity === 'sketchy'))) return null;
   return {
     source: 'wallhaven',
     id: String(p.id),
@@ -225,12 +235,13 @@ function fromWallhaven(p) {
     sourceUrl: /^https?:\/\//.test(p.source ?? '') ? p.source : null,
     postUrl: p.url,
     md5: null,
+    spicy: p.purity === 'sketchy',
   };
 }
 
 // Single characters only (Wallhaven can't search for two characters at once),
 // and only full names, so a bare "Levi" doesn't match random wallpapers.
-async function wallhavenResults(info, { sort, solo }) {
+async function wallhavenResults(info, { sort, solo, spicy = false }) {
   if (info.kind !== 'character' || solo) return [];
   const c = await character(info.memberIds[0]);
   if (c.name.trim().split(/\s+/).length < 2) return [];
@@ -240,9 +251,9 @@ async function wallhavenResults(info, { sort, solo }) {
   for (const name of [...new Set([short, c.name])]) {
     const out = [];
     for (const page of [1, 2]) {
-      const path = `/search?q=${encodeURIComponent(`"${name}"`)}&categories=010&purity=100&sorting=${sorting}&page=${page}`;
+      const path = `/search?q=${encodeURIComponent(`"${name}"`)}&categories=010&purity=${spicy ? '110' : '100'}&sorting=${sorting}&page=${page}`;
       const r = await cache(`wh|${path}`, () => wallhaven(path));
-      out.push(...(r.data ?? []).map(fromWallhaven).filter(Boolean));
+      out.push(...(r.data ?? []).map((p) => fromWallhaven(p, { spicy })).filter(Boolean));
       if ((r.meta?.last_page ?? 1) <= page) break;
     }
     if (out.length) return out;
@@ -250,10 +261,10 @@ async function wallhavenResults(info, { sort, solo }) {
   return [];
 }
 
-async function wallhavenPost(id) {
+async function wallhavenPost(id, { spicy = false } = {}) {
   if (!/^[a-z0-9]+$/i.test(String(id))) return null;
   const r = await wallhaven(`/w/${id}`);
-  return fromWallhaven(r.data);
+  return fromWallhaven(r.data, { spicy });
 }
 
 // ---- Cross-source ranking ----------------------------------------------------------------

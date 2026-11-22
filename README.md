@@ -141,6 +141,7 @@ Character entries added before this version are linked to their anime in the bac
 - **📱 Wallpaper maker**: crop any picture to phone or desktop shape with a lock-screen clock preview, then save it to Photos.
 - **🖌️ Artists**: follow artists and get a notification when they post new art (checked every 3 hours).
 - Watchlists moved into **Lists** (🍿 Watch, next to Characters, Anime, Manga and Ships); the gallery moved from Us to Art.
+- **🌶️ Spicy art** (Settings, per person, off by default): adds suggestive but non-explicit fan art (Danbooru *sensitive*, Zerochan ecchi/fanservice, Wallhaven *sketchy*); never nudity, *questionable* or *explicit*. **Adults only**: spicy pictures appear only when every character in them is known to be 18+ (AniList age; ages are learned in the background), never with tags like loli/shota/child/aged-down, and characters without a known age get the normal art. Spicy saves in the gallery and on boards stay hidden for people who have the switch off; games, Art of the day and Wrapped always use safe pictures.
 
 ## 🎨 Fan art & gallery
 

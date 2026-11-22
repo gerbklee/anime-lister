@@ -15,6 +15,7 @@ const { cacheImage, isAllowedImageUrl, removeImageIfUnused, cropImage, cleanCrop
 const { usersById, getUser } = require('./users');
 const { notify } = require('./notify');
 const fanart = require('./fanart');
+const { isSpicy, allAdults } = require('./adult');
 
 const COLOURS = {
   red: 'red_theme', orange: 'orange_theme', yellow: 'yellow_theme', green: 'green_theme', blue: 'blue_theme',
@@ -50,11 +51,11 @@ const q = {
   items: db.prepare('SELECT * FROM art_board_items WHERE board_id = ? ORDER BY created_at DESC'),
   item: db.prepare('SELECT * FROM art_board_items WHERE id = ?'),
   itemByPost: db.prepare('SELECT * FROM art_board_items WHERE board_id = ? AND source = ? AND post_id = ?'),
-  covers: db.prepare('SELECT thumb_file, thumb_url, source FROM art_board_items WHERE board_id = ? ORDER BY created_at DESC LIMIT 4'),
-  count: db.prepare('SELECT COUNT(*) AS n FROM art_board_items WHERE board_id = ?'),
+  covers: db.prepare('SELECT thumb_file, thumb_url, source FROM art_board_items WHERE board_id = ? AND (spicy = 0 OR ?) ORDER BY created_at DESC LIMIT 4'),
+  count: db.prepare('SELECT COUNT(*) AS n FROM art_board_items WHERE board_id = ? AND (spicy = 0 OR ?)'),
   insertItem: db.prepare(`
-    INSERT INTO art_board_items (board_id, source, post_id, image_url, thumb_url, image_file, thumb_file, source_url, post_url, artist, width, height, added_by, created_at)
-    VALUES (@boardId, @source, @postId, @imageUrl, @thumbUrl, @imageFile, @thumbFile, @sourceUrl, @postUrl, @artist, @width, @height, @addedBy, @now)`),
+    INSERT INTO art_board_items (board_id, source, post_id, image_url, thumb_url, image_file, thumb_file, source_url, post_url, artist, width, height, added_by, created_at, spicy)
+    VALUES (@boardId, @source, @postId, @imageUrl, @thumbUrl, @imageFile, @thumbFile, @sourceUrl, @postUrl, @artist, @width, @height, @addedBy, @now, @spicy)`),
   deleteItem: db.prepare('DELETE FROM art_board_items WHERE id = ?'),
   boardFiles: db.prepare('SELECT image_file, thumb_file FROM art_board_items WHERE board_id = ?'),
   boardsWithPost: db.prepare(`
@@ -128,7 +129,20 @@ function filterItems(items, { shape, quality, solo }) {
 }
 
 // Search Danbooru for pictures with all `tags`. Returns sorted items (with `all`).
-async function searchTags(tags, { sort = 'best', page = 1 } = {}) {
+// With spicy art on, the general-only results are merged in too, so pictures
+// that fail the adults-only check never leave a search empty.
+async function searchTags(tags, opts = {}) {
+  if (!opts.spicy) return searchTagsOnce(tags, opts);
+  const [spicyRes, safeRes] = await Promise.all([searchTagsOnce(tags, opts), searchTagsOnce(tags, { ...opts, spicy: false })]);
+  const seen = new Map();
+  for (const i of [...spicyRes.items, ...safeRes.items]) if (!seen.has(i.id)) seen.set(i.id, i);
+  const merged = [...seen.values()].sort((a, b) => (opts.sort === 'new' ? Number(b.id) - Number(a.id) : b.score - a.score));
+  return { items: merged, hasMore: spicyRes.hasMore || safeRes.hasMore };
+}
+
+async function searchTagsOnce(tags, { sort = 'best', page = 1, spicy = false } = {}) {
+  const R = fanart.ratingFor(spicy);
+  const allowed = fanart.spicyFilter(spicy);
   const uniq = [...new Set(tags.filter(Boolean))];
   if (!uniq.length) throw new HttpError(400, 'Search for something first.');
   const counts = await tagCounts(uniq);
@@ -139,24 +153,24 @@ async function searchTags(tags, { sort = 'best', page = 1 } = {}) {
 
   // One term: page straight through Danbooru.
   if (ordered.length === 1 || (ordered.length === 2 && sort === 'new')) {
-    const raw = await fetchPosts(`${ordered.join(' ')} rating:g${sort === 'best' ? ' order:score' : ''}`, page);
-    return { items: raw, hasMore: raw.length >= 150 };
+    const raw = await fetchPosts(`${ordered.join(' ')} ${R}${sort === 'best' ? ' order:score' : ''}`, page);
+    return { items: raw.filter(allowed), hasMore: raw.length >= 150 };
   }
 
   // Several terms: build a pool once (cached), filter locally, page through it.
-  const pool = await longCache(`pool|${ordered.join(' ')}|${sort}`, async () => {
+  const pool = await longCache(`pool|${ordered.join(' ')}|${sort}|${R}`, async () => {
     const seen = new Map();
-    const add = (list) => list.filter(hasAll).forEach((i) => !seen.has(i.id) && seen.set(i.id, i));
+    const add = (list) => list.filter((i) => hasAll(i) && allowed(i)).forEach((i) => !seen.has(i.id) && seen.set(i.id, i));
     if (sort === 'best') {
       for (let p = 1; p <= 3; p++) {
-        const raw = await fetchPosts(`${ordered[0]} rating:g order:score`, p);
+        const raw = await fetchPosts(`${ordered[0]} ${R} order:score`, p);
         add(raw);
         if (raw.length < 150 || seen.size >= 200) break;
       }
     }
     if (sort !== 'best' || seen.size < 40) {
       for (let p = 1; p <= 3; p++) {
-        const raw = await fetchPosts(`${ordered[0]} ${ordered[1]} rating:g`, p);
+        const raw = await fetchPosts(`${ordered[0]} ${ordered[1]} ${R}`, p);
         add(raw);
         if (raw.length < 150) break;
       }
@@ -207,6 +221,7 @@ const fileUrl = (file, remote, source) => (file ? `/images/${file}` : source ===
 
 function boardView(b, me, users) {
   const members = q.members.all(b.id).map((m) => users.get(m.user_id)).filter(Boolean);
+  const spicyOn = isSpicy(me) ? 1 : 0;
   return {
     id: b.id,
     name: b.name,
@@ -215,8 +230,8 @@ function boardView(b, me, users) {
     isOwner: b.owner_id === me,
     members,
     isShared: members.length > 0,
-    count: q.count.get(b.id).n,
-    covers: q.covers.all(b.id).map((c) => fileUrl(c.thumb_file, c.thumb_url, c.source)),
+    count: q.count.get(b.id, spicyOn).n,
+    covers: q.covers.all(b.id, spicyOn).map((c) => fileUrl(c.thumb_file, c.thumb_url, c.source)),
     updatedAt: b.updated_at,
   };
 }
@@ -237,6 +252,7 @@ function itemView(r, users) {
     addedBy: users.get(r.added_by) ?? null,
     savedBy: users.get(r.added_by) ?? null,
     addedAt: r.created_at,
+    spicy: !!r.spicy,
   };
 }
 
@@ -264,7 +280,8 @@ const shuffle = (arr) => {
 };
 
 async function forYou(me) {
-  return forYouCache(`foryou|${me}`, async () => {
+  const spicy = isSpicy(me);
+  return forYouCache(`foryou|${me}|${spicy ? 's' : 'g'}`, async () => {
     forYouFresh.set(me, Date.now());
     const { chars, ships } = await subjectsFor(me);
     // Favour higher-ranked characters, with some variety.
@@ -272,7 +289,7 @@ async function forYou(me) {
     const pools = await Promise.allSettled(
       picks.map(async (subject) => {
         const info = await fanart.subjectInfo(subject);
-        const { ranked } = await fanart.rankedPool(info, { sort: 'best', solo: false });
+        const { ranked } = await fanart.rankedPool(info, { sort: 'best', solo: false, spicy });
         return ranked.slice(0, 10).map((i) => ({ ...i, subject, subjectName: info.name }));
       }),
     );
@@ -301,14 +318,16 @@ async function copyrightTag(anime) {
 }
 
 async function trending(me) {
-  return cache(`trending|${me}`, async () => {
+  const spicy = isSpicy(me);
+  const allowed = fanart.spicyFilter(spicy);
+  return cache(`trending|${me}|${spicy ? 's' : 'g'}`, async () => {
     const anime = q.watching.all(me);
     const lists = [];
     for (const a of anime) {
       const tag = await copyrightTag(a).catch(() => null);
       if (!tag) continue;
-      const raw = await fetchPosts(`${tag} rating:g order:rank`, 1, 40).catch(() => []);
-      lists.push(filterItems(raw, {}).map((i) => ({ ...i, seriesTitle: a.title })));
+      const raw = await fetchPosts(`${tag} ${fanart.ratingFor(spicy)} order:rank`, 1, 40).catch(() => []);
+      lists.push(filterItems(raw.filter(allowed), {}).map((i) => ({ ...i, seriesTitle: a.title })));
     }
     const out = [];
     for (let i = 0; out.length < 40 && lists.some((l) => l[i]); i++) for (const l of lists) if (l[i]) out.push(l[i]);
@@ -502,7 +521,7 @@ router.get('/art/search', wrap(async (req, res) => {
   if (req.query.color && COLOURS[req.query.color]) tags.push(COLOURS[req.query.color]);
   const sort = req.query.sort === 'new' ? 'new' : 'best';
   const page = Math.max(1, Math.min(30, Number(req.query.page) || 1));
-  const { items, hasMore } = await searchTags(tags, { sort, page });
+  const { items, hasMore } = await searchTags(tags, { sort, page, spicy: isSpicy(req.user.id) });
   const filtered = filterItems(items, { shape: req.query.shape, quality: req.query.quality, solo: req.query.solo === '1' });
   res.json({ items: markSaved(filtered, req.user.id), hasMore, page, tags });
 }));
@@ -540,7 +559,7 @@ router.get('/art/similar', wrap(async (req, res) => {
   let used = tags;
   let found = [];
   for (const attempt of attempts) {
-    const { items } = await searchTags(attempt, { sort: 'best' });
+    const { items } = await searchTags(attempt, { sort: 'best', spicy: isSpicy(req.user.id) });
     found = filterItems(items.filter((i) => i.id !== id), {});
     used = attempt;
     if (found.length >= 6) break;
@@ -578,7 +597,8 @@ router.post('/art/boards', (req, res) => {
 router.get('/art/boards/:id', (req, res) => {
   const { board } = boardAccess(parseId(req.params.id), req.user.id);
   const users = usersById();
-  res.json({ ...boardView(board, req.user.id, users), items: q.items.all(board.id).map((r) => itemView(r, users)) });
+  const spicyOn = isSpicy(req.user.id);
+  res.json({ ...boardView(board, req.user.id, users), items: q.items.all(board.id).filter((r) => !r.spicy || spicyOn).map((r) => itemView(r, users)) });
 });
 
 router.patch('/art/boards/:id', (req, res) => {
@@ -627,11 +647,18 @@ router.get('/art/boards-with', (req, res) => {
 
 router.post('/art/boards/:id/items', wrap(async (req, res) => {
   const { board } = boardAccess(parseId(req.params.id), req.user.id);
-  const { source, id } = req.body?.item ?? {};
+  const { source, id, subject } = req.body?.item ?? {};
   const existing = q.itemByPost.get(board.id, source, String(id));
   if (existing) return res.json(itemView(existing, usersById()));
-  const post = await fanart.fetchPost(source, id);
-  if (!post) throw new HttpError(400, 'That picture is no longer available or not work-safe.');
+  // Spicy pictures: Danbooru checks every tagged character; for other sources
+  // the picture must come from a character/ship of known adults.
+  let spicy = isSpicy(req.user.id);
+  if (spicy && source !== 'danbooru') {
+    const info = subject ? await fanart.subjectInfo(subject).catch(() => null) : null;
+    spicy = !!info && (await allAdults(info.memberIds));
+  }
+  const post = await fanart.fetchPost(source, id, { spicy });
+  if (!post) throw new HttpError(400, 'That picture is no longer available or not allowed here.');
   let imageFile;
   let thumbFile;
   try {
@@ -656,6 +683,7 @@ router.post('/art/boards/:id/items', wrap(async (req, res) => {
       height: post.height,
       addedBy: req.user.id,
       now: Date.now(),
+      spicy: post.spicy ? 1 : 0,
     }).lastInsertRowid,
   );
   q.touchBoard.run(Date.now(), board.id);
@@ -709,8 +737,8 @@ router.get('/art/artists/feed', wrap(async (req, res) => {
   const follows = q.follows.all(req.user.id).slice(0, 15);
   const lists = await Promise.all(
     follows.map((f) =>
-      fetchPosts(`${f.artist} rating:g`, 1, 24)
-        .then((items) => filterItems(items, {}).map((i) => ({ ...i, artistName: f.name })))
+      fetchPosts(`${f.artist} ${fanart.ratingFor(isSpicy(req.user.id))}`, 1, 24)
+        .then((items) => filterItems(items.filter(fanart.spicyFilter(isSpicy(req.user.id))), {}).map((i) => ({ ...i, artistName: f.name })))
         .catch(() => []),
     ),
   );

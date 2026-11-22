@@ -19,6 +19,12 @@ const { guessTag, character } = require('./pictures');
 const { usersById } = require('./users');
 const activity = require('./activity');
 const { zerochanResults, wallhavenResults, zerochanPost, wallhavenPost, rankAcrossSources } = require('./fanart-sources');
+const { isSpicy, allAdults, danbooruSpicyOk } = require('./adult');
+
+// Danbooru rating filter: "general", plus "sensitive" (suggestive, no nudity)
+// when spicy art is allowed. Never questionable or explicit.
+const ratingFor = (spicy) => (spicy ? 'rating:g,s' : 'rating:g');
+const spicyFilter = (spicy) => (i) => !i.spicy || (spicy && danbooruSpicyOk(i));
 
 const DANBOORU = 'https://danbooru.donmai.us';
 const SAFEBOORU = 'https://safebooru.org';
@@ -42,9 +48,9 @@ const q = {
   savedSamePost: db.prepare('SELECT * FROM fanart_saved WHERE source = ? AND post_id = ?'),
   insertSaved: db.prepare(`
     INSERT INTO fanart_saved (subject, subject_name, source, post_id, image_url, thumb_url, image_file, thumb_file,
-      source_url, post_url, artist, width, height, score, saved_by, created_at)
+      source_url, post_url, artist, width, height, score, saved_by, created_at, spicy)
     VALUES (@subject, @subjectName, @source, @postId, @imageUrl, @thumbUrl, @imageFile, @thumbFile,
-      @sourceUrl, @postUrl, @artist, @width, @height, @score, @savedBy, @now)`),
+      @sourceUrl, @postUrl, @artist, @width, @height, @score, @savedBy, @now, @spicy)`),
   deleteSaved: db.prepare('DELETE FROM fanart_saved WHERE id = ?'),
   hiddenKeys: db.prepare('SELECT source, post_id FROM fanart_hidden'),
   hiddenAll: db.prepare('SELECT * FROM fanart_hidden ORDER BY created_at DESC'),
@@ -59,10 +65,10 @@ const q = {
   lastSaveActivity: db.prepare(`SELECT id, data, created_at FROM activities WHERE user_id = ? AND type = 'fanart_save' ORDER BY id DESC LIMIT 1`),
   updateActivity: db.prepare('UPDATE activities SET data = ?, updated_at = ? WHERE id = ?'),
   deleteReactions: db.prepare('DELETE FROM reactions WHERE target = ?'),
-  randomSaved: db.prepare('SELECT image_file, image_url FROM fanart_saved WHERE subject = ? ORDER BY RANDOM() LIMIT 1'),
+  randomSaved: db.prepare('SELECT image_file, image_url FROM fanart_saved WHERE subject = ? AND spicy = 0 ORDER BY RANDOM() LIMIT 1'),
   pictureOfYear: db.prepare(`
     SELECT s.*, (SELECT COUNT(*) FROM reactions r WHERE r.target = 'fanart:' || s.id) AS reactions
-    FROM fanart_saved s WHERE s.created_at >= @from AND s.created_at < @to
+    FROM fanart_saved s WHERE s.created_at >= @from AND s.created_at < @to AND s.spicy = 0
     ORDER BY reactions DESC, s.created_at DESC LIMIT 1`),
 };
 
@@ -130,8 +136,10 @@ const clean = (s) => String(s ?? '').replace(/_/g, ' ').trim();
 // fetched through the NAS (see /fanart/img below).
 const proxied = (url) => (url ? `/api/fanart/img?u=${encodeURIComponent(url)}` : null);
 
+// Accepts "general" and "sensitive" posts; sensitive ones are marked `spicy`
+// and must pass the adults-only check before they are shown (see adult.js).
 function fromDanbooru(p) {
-  if (!p || p.rating !== 'g' || !OK_EXT.has(p.file_ext) || !p.large_file_url) return null;
+  if (!p || !['g', 's'].includes(p.rating) || !OK_EXT.has(p.file_ext) || !p.large_file_url) return null;
   const variants = Object.fromEntries((p.media_asset?.variants ?? []).map((v) => [v.type, v.url]));
   const artist = p.tag_string_artist ? clean(p.tag_string_artist.split(' ')[0]) : null;
   const thumbUrl = variants['360x360'] ?? p.preview_file_url;
@@ -151,6 +159,7 @@ function fromDanbooru(p) {
     postUrl: `${DANBOORU}/posts/${p.id}`,
     tags: `${p.tag_string_general ?? ''} ${p.tag_string_meta ?? ''}`,
     characters: (p.tag_string_character ?? '').split(' ').filter(Boolean),
+    spicy: p.rating === 's',
   };
 }
 
@@ -229,6 +238,7 @@ async function danbooruTag(characterId) {
   const best = [...found.values()].sort((a, b) => score(b) - score(a))[0];
   const result = best && score(best) >= 100 ? best : null;
   q.saveTag.run(characterId, 'danbooru', result?.tag ?? null, result?.count ?? null, Date.now());
+  require('./adult').invalidateAdultTags();
   return result;
 }
 
@@ -255,7 +265,9 @@ const posts = (tags, page, limit = 100) =>
 
 // Returns { items, hasMore, source } for one page (Danbooru), before filtering
 // out hidden/saved pictures.
-async function searchDanbooru(info, { sort, solo }) {
+async function searchDanbooru(info, { sort, solo, spicy = false }) {
+  const R = ratingFor(spicy);
+  const allowed = spicyFilter(spicy);
   const tags = [];
   for (const id of info.memberIds) {
     const t = await danbooruTag(id);
@@ -263,20 +275,29 @@ async function searchDanbooru(info, { sort, solo }) {
     tags.push(t);
   }
   if (tags.length === 1) {
-    const raw = await posts(`${tags[0].tag} rating:g${sort === 'best' ? ' order:score' : ''}`, 1, 200);
-    return { items: raw.filter((i) => goodQuality(i, { solo, maxCharacters: 3 })), source: 'danbooru', tags: [tags[0].tag] };
+    const ok = (i) => goodQuality(i, { solo, maxCharacters: 3 }) && allowed(i);
+    let items = (await posts(`${tags[0].tag} ${R}${sort === 'best' ? ' order:score' : ''}`, 1, 200)).filter(ok);
+    // Spicy: also take the general-only results, so filtered-out spicy posts
+    // never leave the page thin.
+    if (spicy) {
+      const safe = (await posts(`${tags[0].tag} rating:g${sort === 'best' ? ' order:score' : ''}`, 1, 200)).filter(ok);
+      const seen = new Map(items.map((i) => [i.id, i]));
+      for (const i of safe) if (!seen.has(i.id)) seen.set(i.id, i);
+      items = [...seen.values()].sort((a, b) => (sort === 'best' ? b.score - a.score : Number(b.id) - Number(a.id)));
+    }
+    return { items, source: 'danbooru', tags: [tags[0].tag] };
   }
 
   // Ships: collect a pool once (cached), then page through it locally.
   const names = tags.map((t) => t.tag);
   const hasAll = (i) => names.every((n) => i.characters?.includes(n));
-  const pool = await dbCache(`pool|${names.join(' ')}|${sort}`, async () => {
+  const pool = await dbCache(`pool|${names.join(' ')}|${sort}|${R}`, async () => {
     const seen = new Map();
     const add = (list) => list.filter(hasAll).forEach((i) => !seen.has(i.id) && seen.set(i.id, i));
     if (sort === 'best') {
       const rarest = [...tags].sort((a, b) => a.count - b.count)[0];
       for (let p = 1; p <= 4; p++) {
-        const raw = await posts(`${rarest.tag} rating:g order:score`, p, 200);
+        const raw = await posts(`${rarest.tag} ${R} order:score`, p, 200);
         add(raw);
         if (raw.length < 150) break;
       }
@@ -284,12 +305,12 @@ async function searchDanbooru(info, { sort, solo }) {
     if (sort !== 'best' || seen.size < 24) {
       const pair = [...tags].sort((a, b) => a.count - b.count).slice(0, 2).map((t) => t.tag);
       for (let p = 1; p <= 3; p++) {
-        const raw = await posts(`${pair.join(' ')} rating:g`, p, 200);
+        const raw = await posts(`${pair.join(' ')} ${R}`, p, 200);
         add(raw);
         if (raw.length < 150) break;
       }
     }
-    const list = [...seen.values()].filter((i) => goodQuality(i, { solo: false, maxCharacters: names.length + 2 }));
+    const list = [...seen.values()].filter((i) => goodQuality(i, { solo: false, maxCharacters: names.length + 2 }) && allowed(i));
     return sort === 'best' ? list.sort((a, b) => b.score - a.score) : list;
   });
   return { items: pool, source: 'danbooru', tags: names };
@@ -324,6 +345,7 @@ function savedView(row, users, me) {
     postUrl: row.post_url,
     savedBy: users.get(row.saved_by) ?? null,
     savedAt: row.created_at,
+    spicy: !!row.spicy,
     reactions: activity.reactionSummary(`fanart:${row.id}`, me),
   };
 }
@@ -331,14 +353,17 @@ function savedView(row, users, me) {
 // ---- Saving --------------------------------------------------------------------------------
 
 // Looks the post up again at the source, so only real work-safe pictures are saved.
-async function fetchPost(source, postId) {
+// `spicy`: whether suggestive pictures are allowed here (the person's switch AND
+// a subject of known adults). Spicy Danbooru posts are re-checked as well.
+async function fetchPost(source, postId, { spicy = false } = {}) {
   if (!/^[a-z0-9]+$/i.test(String(postId))) throw new HttpError(400, 'Invalid picture');
   if (source === 'danbooru') {
     const p = await danbooru(`/posts/${postId}.json?only=${DB_FIELDS}`).catch(() => null);
-    return fromDanbooru(p);
+    const item = fromDanbooru(p);
+    return item && spicyFilter(spicy)(item) ? item : null;
   }
-  if (source === 'zerochan') return zerochanPost(postId);
-  if (source === 'wallhaven') return wallhavenPost(postId);
+  if (source === 'zerochan') return zerochanPost(postId, { spicy });
+  if (source === 'wallhaven') return wallhavenPost(postId, { spicy });
   if (source === 'safebooru') {
     const res = await fetch(`${SAFEBOORU}/index.php?page=dapi&s=post&q=index&json=1&id=${postId}`, { headers: UA, signal: AbortSignal.timeout(15_000) });
     const rows = await res.json().catch(() => []);
@@ -367,12 +392,15 @@ const router = express.Router();
 
 // All sources in parallel, ranked together by popularity (cached per subject).
 const poolCache = memo(3 * 3600 * 1000, 200);
-async function rankedPool(info, { sort, solo }) {
-  return poolCache(`${info.kind}:${info.id}|${sort}|${solo ? 1 : 0}`, async () => {
+// `spicy` here means: the person wants spicy art. It only takes effect when
+// every member of the subject is a known adult.
+async function rankedPool(info, { sort, solo, spicy: wanted = false }) {
+  const spicy = wanted && (await allAdults(info.memberIds));
+  return poolCache(`${info.kind}:${info.id}|${sort}|${solo ? 1 : 0}|${spicy ? 's' : 'g'}`, async () => {
     const [db, zc, wh] = await Promise.allSettled([
-      searchDanbooru(info, { sort, solo }),
-      zerochanResults(info, { sort, solo }),
-      wallhavenResults(info, { sort, solo }),
+      searchDanbooru(info, { sort, solo, spicy }),
+      zerochanResults(info, { sort, solo, spicy }),
+      wallhavenResults(info, { sort, solo, spicy }),
     ]);
     const lists = {};
     const failed = [];
@@ -411,9 +439,10 @@ router.get('/fanart', wrap(async (req, res) => {
   const subject = `${info.kind}:${info.id}`;
   const users = usersById();
 
-  const { ranked, sources, notice } = await rankedPool(info, { sort, solo });
+  const spicyOn = isSpicy(me);
+  const { ranked, sources, notice } = await rankedPool(info, { sort, solo, spicy: spicyOn });
   const hidden = new Set(q.hiddenKeys.all().map((h) => `${h.source}:${h.post_id}`));
-  const savedRows = q.saved.all(subject);
+  const savedRows = q.saved.all(subject).filter((r) => !r.spicy || spicyOn);
   const savedKeys = new Set(savedRows.map((r) => `${r.source}:${r.post_id}`));
   const keysOf = (i) => (i.sources ?? [{ source: i.source, id: i.id }]).map((s) => `${s.source}:${s.id}`);
   const visible = ranked.filter((i) => !keysOf(i).some((k) => hidden.has(k) || savedKeys.has(k)));
@@ -439,8 +468,8 @@ router.post('/fanart/saved', wrap(async (req, res) => {
   const existing = q.savedByPost.get(subject, source, String(id));
   if (existing) return res.json(savedView(q.savedOne.get(existing.id), usersById(), me));
 
-  const post = await fetchPost(source, id);
-  if (!post) throw new HttpError(400, 'That picture is no longer available or not work-safe.');
+  const post = await fetchPost(source, id, { spicy: isSpicy(me) && (await allAdults(info.memberIds)) });
+  if (!post) throw new HttpError(400, 'That picture is no longer available or not allowed here.');
   let imageFile = null;
   let thumbFile = null;
   try {
@@ -467,6 +496,7 @@ router.post('/fanart/saved', wrap(async (req, res) => {
       score: post.score,
       savedBy: me,
       now: Date.now(),
+      spicy: post.spicy ? 1 : 0,
     }).lastInsertRowid,
   );
   q.unhide.run(post.source, post.id);
@@ -570,8 +600,9 @@ router.get('/gallery', (req, res) => {
     by: req.query.by ? parseId(req.query.by) : null,
     limit,
   });
+  const spicyOn = isSpicy(me);
   res.json({
-    items: rows.map((r) => savedView(r, users, me)),
+    items: rows.filter((r) => !r.spicy || spicyOn).map((r) => savedView(r, users, me)),
     nextBefore: rows.length === limit ? rows[rows.length - 1].id : null,
     subjects: q.gallerySubjects.all().map((s) => ({ subject: s.subject, name: s.subject_name, count: s.n })),
   });
@@ -591,10 +622,10 @@ function pictureOfYear(year, me) {
 }
 
 // Saved pictures for feed items.
-const feedPictures = (ids) =>
+const feedPictures = (ids, viewerId) =>
   (ids ?? [])
     .map((id) => q.savedOne.get(id))
-    .filter(Boolean)
+    .filter((r) => r && (!r.spicy || (viewerId && isSpicy(viewerId))))
     .map((r) => ({ savedId: r.id, thumb: r.thumb_file ? `/images/${r.thumb_file}` : r.source === 'danbooru' ? proxied(r.thumb_url) : r.thumb_url, subject: r.subject }));
 
 module.exports = {
@@ -615,5 +646,7 @@ module.exports = {
   proxied,
   memo,
   hiddenKeys: () => new Set(q.hiddenKeys.all().map((h) => `${h.source}:${h.post_id}`)),
+  ratingFor,
+  spicyFilter,
   DB_FIELDS,
 };

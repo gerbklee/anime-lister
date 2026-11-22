@@ -19,6 +19,11 @@ export function FanartGrid({ items, onOpen, selected, emptyText = 'No pictures h
         >
           <img src={it.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />
           {it.savedId && <span className="fanart-badge" aria-label="Saved">💖</span>}
+          {it.spicy && (
+            <span className="fanart-badge spicy" aria-label="Spicy">
+              🌶️
+            </span>
+          )}
           {!it.savedId && it.sources?.length > 1 && (
             <span className="fanart-badge multi" title={it.popularity}>
               ×{it.sources.length}

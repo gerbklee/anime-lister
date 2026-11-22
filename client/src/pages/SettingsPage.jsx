@@ -30,6 +30,41 @@ function AvatarPicker({ onClose, onPicked }) {
   );
 }
 
+// Per person: suggestive (not explicit) fan art, only for known adult characters.
+function SpicySetting() {
+  const { me, setMe } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const on = !!me.spicyArt;
+  const toggle = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.setSpicy(!on);
+      setMe({ ...me, spicyArt: r.spicyArt });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card settings-card">
+      <h3>🌶️ Spicy art</h3>
+      <p className="muted small">
+        Adds suggestive fan art (fanservice, swimsuits, lingerie, suggestive poses) from Danbooru, Zerochan and Wallhaven. Never nudity or explicit
+        content. Only for characters the app knows are adults (age 18+ on AniList); everyone else keeps the normal art. This only changes your account;
+        spicy pictures you save stay hidden for anyone who has this switched off.
+      </p>
+      <label className="switch-row">
+        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} />
+        <span>{on ? 'On' : 'Off'}</span>
+      </label>
+      {error && <p className="error-text small">{error}</p>}
+    </div>
+  );
+}
+
 export default function SettingsPage({ onLogout }) {
   const { me, setMe, refreshLists } = useApp();
   const [current, setCurrent] = useState('');
@@ -79,6 +114,7 @@ export default function SettingsPage({ onLogout }) {
         <h3>🎨 Appearance</h3>
         <ThemeToggle />
       </div>
+      <SpicySetting />
       <div className="card settings-card">
         <h3>Profile photo</h3>
         <div className="settings-user">
