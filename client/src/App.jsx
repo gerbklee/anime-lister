@@ -147,9 +147,7 @@ function Main({ me, setMe }) {
       <div className="app">
         <header className="topbar">
           <a className="logo" href="#/">
-            <span className="logo-mark" aria-hidden="true">
-              ✦
-            </span>
+            <img className="logo-mark" src="/icons/capy.svg" alt="" aria-hidden="true" />
             Anime Hub
           </a>
           <div className="top-nav">

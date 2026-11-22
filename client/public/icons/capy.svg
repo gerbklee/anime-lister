@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c4dff"/>
+      <stop offset="0.55" stop-color="#b14cff"/>
+      <stop offset="1" stop-color="#ff5e9a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.42" r="0.55">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c58650"/>
+      <stop offset="1" stop-color="#a96d3d"/>
+    </linearGradient>
+    <radialGradient id="orange" cx="0.38" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#ffc04d"/>
+      <stop offset="0.6" stop-color="#ff9a1f"/>
+      <stop offset="1" stop-color="#f07a0c"/>
+    </radialGradient>
+  </defs>
+    <clipPath id="c"><rect width="100" height="100" rx="22"/></clipPath>
+    <g clip-path="url(#c)">
+      <rect width="100" height="100" fill="url(#bg)"/>
+      <rect width="100" height="100" fill="url(#glow)"/>
+      
+  <g transform="translate(50 52) scale(0.92) translate(-50 -52)">
+    <!-- shoulders -->
+    <ellipse cx="50" cy="104" rx="42" ry="22" fill="#94592f"/>
+    <!-- tiny ears, set far apart at the top corners -->
+    <ellipse cx="32" cy="38.5" rx="4.6" ry="4" fill="#8a522b"/>
+    <ellipse cx="32" cy="39" rx="2.4" ry="2" fill="#5e3419"/>
+    <ellipse cx="68" cy="38.5" rx="4.6" ry="4" fill="#8a522b"/>
+    <ellipse cx="68" cy="39" rx="2.4" ry="2" fill="#5e3419"/>
+    <!-- boxy head that widens towards the big snout -->
+    <path d="M39 35.5 H61 Q75 35.5 75.5 49 L78 80 Q79 93 66 93 H34 Q21 93 22 80 L24.5 49 Q25 35.5 39 35.5 Z" fill="url(#fur)"/>
+    <path d="M38 39 H62 Q68 39 69 45 L69.5 49 H30.5 L31 45 Q32 39 38 39 Z" fill="#d7a06b" opacity="0.4"/>
+    <!-- big blunt snout -->
+    <path d="M30 63 Q30 58 36 58 H64 Q70 58 70 63 L72 82 Q72.5 91 63 91 H37 Q27.5 91 28 82 Z" fill="#9b6034"/>
+    <path d="M35 60.5 H65" stroke="#b67a48" stroke-width="2.2" stroke-linecap="round" opacity="0.7"/>
+    <!-- nostrils: two dark slits on top of the snout -->
+    <ellipse cx="43" cy="66" rx="2.6" ry="1.9" transform="rotate(-18 43 66)" fill="#2f1b0f"/>
+    <ellipse cx="57" cy="66" rx="2.6" ry="1.9" transform="rotate(18 57 66)" fill="#2f1b0f"/>
+    <path d="M50 70 V76 M45 79.5 Q50 83 55 79.5" fill="none" stroke="#2f1b0f" stroke-width="1.6" stroke-linecap="round"/>
+    <!-- small, calm, half-closed eyes -->
+    <path d="M33.5 50.5 Q37 48.2 40.5 50.5" fill="none" stroke="#24150b" stroke-width="2.3" stroke-linecap="round"/>
+    <path d="M59.5 50.5 Q63 48.2 66.5 50.5" fill="none" stroke="#24150b" stroke-width="2.3" stroke-linecap="round"/>
+    <!-- blush -->
+    <ellipse cx="31" cy="57" rx="3.6" ry="2.1" fill="#ff8fa3" opacity="0.55"/>
+    <ellipse cx="69" cy="57" rx="3.6" ry="2.1" fill="#ff8fa3" opacity="0.55"/>
+    <!-- the orange, balanced on top -->
+    <ellipse cx="50" cy="36.8" rx="10" ry="2" fill="#000" opacity="0.2"/>
+    <circle cx="50" cy="26" r="11.5" fill="url(#orange)"/>
+    <circle cx="45.8" cy="21.8" r="3.1" fill="#fff" opacity="0.45"/>
+    <circle cx="54" cy="29.5" r="0.65" fill="#d9700f" opacity="0.6"/>
+    <circle cx="56.5" cy="25" r="0.65" fill="#d9700f" opacity="0.6"/>
+    <circle cx="51" cy="32.5" r="0.65" fill="#d9700f" opacity="0.6"/>
+    <circle cx="44.5" cy="29.5" r="0.65" fill="#d9700f" opacity="0.6"/>
+    <!-- stem & leaf -->
+    <path d="M50 15 Q50.4 12.8 51.6 11.8" fill="none" stroke="#6b4a1f" stroke-width="1.7" stroke-linecap="round"/>
+    <path d="M51.2 13.2 Q56 8.4 61.5 11.4 Q57.6 16.2 51.2 13.2 Z" fill="#3fae4a"/>
+    <path d="M51.8 13.1 Q56 11.6 59.6 11.7" fill="none" stroke="#2c8a37" stroke-width="0.7"/>
+  </g>
+    </g></svg>

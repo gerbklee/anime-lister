@@ -64,8 +64,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'Anime Hub', {
       body: data.body || '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/badge.png',
+      icon: '/icons/capy-192.png',
+      badge: '/icons/capy-badge.png',
       tag: data.tag,
       data: { url: data.url || '#/' },
     }),

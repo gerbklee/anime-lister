@@ -43,7 +43,7 @@ export default function AuthPage({ onAuthed }) {
       </div>
       <form className="auth-card" onSubmit={submit}>
         <h1 className="logo auth-logo">
-          <span className="logo-mark" aria-hidden="true">✦</span> Anime Hub
+          <img className="logo-mark" src="/icons/capy.svg" alt="" aria-hidden="true" /> Anime Hub
         </h1>
 
         <div className="tabs" role="tablist">
