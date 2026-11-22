@@ -1,0 +1,30 @@
+# Paste this into OpenMediaVault: Services -> Compose -> Files -> Add.
+# Replace the /srv/... path with the path of your "appdata" shared folder
+# (Storage -> Shared Folders shows the absolute path).
+
+services:
+  anime-lister:
+    image: ghcr.io/gerbklee/anime-lister:latest
+    container_name: anime-lister
+    ports:
+      - "3000:3000"
+    volumes:
+      - /srv/dev-disk-by-uuid-XXXX/appdata/anime-lister:/data
+    restart: unless-stopped
+    labels:
+      # Lets the Watchtower below update this container.
+      - com.centurylinklabs.watchtower.enable=true
+
+  # Checks every 5 minutes for a new image on ghcr.io and restarts
+  # anime-lister with it. Only containers with the label above are touched.
+  # Uses the maintained fork; the original containrrr/watchtower is archived
+  # and does not work with Docker 29+.
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: anime-lister-watchtower
+    command: --label-enable --cleanup --interval 300
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped

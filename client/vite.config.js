@@ -1,0 +1,14 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+// In development, the Vite dev server forwards API and image requests
+// to the Express server running on port 3000.
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3000',
+      '/images': 'http://localhost:3000',
+    },
+  },
+});

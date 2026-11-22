@@ -1,0 +1,11 @@
+services:
+  anime-lister:
+    build: .
+    container_name: anime-lister
+    ports:
+      # Published on all network interfaces, so other devices on the LAN can connect.
+      - "3000:3000"
+    volumes:
+      # SQLite database + cached character images live here and survive rebuilds.
+      - ./data:/data
+    restart: unless-stopped
