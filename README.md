@@ -2,6 +2,8 @@
 
 A self-hosted web app for creating and maintaining numbered (ranked) lists of anime characters.
 
+- User accounts: personal lists (others can view them read-only) and shared lists that members edit together
+- A comparison page: taste match score, side-by-side ranks, who ranked what, and favourite series
 - Multiple named lists, each numbered on its own
 - Search-as-you-type character suggestions powered by the [AniList](https://anilist.co) API (no API key needed)
 - Each entry shows the character's image, name and series; you can switch the series if they appear in several
@@ -78,6 +80,18 @@ To see what Watchtower did: **Services → Compose → Containers**, then the lo
 
 To roll back, change `:latest` in the OMV stack to a previous `sha-xxxxxxx` tag (listed on the
 package page on GitHub) and click **Up**.
+
+## Accounts and sharing
+
+- Anyone can sign up on the login page. Each device stays logged in (sessions last a year and extend while in use).
+- **Personal lists**: only the owner edits; every logged-in user can view them read-only. They count in comparisons.
+- **Shared lists**: the owner invites people by username; members can add, remove, reorder and write notes. Only the owner can rename, delete or manage members; members can leave. Entries show who added them. Shared lists don't count in comparisons.
+- Open lists refresh every 5 seconds, so you see each other's changes. If a reorder clashes with someone else's change, the list reloads.
+- **Upgrading from the single-user version**: on first start the database is backed up to `anime-lister.backup-v1.db`, and the existing lists become shared lists owned by **the first account that signs up**.
+
+### Compare
+
+Compares all personal lists of two people. Each position is scored as `1 - (rank - 1) / list length` (#1 is always 1.0), and a character in several lists counts with its best score. The taste match is 40% overlap (shared characters relative to the smaller collection) plus 60% ranking similarity (1 minus the average score difference).
 
 ## Data and backups
 

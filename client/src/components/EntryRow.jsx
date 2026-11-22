@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import Avatar from './Avatar.jsx';
 
 function RankInput({ rank, total, onMove }) {
   const [value, setValue] = useState(String(rank));
@@ -48,7 +49,7 @@ function RankInput({ rank, total, onMove }) {
   );
 }
 
-function NoteEditor({ note, onSave }) {
+function NoteEditor({ note, noteBy, showAuthor, onSave }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(note);
   const cancelled = useRef(false);
@@ -62,6 +63,7 @@ function NoteEditor({ note, onSave }) {
     return note ? (
       <p className="note" onClick={startEditing} title="Click to edit note">
         {note}
+        {showAuthor && noteBy && <span className="note-author"> by {noteBy.username}</span>}
       </p>
     ) : (
       <button className="link-btn" onClick={startEditing}>
@@ -100,26 +102,36 @@ function NoteEditor({ note, onSave }) {
   );
 }
 
-export default function EntryRow({ entry, rank, total, onMove, onUpdate, onDelete }) {
+export default function EntryRow({ entry, rank, total, readOnly, showAuthors, onMove, onUpdate, onDelete }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
+    disabled: readOnly,
   });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
-    <li ref={setNodeRef} style={style} className={`entry ${isDragging ? 'dragging' : ''}`}>
-      <button
-        ref={setActivatorNodeRef}
-        className="drag-handle"
-        aria-label={`Drag to reorder ${entry.name}`}
-        {...attributes}
-        {...listeners}
-      >
-        ⠿
-      </button>
+    <li ref={setNodeRef} style={style} className={`entry ${isDragging ? 'dragging' : ''} ${readOnly ? 'read-only' : ''}`}>
+      {!readOnly && (
+        <button
+          ref={setActivatorNodeRef}
+          className="drag-handle"
+          aria-label={`Drag to reorder ${entry.name}`}
+          {...attributes}
+          {...listeners}
+        >
+          ⠿
+        </button>
+      )}
 
-      <RankInput rank={rank} total={total} onMove={(target) => onMove(entry.id, target)} />
+      {readOnly ? (
+        <span className="rank">
+          <span className="rank-hash">#</span>
+          {rank}
+        </span>
+      ) : (
+        <RankInput rank={rank} total={total} onMove={(target) => onMove(entry.id, target)} />
+      )}
 
       {entry.image ? (
         <img className="portrait" src={entry.image} alt={entry.name} loading="lazy" />
@@ -128,16 +140,20 @@ export default function EntryRow({ entry, rank, total, onMove, onUpdate, onDelet
       )}
 
       <div className="entry-info">
-        <a
-          className="entry-name"
-          href={`https://anilist.co/character/${entry.anilistId}`}
-          target="_blank"
-          rel="noreferrer"
-          title="Open on AniList"
-        >
-          {entry.name}
-        </a>
-        {entry.seriesOptions.length > 1 ? (
+        <div className="entry-title">
+          <a
+            className="entry-name"
+            href={`https://anilist.co/character/${entry.anilistId}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Open on AniList"
+          >
+            {entry.name}
+          </a>
+          {showAuthors && entry.addedBy && <Avatar user={entry.addedBy} size={18} title={`Added by ${entry.addedBy.username}`} />}
+        </div>
+
+        {!readOnly && entry.seriesOptions.length > 1 ? (
           <select
             className="series-select"
             value={entry.seriesTitle ?? ''}
@@ -154,12 +170,24 @@ export default function EntryRow({ entry, rank, total, onMove, onUpdate, onDelet
         ) : (
           <span className="series">{entry.seriesTitle || 'Unknown series'}</span>
         )}
-        <NoteEditor note={entry.note} onSave={(note) => onUpdate(entry.id, { note })} />
+
+        {readOnly ? (
+          entry.note && <p className="note read-only">{entry.note}</p>
+        ) : (
+          <NoteEditor
+            note={entry.note}
+            noteBy={entry.noteBy}
+            showAuthor={showAuthors}
+            onSave={(note) => onUpdate(entry.id, { note })}
+          />
+        )}
       </div>
 
-      <button className="icon-btn danger" onClick={() => onDelete(entry)} aria-label={`Remove ${entry.name}`} title="Remove">
-        ✕
-      </button>
+      {!readOnly && (
+        <button className="icon-btn danger" onClick={() => onDelete(entry)} aria-label={`Remove ${entry.name}`} title="Remove">
+          ✕
+        </button>
+      )}
     </li>
   );
 }

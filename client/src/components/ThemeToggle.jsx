@@ -19,7 +19,8 @@ export default function ThemeToggle() {
   const next = theme === 'dark' ? 'light' : 'dark';
   return (
     <button className="btn ghost" onClick={() => setTheme(next)} aria-label={`Switch to ${next} mode`}>
-      {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
+      <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+      <span className="hide-mobile"> {theme === 'dark' ? 'Light' : 'Dark'}</span>
     </button>
   );
 }
