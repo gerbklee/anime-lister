@@ -230,6 +230,62 @@ const MIGRATIONS = {
       fetched_at    INTEGER NOT NULL
     );
   `,
+
+  // v6: manga (shares the anime tables; AniList ids are unique across both),
+  // episode length & relations, openings cache, games, push notifications.
+  6: `
+    ALTER TABLE anime ADD COLUMN type TEXT NOT NULL DEFAULT 'ANIME';
+    ALTER TABLE anime ADD COLUMN chapters INTEGER;
+    ALTER TABLE anime ADD COLUMN volumes INTEGER;
+    ALTER TABLE anime ADD COLUMN duration INTEGER;
+    ALTER TABLE anime ADD COLUMN relations TEXT NOT NULL DEFAULT '[]';
+    -- Rows fetched before v6 lack duration/relations; refreshed on next use.
+    ALTER TABLE anime ADD COLUMN meta_version INTEGER NOT NULL DEFAULT 1;
+
+    ALTER TABLE user_anime ADD COLUMN progress_volumes INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE users ADD COLUMN notify_prefs TEXT NOT NULL DEFAULT '{}';
+
+    CREATE TABLE anime_themes (
+      anime_id    INTEGER PRIMARY KEY,
+      data        TEXT    NOT NULL,
+      fetched_at  INTEGER NOT NULL
+    );
+
+    -- A challenge: fixed questions; every player plays it once.
+    CREATE TABLE games (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      type        TEXT    NOT NULL,
+      created_by  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      questions   TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+
+    CREATE TABLE game_players (
+      game_id      INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      answers      TEXT,
+      score        INTEGER,
+      correct      INTEGER,
+      finished_at  INTEGER,
+      PRIMARY KEY (game_id, user_id)
+    );
+    CREATE INDEX idx_game_players_user ON game_players (user_id);
+
+    CREATE TABLE push_subscriptions (
+      endpoint    TEXT    PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      keys        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+
+    -- Episodes we already sent an "airing now" notification for.
+    CREATE TABLE airing_notified (
+      anime_id  INTEGER NOT NULL,
+      episode   INTEGER NOT NULL,
+      PRIMARY KEY (anime_id, episode)
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

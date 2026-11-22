@@ -1,6 +1,7 @@
 # Paste this into OpenMediaVault: Services -> Compose -> Files -> Add.
-# Replace the /srv/... path with the path of your "appdata" shared folder
-# (Storage -> Shared Folders shows the absolute path).
+# Replace the /srv/... paths with the path of your "appdata" shared folder
+# (Storage -> Shared Folders shows the absolute path), and the Tailscale
+# auth key (see README: "Install as app & outside access").
 
 services:
   anime-lister:
@@ -28,3 +29,40 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+
+  # Tailscale: gives the app an HTTPS address in your private Tailscale
+  # network (https://animelister.<your-tailnet>.ts.net), reachable from your
+  # phones anywhere, with nothing opened on your router. Needed for "Install
+  # as app" and push notifications.
+  tailscale:
+    image: tailscale/tailscale:stable
+    container_name: anime-lister-tailscale
+    hostname: animelister
+    environment:
+      - TS_AUTHKEY=tskey-auth-REPLACE-ME
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+      - TS_USERSPACE=false
+    configs:
+      - source: tailscale-serve
+        target: /config/serve.json
+    volumes:
+      - /srv/dev-disk-by-uuid-XXXX/appdata/tailscale:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+    restart: unless-stopped
+
+configs:
+  # HTTPS on port 443 of the Tailscale address -> the app container.
+  tailscale-serve:
+    content: |
+      {
+        "TCP": { "443": { "HTTPS": true } },
+        "Web": {
+          "$${TS_CERT_DOMAIN}:443": {
+            "Handlers": { "/": { "Proxy": "http://anime-lister:3000" } }
+          }
+        }
+      }

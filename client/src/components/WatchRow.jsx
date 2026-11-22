@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { animeMeta } from '../util.js';
+import { animeMeta, mediaHref } from "../util.js";
 import Avatar from './Avatar.jsx';
 import Thread from './Thread.jsx';
 import { CatalogueBadge, NoteEditor, Portrait, RankInput } from './EntryRow.jsx';
@@ -15,6 +15,7 @@ export default function WatchRow({ entry, rank, total, onMove, onUpdate, onDelet
   const [count, setCount] = useState(entry.commentCount ?? 0);
   useEffect(() => setCount(entry.commentCount ?? 0), [entry.commentCount]);
   const a = entry.anime;
+  const manga = a?.type === "MANGA";
 
   const style = { transform: CSS.Transform.toString(transform), transition };
 
@@ -28,9 +29,10 @@ export default function WatchRow({ entry, rank, total, onMove, onUpdate, onDelet
         <Portrait src={entry.image} alt={entry.name} />
         <div className="entry-info">
           <div className="entry-title">
-            <a className="entry-name" href={`#/anime/${entry.anilistId}`} title="Open anime page">
+            <a className="entry-name" href={a ? mediaHref(a) : `#/anime/${entry.anilistId}`} title="Open page">
               {entry.name}
             </a>
+            {manga && <span className="pill tiny">📖 Manga</span>}
             {entry.addedBy && <Avatar user={entry.addedBy} size={18} title={`Added by ${entry.addedBy.username}`} />}
           </div>
           <div className="series-line">
@@ -51,14 +53,14 @@ export default function WatchRow({ entry, rank, total, onMove, onUpdate, onDelet
             ▶ Trailer
           </button>
         ) : (
-          <span className="muted tiny">No trailer</span>
+          <span className="muted tiny">{manga ? "" : "No trailer"}</span>
         )}
         <button className={`btn ghost small-btn ${showComments ? 'active' : ''}`} onClick={() => setShowComments((s) => !s)} aria-expanded={showComments}>
           💬 {count > 0 ? count : 'Comment'}
         </button>
         <div className="spacer" />
         <button className="btn primary small-btn" onClick={onWatched}>
-          ✓ Watched it
+          {manga ? '✓ Read it' : '✓ Watched it'}
         </button>
       </div>
 

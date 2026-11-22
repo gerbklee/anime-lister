@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { STATUS_LABELS, timeAgo } from '../util.js';
+import { STATUS_LABELS, mediaHref, timeAgo } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Stars from '../components/Stars.jsx';
 import Thread from '../components/Thread.jsx';
@@ -14,7 +14,7 @@ const FILTERS = [
   ['me', 'Me'],
 ];
 
-const AnimeLink = ({ anime }) => (anime ? <a href={`#/anime/${anime.id}`}>{anime.title}</a> : <span>an anime</span>);
+const AnimeLink = ({ anime }) => (anime ? <a href={mediaHref(anime)}>{anime.title}</a> : <span>an anime</span>);
 
 function listHref(list) {
   return list.kind === 'watchlist' ? `#/watch/${list.id}` : `#/list/${list.id}`;
@@ -26,12 +26,13 @@ function Sentence({ item, me }) {
   const { type, data, anime, list } = item;
   switch (type) {
     case 'anime_status':
-      if (data.status === 'watching') return <>started watching <AnimeLink anime={anime} /></>;
+      const manga = anime?.type === 'MANGA';
+      if (data.status === 'watching') return <>started {manga ? 'reading' : 'watching'} <AnimeLink anime={anime} /></>;
       if (data.status === 'dropped') return <>dropped <AnimeLink anime={anime} /></>;
       return data.previous ? (
         <>finished <AnimeLink anime={anime} /></>
       ) : (
-        <>watched <AnimeLink anime={anime} /></>
+        <>{manga ? 'read' : 'watched'} <AnimeLink anime={anime} /></>
       );
     case 'anime_rating':
       return <>rated <AnimeLink anime={anime} /></>;
@@ -62,11 +63,11 @@ function Sentence({ item, me }) {
   }
 }
 
-function FeedItem({ item, me }) {
+export function FeedItem({ item, me }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(item.commentCount);
   const thumb = item.anime?.cover ?? (item.type === 'list_add' ? item.data.image : null);
-  const thumbHref = item.anime ? `#/anime/${item.anime.id}` : item.list ? listHref(item.list) : null;
+  const thumbHref = item.anime ? mediaHref(item.anime) : item.list ? listHref(item.list) : null;
 
   return (
     <li className="feed-item card">

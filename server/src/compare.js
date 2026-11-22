@@ -32,7 +32,7 @@ const q = {
     WHERE r.user_id = ? AND l.kind = ? AND l.is_shared = 1`),
   catalogue: db.prepare(`
     SELECT ua.anime_id, ua.status AS ua_status, ua.rating, a.*
-    FROM user_anime ua JOIN anime a ON a.id = ua.anime_id WHERE ua.user_id = ?`),
+    FROM user_anime ua JOIN anime a ON a.id = ua.anime_id WHERE ua.user_id = ? AND a.type = ?`),
 };
 
 const byScore = (a, b) => b.placement.score - a.placement.score || a.name.localeCompare(b.name);
@@ -173,9 +173,9 @@ function topGenres({ weights, total }, limit = 6) {
     .slice(0, limit);
 }
 
-function compareCatalogues(meId, otherId) {
-  const mineRows = q.catalogue.all(meId);
-  const theirRows = q.catalogue.all(otherId);
+function compareCatalogues(meId, otherId, type = "ANIME") {
+  const mineRows = q.catalogue.all(meId, type);
+  const theirRows = q.catalogue.all(otherId, type);
   const mine = new Map(mineRows.map((r) => [r.anime_id, r]));
   const theirs = new Map(theirRows.map((r) => [r.anime_id, r]));
   const seen = (r) => r.ua_status !== 'dropped';
@@ -259,18 +259,20 @@ function otherUser(req) {
 // Character lists (default) or anime lists.
 router.get('/compare', (req, res) => {
   const other = otherUser(req);
-  const kind = req.query.kind === 'anime' ? 'anime' : 'character';
+  const kind = ["anime", "manga"].includes(req.query.kind) ? req.query.kind : "character";
   res.json({ me: req.user, other, kind, ...compareLists(req.user.id, other.id, kind) });
 });
 
-router.get('/compare/anime', (req, res) => {
+router.get("/compare/anime", (req, res) => {
   const other = otherUser(req);
+  const type = req.query.type === "MANGA" ? "MANGA" : "ANIME";
   res.json({
     me: req.user,
     other,
-    catalogue: compareCatalogues(req.user.id, other.id),
-    lists: compareLists(req.user.id, other.id, 'anime'),
+    type,
+    catalogue: compareCatalogues(req.user.id, other.id, type),
+    lists: compareLists(req.user.id, other.id, type === "MANGA" ? "manga" : "anime"),
   });
 });
 
-module.exports = { compareRouter: router };
+module.exports = { compareRouter: router, compareCatalogues };

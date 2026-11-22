@@ -161,8 +161,9 @@ export default function EntryRow({
   });
 
   const style = { transform: CSS.Transform.toString(transform), transition };
-  const isAnime = kind === 'anime';
+  const isAnime = kind === 'anime' || kind === 'manga';
   const animeId = isAnime ? entry.anilistId : entry.seriesAnimeId;
+  const mediaLink = kind === 'manga' ? `#/manga/${entry.anilistId}` : `#/anime/${entry.anilistId}`;
   const [showThread, setShowThread] = useState(false);
   const [commentCount, setCommentCount] = useState(entry.commentCount ?? 0);
   useEffect(() => setCommentCount(entry.commentCount ?? 0), [entry.commentCount]);
@@ -201,8 +202,8 @@ export default function EntryRow({
         <div className="entry-title">
           <a
             className="entry-name"
-            href={isAnime ? `#/anime/${entry.anilistId}` : `#/character/${entry.anilistId}`}
-            title={isAnime ? 'Open anime page' : 'Open character page'}
+            href={isAnime ? mediaLink : `#/character/${entry.anilistId}`}
+            title={isAnime ? 'Open page' : 'Open character page'}
           >
             {entry.name}
           </a>

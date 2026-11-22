@@ -1,9 +1,9 @@
 const TABS = [
+  { key: 'home', href: '#/', icon: '🏠', label: 'Home' },
   { key: 'lists', href: '#/lists', icon: '📋', label: 'Lists' },
   { key: 'discover', href: '#/discover', icon: '🧭', label: 'Discover' },
   { key: 'watch', href: '#/watch', icon: '🍿', label: 'Watchlists' },
-  { key: 'feed', href: '#/feed', icon: '📰', label: 'Feed' },
-  { key: 'compare', href: '#/compare', icon: '📊', label: 'Compare' },
+  { key: 'us', href: '#/us', icon: '💞', label: 'Us' },
 ];
 
 // Tab band under the header on desktop; app-style bottom bar on phones.

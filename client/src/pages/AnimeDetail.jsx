@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { STATUS_LABELS, formatLabel, plural, timeAgo, parseDate } from '../util.js';
+import { formatLabel, mediaHref, plural, statusLabel, timeAgo, parseDate } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Stars from '../components/Stars.jsx';
 import Thread from '../components/Thread.jsx';
@@ -9,8 +9,72 @@ import Reactions from '../components/Reactions.jsx';
 import TrailerModal from '../components/TrailerModal.jsx';
 import AddToListMenu from '../components/AddToListMenu.jsx';
 import { formatPopularity } from '../components/AnimeTile.jsx';
+import { CatalogueBadge } from '../components/EntryRow.jsx';
+import Modal from '../components/Modal.jsx';
 
 const SEASONS = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' };
+const RELATIONS = {
+  ADAPTATION: 'Adaptation',
+  SOURCE: 'Based on',
+  PREQUEL: 'Prequel',
+  SEQUEL: 'Sequel',
+  SIDE_STORY: 'Side story',
+  SPIN_OFF: 'Spin-off',
+  PARENT: 'Main story',
+  ALTERNATIVE: 'Alternative version',
+};
+
+// Openings & endings from AnimeThemes; tap to play in the video pop-up.
+function Themes({ animeId }) {
+  const [themes, setThemes] = useState(null);
+  const [error, setError] = useState(null);
+  const [playing, setPlaying] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .themes(animeId)
+      .then((d) => !cancelled && setThemes(d.themes))
+      .catch((err) => !cancelled && setError(err.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [animeId]);
+  if (themes && themes.length === 0) return null;
+  return (
+    <div className="card">
+      <h3>🎵 Openings & endings</h3>
+      {error && <p className="muted small">{error}</p>}
+      {!themes && !error && <p className="muted small">Loading…</p>}
+      {themes && (
+        <ul className="themes">
+          {themes.map((t) => (
+            <li key={t.id}>
+              <button type="button" className="theme" onClick={() => setPlaying(t)}>
+                <span className="theme-slug">{t.slug}</span>
+                <span className="theme-info">
+                  <b>{t.title ?? 'Untitled'}</b>
+                  <span className="muted tiny">
+                    {t.artists.join(', ')}
+                    {t.episodes ? ` · ep ${t.episodes}` : ''}
+                    {t.spoiler ? ' · ⚠️ spoiler' : ''}
+                  </span>
+                </span>
+                <span aria-hidden="true">▶</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {playing && (
+        <Modal title={`${playing.slug} · ${playing.title ?? ''}`} onClose={() => setPlaying(null)} wide center>
+          <div className="video-frame">
+            <video src={playing.video} controls autoPlay playsInline />
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
 const STATUS = { FINISHED: 'Finished', RELEASING: 'Airing', NOT_YET_RELEASED: 'Not yet aired', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' };
 
 export function SpoilerText({ text, spoiler }) {
@@ -24,7 +88,7 @@ export function SpoilerText({ text, spoiler }) {
   );
 }
 
-function ReviewCard({ entry, isMine }) {
+function ReviewCard({ entry, isMine, type }) {
   const [open, setOpen] = useState(false);
   const [count, setCount] = useState(entry.commentCount);
   return (
@@ -34,8 +98,8 @@ function ReviewCard({ entry, isMine }) {
         <div>
           <b>{isMine ? 'You' : entry.user?.username}</b>
           <div className="muted tiny">
-            {STATUS_LABELS[entry.status]}
-            {entry.status === 'watching' && ` · ep ${entry.progress}`} · {timeAgo(parseDate(entry.updatedAt))}
+            {statusLabel(entry.status, type)}
+            {entry.status === 'watching' && ` · ${type === 'MANGA' ? 'ch' : 'ep'} ${entry.progress}`} · {timeAgo(parseDate(entry.updatedAt))}
           </div>
         </div>
         <div className="spacer" />
@@ -98,6 +162,7 @@ function MyEntry({ anime, mine, onSaved }) {
   };
 
   const reviewDirty = review.trim() !== (mine?.review ?? '') || spoiler !== (mine?.spoiler ?? false);
+  const manga = anime.type === 'MANGA';
 
   return (
     <div className="card my-entry">
@@ -105,24 +170,40 @@ function MyEntry({ anime, mine, onSaved }) {
       <div className="segmented status-picker">
         {['watched', 'watching', 'dropped'].map((s) => (
           <button key={s} type="button" disabled={busy} className={mine?.status === s ? 'active' : ''} onClick={() => save({ status: s })}>
-            {STATUS_LABELS[s]}
+            {statusLabel(s, anime.type)}
           </button>
         ))}
       </div>
       {!mine && <p className="muted small">Pick a status to add it to your catalogue.</p>}
 
       {mine?.status === 'watching' && (
-        <div className="progress">
-          <button className="icon-btn" disabled={busy} onClick={() => save({ progress: Math.max(0, mine.progress - 1) })} aria-label="One episode back">
-            −
-          </button>
-          <span>
-            Episode {mine.progress}
-            {anime.episodes ? ` of ${anime.episodes}` : ''}
-          </span>
-          <button className="icon-btn" disabled={busy} onClick={() => save({ progress: mine.progress + 1 })} aria-label="One more episode">
-            +
-          </button>
+        <div className="progress-rows">
+          <div className="progress">
+            <button className="icon-btn" disabled={busy} onClick={() => save({ progress: Math.max(0, mine.progress - 1) })} aria-label="One back">
+              −
+            </button>
+            <span>
+              {manga ? 'Chapter' : 'Episode'} {mine.progress}
+              {(manga ? anime.chapters : anime.episodes) ? ` of ${manga ? anime.chapters : anime.episodes}` : ''}
+            </span>
+            <button className="icon-btn" disabled={busy} onClick={() => save({ progress: mine.progress + 1 })} aria-label="One more">
+              +
+            </button>
+          </div>
+          {manga && (
+            <div className="progress">
+              <button className="icon-btn" disabled={busy} onClick={() => save({ progressVolumes: Math.max(0, (mine.progressVolumes ?? 0) - 1) })} aria-label="One volume back">
+                −
+              </button>
+              <span>
+                Volume {mine.progressVolumes ?? 0}
+                {anime.volumes ? ` of ${anime.volumes}` : ''}
+              </span>
+              <button className="icon-btn" disabled={busy} onClick={() => save({ progressVolumes: (mine.progressVolumes ?? 0) + 1 })} aria-label="One more volume">
+                +
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -313,13 +394,18 @@ export default function AnimeDetail({ id, suggest }) {
     refreshCatalogue();
   };
 
+  const manga = anime.type === 'MANGA';
   const meta = [
     formatLabel(anime.format),
     anime.season && anime.seasonYear ? `${SEASONS[anime.season]} ${anime.seasonYear}` : anime.seasonYear,
-    anime.episodes ? plural(anime.episodes, 'episode') : null,
-    STATUS[anime.status],
+    manga ? (anime.chapters ? plural(anime.chapters, 'chapter') : null) : anime.episodes ? plural(anime.episodes, 'episode') : null,
+    manga && anime.volumes ? plural(anime.volumes, 'volume') : null,
+    !manga && anime.duration ? `${anime.duration} min` : null,
+    manga && anime.status === 'RELEASING' ? 'Publishing' : STATUS[anime.status],
     anime.studios,
   ].filter(Boolean);
+  const adaptations = anime.relations.filter((r) => r.relationType === 'ADAPTATION' || r.relationType === 'SOURCE');
+  const related = anime.relations.filter((r) => ['PREQUEL', 'SEQUEL', 'SIDE_STORY', 'SPIN_OFF', 'PARENT', 'ALTERNATIVE'].includes(r.relationType));
 
   return (
     <section className="anime-detail">
@@ -353,11 +439,11 @@ export default function AnimeDetail({ id, suggest }) {
           </button>
         )}
         <AddToListMenu kind="watchlist" itemId={anime.id} label="🍿 Watchlist" />
-        <AddToListMenu kind="anime" itemId={anime.id} label="📋 Anime list" />
+        <AddToListMenu kind={manga ? 'manga' : 'anime'} itemId={anime.id} label={manga ? '📋 Manga list' : '📋 Anime list'} />
         <a className="btn ghost" href={`#/discover/similar/${anime.id}`}>
-          🔎 Similar anime
+          🔎 Similar {manga ? 'manga' : 'anime'}
         </a>
-        <a className="btn ghost" href={`https://anilist.co/anime/${anime.id}`} target="_blank" rel="noreferrer">
+        <a className="btn ghost" href={`https://anilist.co/${manga ? 'manga' : 'anime'}/${anime.id}`} target="_blank" rel="noreferrer">
           AniList ↗
         </a>
       </div>
@@ -378,14 +464,39 @@ export default function AnimeDetail({ id, suggest }) {
             </div>
           )}
 
+          {!manga && <Themes animeId={anime.id} />}
+
           <div className="card">
             <h3>Everyone's take</h3>
-            {mine?.review && <ReviewCard entry={mine} isMine />}
+            {mine?.review && <ReviewCard entry={mine} isMine type={anime.type} />}
             {others.length === 0 && !mine?.review && <p className="muted small">Nobody else has this in their catalogue yet.</p>}
             {others.map((o) => (
-              <ReviewCard key={o.user.id} entry={o} />
+              <ReviewCard key={o.user.id} entry={o} type={anime.type} />
             ))}
           </div>
+
+          {(adaptations.length > 0 || related.length > 0) && (
+            <div className="card">
+              <h3>{manga ? '🎬 Adapted as' : '📖 Source & related'}</h3>
+              <ul className="relations">
+                {[...adaptations, ...related].map((r) => (
+                  <li key={`${r.relationType}-${r.id}`}>
+                    <a href={mediaHref(r)} className="relation">
+                      {r.cover && <img src={r.cover} alt="" loading="lazy" />}
+                      <span>
+                        <b>{r.title}</b>
+                        <span className="muted tiny">
+                          {RELATIONS[r.relationType] ?? r.relationType} · {formatLabel(r.format)}
+                          {r.year ? ` · ${r.year}` : ''}
+                        </span>
+                      </span>
+                    </a>
+                    <CatalogueBadge animeId={r.id} />
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {watchThreads.map((t) => (
             <div className="card" key={t.thread}>

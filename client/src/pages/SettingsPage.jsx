@@ -5,6 +5,7 @@ import Avatar from '../components/Avatar.jsx';
 import ImagePicker from '../components/ImagePicker.jsx';
 import Modal from '../components/Modal.jsx';
 import SearchBox from '../components/SearchBox.jsx';
+import AppSettings from '../components/AppSettings.jsx';
 
 // Step 1: choose a character. Step 2: choose one of their pictures.
 function AvatarPicker({ onClose, onPicked }) {
@@ -90,6 +91,8 @@ export default function SettingsPage({ onLogout }) {
         </div>
         {avatarError && <p className="error-text small">{avatarError}</p>}
       </div>
+
+      <AppSettings />
 
       <form className="card settings-card" onSubmit={changePassword}>
         <h3>Change password</h3>

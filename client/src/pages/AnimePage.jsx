@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { animeSearch, api } from '../api.js';
+import { animeSearch, api, mangaSearch } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { STATUS_LABELS, animeMeta, parseDate, plural } from '../util.js';
+import { animeMeta, mediaHref, parseDate, plural, statusLabel } from '../util.js';
 import SearchBox from '../components/SearchBox.jsx';
 import Stars from '../components/Stars.jsx';
 import Modal from '../components/Modal.jsx';
 
 const TABS = ['watched', 'watching', 'dropped'];
 
-function QuickAdd({ result, onSave, onClose }) {
+function QuickAdd({ result, type, onSave, onClose }) {
   const [status, setStatus] = useState('watched');
   const [rating, setRating] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -33,7 +33,7 @@ function QuickAdd({ result, onSave, onClose }) {
           <div className="segmented">
             {TABS.map((s) => (
               <button key={s} type="button" className={status === s ? 'active' : ''} onClick={() => setStatus(s)}>
-                {STATUS_LABELS[s]}
+                {statusLabel(s, type)}
               </button>
             ))}
           </div>
@@ -59,9 +59,11 @@ function QuickAdd({ result, onSave, onClose }) {
 
 function AnimeCard({ item, editable, onChange }) {
   const a = item.anime;
+  const manga = a.type === 'MANGA';
+  const total = manga ? a.chapters : a.episodes;
   return (
     <li className="anime-card">
-      <a href={`#/anime/${a.id}`} className="anime-card-cover" style={{ '--cover-color': a.color || 'var(--surface-2)' }}>
+      <a href={mediaHref(a)} className="anime-card-cover" style={{ '--cover-color': a.color || 'var(--surface-2)' }}>
         {a.cover && <img src={a.cover} alt={a.title} loading="lazy" />}
         {item.review && (
           <span className="card-flag" title="Has a review">
@@ -70,7 +72,7 @@ function AnimeCard({ item, editable, onChange }) {
         )}
       </a>
       <div className="anime-card-body">
-        <a href={`#/anime/${a.id}`} className="anime-card-title" title={a.title}>
+        <a href={mediaHref(a)} className="anime-card-title" title={a.title}>
           {a.title}
         </a>
         <div className="muted tiny">{animeMeta(a)}</div>
@@ -78,16 +80,16 @@ function AnimeCard({ item, editable, onChange }) {
         {item.status === 'watching' && (
           <div className="progress">
             {editable && (
-              <button className="icon-btn" onClick={() => onChange({ progress: Math.max(0, item.progress - 1) })} aria-label="One episode back">
+              <button className="icon-btn" onClick={() => onChange({ progress: Math.max(0, item.progress - 1) })} aria-label="One back">
                 −
               </button>
             )}
             <span className="small">
-              Ep {item.progress}
-              {a.episodes ? ` / ${a.episodes}` : ''}
+              {manga ? 'Ch' : 'Ep'} {item.progress}
+              {total ? ` / ${total}` : ''}
             </span>
             {editable && (
-              <button className="icon-btn" onClick={() => onChange({ progress: item.progress + 1 })} aria-label="One more episode">
+              <button className="icon-btn" onClick={() => onChange({ progress: item.progress + 1 })} aria-label="One more">
                 +
               </button>
             )}
@@ -98,8 +100,8 @@ function AnimeCard({ item, editable, onChange }) {
   );
 }
 
-// A user's anime catalogue: watched / watching / dropped, with ratings.
-export default function AnimePage({ userId }) {
+// A user's anime or manga catalogue: watched/read, watching/reading, dropped.
+export default function AnimePage({ userId, type = 'ANIME' }) {
   const { me, users, navigate, refreshCatalogue } = useApp();
   const [items, setItems] = useState(null);
   const [tab, setTab] = useState('watched');
@@ -108,16 +110,18 @@ export default function AnimePage({ userId }) {
   const [notice, setNotice] = useState(null);
   const [error, setError] = useState(null);
 
+  const manga = type === 'MANGA';
+  const word = manga ? 'manga' : 'anime';
   const isMe = userId === me.id;
   const owner = users.find((u) => u.id === userId);
 
   const load = useCallback(async () => {
     try {
-      setItems(await api.catalogue(userId));
+      setItems(await api.catalogue(userId, type));
     } catch (err) {
       setError(err.message);
     }
-  }, [userId]);
+  }, [userId, type]);
 
   useEffect(() => {
     load();
@@ -154,10 +158,11 @@ export default function AnimePage({ userId }) {
     await load();
     refreshCatalogue();
     setTab(status);
+    const href = manga ? `#/manga/${result.id}` : `#/anime/${result.id}/suggest`;
     setNotice(
       status === 'watched' ? (
         <>
-          Added {result.name}. <a href={`#/anime/${result.id}/suggest`}>Write a review or rank its characters →</a>
+          Added {result.name}. <a href={href}>{manga ? 'Write a review →' : 'Write a review or rank its characters →'}</a>
         </>
       ) : (
         `Added ${result.name}.`
@@ -165,15 +170,13 @@ export default function AnimePage({ userId }) {
     );
   };
 
+  const profileBase = (id) => (id === me.id ? '#/profile' : `#/profile/u/${id}`);
+
   return (
     <section className="catalogue">
       <div className="catalogue-header">
-        <span className="muted small">Show the anime of</span>
-        <select
-          value={userId}
-          onChange={(e) => navigate(Number(e.target.value) === me.id ? '#/profile' : `#/profile/u/${e.target.value}`)}
-          aria-label="Whose anime"
-        >
+        <span className="muted small">Show the {word} of</span>
+        <select value={userId} onChange={(e) => navigate(`${profileBase(Number(e.target.value))}${manga ? '/manga' : ''}`)} aria-label={`Whose ${word}`}>
           {users.map((u) => (
             <option key={u.id} value={u.id}>
               {u.id === me.id ? 'Me' : u.username}
@@ -184,11 +187,11 @@ export default function AnimePage({ userId }) {
 
       {isMe && (
         <SearchBox
-          search={animeSearch}
+          search={manga ? mangaSearch : animeSearch}
           existingIds={existingIds}
           existingLabel="Added"
           addLabel="+ Add"
-          placeholder="Search for an anime you've seen or are watching…"
+          placeholder={manga ? "Search for a manga you've read or are reading…" : "Search for an anime you've seen or are watching…"}
           onAdd={async (r) => setAdding(r)}
         />
       )}
@@ -214,7 +217,7 @@ export default function AnimePage({ userId }) {
         <div className="tabs compact" role="tablist">
           {TABS.map((s) => (
             <button key={s} type="button" role="tab" aria-selected={tab === s} className={tab === s ? 'active' : ''} onClick={() => setTab(s)}>
-              {STATUS_LABELS[s]} <span className="muted small">{counts[s]}</span>
+              {statusLabel(s, type)} <span className="muted small">{counts[s]}</span>
             </button>
           ))}
         </div>
@@ -232,14 +235,14 @@ export default function AnimePage({ userId }) {
           <p className="muted">
             {isMe
               ? tab === 'watched'
-                ? 'Nothing here yet. Search above to add the anime you have seen.'
-                : `No anime marked as ${STATUS_LABELS[tab].toLowerCase()}.`
-              : `${owner?.username ?? 'They'} has no anime here yet.`}
+                ? `Nothing here yet. Search above to add the ${word} you have ${manga ? 'read' : 'seen'}.`
+                : `No ${word} marked as ${statusLabel(tab, type).toLowerCase()}.`
+              : `${owner?.username ?? 'They'} has no ${word} here yet.`}
           </p>
         </div>
       ) : (
         <>
-          <p className="muted small">{plural(shown.length, 'anime', 'anime')}</p>
+          <p className="muted small">{plural(shown.length, word, word)}</p>
           <ul className="anime-grid">
             {shown.map((item) => (
               <AnimeCard key={item.anime.id} item={item} editable={isMe} onChange={(patch) => save(item.anime.id, patch)} />
@@ -248,7 +251,7 @@ export default function AnimePage({ userId }) {
         </>
       )}
 
-      {adding && <QuickAdd result={adding} onClose={() => setAdding(null)} onSave={(v) => quickSave(adding, v)} />}
+      {adding && <QuickAdd result={adding} type={type} onClose={() => setAdding(null)} onSave={(v) => quickSave(adding, v)} />}
     </section>
   );
 }

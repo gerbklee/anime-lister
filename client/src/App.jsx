@@ -12,18 +12,19 @@ import AnimeDetail from './pages/AnimeDetail.jsx';
 import FeedPage from './pages/FeedPage.jsx';
 import CharacterPage from './pages/CharacterPage.jsx';
 import DiscoverPage from './pages/DiscoverPage.jsx';
-import ComparePage from './pages/ComparePage.jsx';
+import HomePage from './pages/HomePage.jsx';
+import UsPage from './pages/UsPage.jsx';
 
 function readRoute() {
   const h = window.location.hash.replace(/^#/, '');
   let m;
   if ((m = h.match(/^\/list\/(\d+)$/))) return { tab: 'lists', id: Number(m[1]) };
-  // Anime pages (not a tab of their own).
-  if ((m = h.match(/^\/anime\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[1]), suggest: !!m[2] };
+  // Anime and manga pages (not a tab of their own).
+  if ((m = h.match(/^\/(anime|manga)\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[2]), suggest: !!m[3] };
   // Profile: your anime catalogue and settings, or someone else's anime.
   if ((m = h.match(/^\/(?:profile|anime)\/u\/(\d+)$/))) return { tab: 'profile', view: 'anime', userId: Number(m[1]) };
-  if ((m = h.match(/^\/profile\/u\/(\d+)\/type$/))) return { tab: 'profile', view: 'type', userId: Number(m[1]) };
-  if (h === '/profile/type') return { tab: 'profile', view: 'type' };
+  if ((m = h.match(/^\/profile\/u\/(\d+)\/(type|manga|stats)$/))) return { tab: 'profile', view: m[2], userId: Number(m[1]) };
+  if ((m = h.match(/^\/profile\/(type|manga|stats)$/))) return { tab: 'profile', view: m[1] };
   if (h === '/profile' || h === '/anime') return { tab: 'profile', view: 'anime' };
   if (h === '/profile/settings' || h === '/settings') return { tab: 'profile', view: 'settings' };
   if ((m = h.match(/^\/watch\/(\d+)$/))) return { tab: 'watch', id: Number(m[1]) };
@@ -34,9 +35,12 @@ function readRoute() {
   if ((m = h.match(/^\/discover\/(calendar|foryou|similar)$/))) return { tab: 'discover', view: m[1] };
   if (h === '/discover' || h === '/discover/season') return { tab: 'discover', view: 'season' };
   if ((m = h.match(/^\/character\/(\d+)$/))) return { tab: 'character', id: Number(m[1]) };
-  if (h === '/feed') return { tab: 'feed' };
-  if (h === '/compare') return { tab: 'compare' };
-  return { tab: 'lists' };
+  if (h === '/feed') return { tab: 'home', view: 'feed' };
+  if ((m = h.match(/^\/us\/games\/(\d+)$/))) return { tab: 'us', view: 'games', gameId: Number(m[1]) };
+  if ((m = h.match(/^\/us\/(compare|games|wrapped)$/))) return { tab: 'us', view: m[1] };
+  if (h === '/us' || h === '/compare') return { tab: 'us', view: 'compare' };
+  if (h === '/lists') return { tab: 'lists' };
+  return { tab: 'home' };
 }
 
 export default function App() {
@@ -130,15 +134,15 @@ function Main({ me, setMe }) {
   else if (route.tab === 'anime') page = <AnimeDetail key={route.animeId} id={route.animeId} suggest={route.suggest} />;
   else if (route.tab === 'discover') page = <DiscoverPage route={route} />;
   else if (route.tab === 'character') page = <CharacterPage key={route.id} id={route.id} />;
-  else if (route.tab === 'feed') page = <FeedPage />;
-  else if (route.tab === 'compare') page = <ComparePage />;
+  else if (route.tab === 'home') page = route.view === 'feed' ? <FeedPage /> : <HomePage />;
+  else if (route.tab === 'us') page = <UsPage route={route} />;
   else page = <ProfilePage route={route} onLogout={logout} />;
 
   return (
     <AppContext.Provider value={ctx}>
       <div className="app">
         <header className="topbar">
-          <a className="logo" href="#/lists">
+          <a className="logo" href="#/">
             <span aria-hidden="true">⭐</span> Anime Lister
           </a>
           <div className="top-nav">

@@ -20,9 +20,10 @@ const { getCharacter } = require('./anilist');
 const { cacheImage, isAllowedImageUrl, removeImageIfUnused } = require('./images');
 const { ensureAnime, saveCharacterLinks, toAnimeSummary } = require('./anime');
 const { usersById } = require('./users');
-const activity = require('./activity');
+const activity = require("./activity");
+const { notify } = require("./notify");
 
-const KINDS = ['character', 'anime', 'watchlist'];
+const KINDS = ["character", "anime", "manga", "watchlist"];
 const CATEGORIES = ['daddy', 'mommy', 'waifu', 'husbando', 'other'];
 
 const q = {
@@ -114,7 +115,11 @@ function parseSeries(raw) {
 const FORMATS = { TV: 'TV', TV_SHORT: 'TV short', MOVIE: 'Movie', SPECIAL: 'Special', OVA: 'OVA', ONA: 'ONA', MUSIC: 'Music' };
 
 function animeMeta(a) {
-  return [FORMATS[a.format] ?? a.format, a.season_year, a.episodes ? `${a.episodes} ep` : null].filter(Boolean).join(' · ');
+  if (a.type === "MANGA") {
+    const format = a.format === "NOVEL" ? "Novel" : a.format === "ONE_SHOT" ? "One-shot" : "Manga";
+    return [format, a.season_year, a.chapters ? `${a.chapters} ch` : null].filter(Boolean).join(" · ");
+  }
+  return [FORMATS[a.format] ?? a.format, a.season_year, a.episodes ? `${a.episodes} ep` : null].filter(Boolean).join(" · ");
 }
 
 function toEntry(row, list, users, me, ranks) {
@@ -446,7 +451,16 @@ router.post('/lists/:id/entries', wrap(async (req, res) => {
     animeId: kind === 'character' ? null : itemId,
     data: { kind, name: values.name, image: values.imageFile ? `/images/${values.imageFile}` : values.imageUrl, rank: inserted.rank },
   });
-  if (kind === 'character') onCharacterAdded(itemId);
+  if (kind === "character") onCharacterAdded(itemId);
+  if (a.list.is_shared) {
+    const people = [a.list.owner_id, ...q.memberIds.all(a.list.id).map((r) => r.user_id)];
+    notify(people, "lists", {
+      title: `${req.user.username} added ${values.name}`,
+      body: kind === "watchlist" ? `to the watchlist “${a.list.name}”` : `to “${a.list.name}”: rank it in your “To rank” tray`,
+      url: kind === "watchlist" ? `#/watch/${a.list.id}` : `#/list/${a.list.id}`,
+      tag: `list-${a.list.id}`,
+    }, req.user.id);
+  }
   const ranks = perPersonRanking(a.list) ? rankMap(a.list.id) : null;
   res.status(201).json(toEntry(q.getEntry.get(inserted.id), a.list, usersById(), req.user.id, ranks));
 }));
@@ -524,7 +538,7 @@ router.post('/entries/:id/watched', wrap(async (req, res) => {
   }
   const anime = await ensureAnime(entry.anilist_id, { cover: true });
   db.transaction(() => {
-    for (const uid of userIds) q.markWatched.run(uid, entry.anilist_id, anime.episodes ?? 0);
+    for (const uid of userIds) q.markWatched.run(uid, entry.anilist_id, (anime.type === "MANGA" ? anime.chapters : anime.episodes) ?? 0);
     removeEntry(entry);
     activity.record({
       userId: req.user.id,

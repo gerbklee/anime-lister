@@ -43,6 +43,8 @@ const q = {
     ORDER BY a.id DESC LIMIT @limit`),
   anime: db.prepare('SELECT * FROM anime WHERE id = ?'),
   entryList: db.prepare('SELECT list_id FROM entries WHERE id = ?'),
+  commenters: db.prepare('SELECT DISTINCT user_id FROM comments WHERE thread = ?'),
+  listPeople: db.prepare('SELECT owner_id AS id FROM lists WHERE id = ? UNION SELECT user_id AS id FROM list_members WHERE list_id = ?'),
   list: db.prepare('SELECT id, name, kind, is_shared FROM lists WHERE id = ?'),
   userAnime: db.prepare('SELECT * FROM user_anime WHERE user_id = ? AND anime_id = ?'),
   comment: db.prepare('SELECT * FROM comments WHERE id = ?'),
@@ -165,6 +167,22 @@ function addComment(thread, userId, body) {
   return id;
 }
 
+// Who should hear about a new comment in a thread, and where it lives.
+function threadAudience(key) {
+  const k = parseKey(key);
+  if (!k) return { userIds: [], url: '#/' };
+  const commenters = q.commenters.all(key).map((r) => r.user_id);
+  const listPeople = (listId) => q.listPeople.all(listId, listId).map((r) => r.id);
+  if (k.kind === 'review') return { userIds: [k.nums[1], ...commenters], url: `#/anime/${k.nums[0]}` };
+  if (k.kind === 'watch') return { userIds: listPeople(k.nums[0]), url: `#/watch/${k.nums[0]}` };
+  if (k.kind === 'entry') {
+    const listId = q.entryList.get(k.nums[0])?.list_id;
+    return { userIds: listId ? [...listPeople(listId), ...commenters] : commenters, url: listId ? `#/list/${listId}` : '#/' };
+  }
+  if (k.kind === 'activity') return { userIds: [q.get.get(k.nums[0])?.user_id, ...commenters], url: '#/feed' };
+  return { userIds: commenters, url: '#/' };
+}
+
 function deleteComment(comment) {
   db.transaction(() => {
     q.deleteComment.run(comment.id);
@@ -264,6 +282,7 @@ module.exports = {
   commentCount,
   listComments,
   addComment,
+  threadAudience,
   deleteComment,
   getComment: (id) => q.comment.get(id),
   feed,

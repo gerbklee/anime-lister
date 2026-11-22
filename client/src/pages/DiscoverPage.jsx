@@ -346,38 +346,70 @@ function RecommendationGrid({ items, renderNote }) {
 }
 
 function ForYouView() {
+  const [type, setType] = useState('ANIME');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const word = type === 'MANGA' ? 'manga' : 'anime';
 
   useEffect(() => {
     let cancelled = false;
+    setData(null);
+    setError(null);
     api
-      .forYou()
+      .forYou(type)
       .then((d) => !cancelled && setData(d))
       .catch((err) => !cancelled && setError(err.message));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [type]);
 
-  if (error) return <div className="banner error">{error}</div>;
-  if (!data) return <Loading text="Working out recommendations from your catalogue… The first time can take a few seconds." />;
+  const switcher = (
+    <div className="segmented compact-seg type-switch">
+      <button type="button" className={type === 'ANIME' ? 'active' : ''} onClick={() => setType('ANIME')}>
+        🎬 Anime
+      </button>
+      <button type="button" className={type === 'MANGA' ? 'active' : ''} onClick={() => setType('MANGA')}>
+        📖 Manga
+      </button>
+    </div>
+  );
+
+  if (error)
+    return (
+      <>
+        {switcher}
+        <div className="banner error">{error}</div>
+      </>
+    );
+  if (!data)
+    return (
+      <>
+        {switcher}
+        <Loading text="Working out recommendations from your catalogue… The first time can take a few seconds." />
+      </>
+    );
   if (data.seedCount === 0) {
     return (
-      <div className="empty-state">
-        <p className="muted">
-          Add anime you've watched under <a href="#/profile">My anime</a> (your profile) and rate them. Recommendations are based on what you
-          liked.
-        </p>
-      </div>
+      <>
+        {switcher}
+        <div className="empty-state">
+          <p className="muted">
+            Add {word} you've {type === 'MANGA' ? 'read' : 'watched'} under{' '}
+            <a href={type === 'MANGA' ? '#/profile/manga' : '#/profile'}>My {word}</a> (your profile) and rate them. Recommendations are
+            based on what you liked.
+          </p>
+        </div>
+      </>
     );
   }
 
   return (
     <>
+      {switcher}
       <p className="muted small">
-        Based on {plural(data.seedCount, 'anime', 'anime')} you liked, using AniList's community recommendations weighted by
-        your ratings. Anime in your catalogue are left out.
+        Based on {plural(data.seedCount, word, word)} you liked, using AniList's community recommendations weighted by your
+        ratings. {type === 'MANGA' ? 'Manga' : 'Anime'} in your catalogue are left out.
         {data.incomplete && ' AniList is busy right now, so some recommendations are still missing. Try again in a minute.'}
       </p>
       <RecommendationGrid

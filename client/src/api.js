@@ -60,14 +60,16 @@ export const api = {
 
   // Search
   search: (term, signal) => request('GET', `/api/search?q=${enc(term)}`, undefined, { signal }),
-  animeSearch: (term, signal) => request('GET', `/api/anime/search?q=${enc(term)}`, undefined, { signal }),
+  animeSearch: (term, signal, type = "ANIME") =>
+    request("GET", `/api/anime/search?q=${enc(term)}&type=${type}`, undefined, { signal }),
 
   // Anime & catalogue
   anime: (id) => request('GET', `/api/anime/${id}`),
   character: (id) => request('GET', `/api/characters/${id}`),
   animeCharacters: (id, page) => request('GET', `/api/anime/${id}/characters?page=${page}`),
   catalogueSummary: () => request('GET', '/api/catalogue/summary'),
-  catalogue: (userId) => request('GET', `/api/users/${userId}/catalogue`),
+  catalogue: (userId, type = "ANIME") => request("GET", `/api/users/${userId}/catalogue?type=${type}`),
+  themes: (animeId) => request("GET", `/api/anime/${animeId}/themes`),
   setCatalogue: (animeId, patch) => request('PUT', `/api/catalogue/${animeId}`, patch),
   removeCatalogue: (animeId) => request('DELETE', `/api/catalogue/${animeId}`),
 
@@ -89,7 +91,7 @@ export const api = {
   discoverSeason: (season, year) =>
     request('GET', `/api/discover/season${season ? `?season=${season}&year=${year}` : ''}`),
   discoverUpcoming: () => request('GET', '/api/discover/upcoming'),
-  forYou: () => request('GET', '/api/discover/foryou'),
+  forYou: (type = "ANIME") => request("GET", `/api/discover/foryou?type=${type}`),
   similar: (animeId) => request('GET', `/api/discover/similar/${animeId}`),
 
   // My type
@@ -98,7 +100,24 @@ export const api = {
 
   // Compare
   compare: (userId, kind = 'character') => request('GET', `/api/compare?with=${userId}&kind=${kind}`),
-  compareAnime: (userId) => request('GET', `/api/compare/anime?with=${userId}`),
+  compareAnime: (userId, type = "ANIME") => request("GET", `/api/compare/anime?with=${userId}&type=${type}`),
+
+  // Home, stats, games, push
+  home: () => request("GET", "/api/home"),
+  tonight: (opts) => request("POST", "/api/home/tonight", opts),
+  stats: (userId) => request("GET", `/api/stats/${userId}`),
+  wrapped: (userId, year) => request("GET", `/api/wrapped/${userId}?year=${year}`),
+  wrappedTogether: (otherId, year) => request("GET", `/api/wrapped-together?with=${otherId}&year=${year}`),
+  games: () => request("GET", "/api/games"),
+  createGame: (type, opponentId) => request("POST", "/api/games", { type, opponentId }),
+  game: (id) => request("GET", `/api/games/${id}`),
+  answerGame: (id, answers) => request("POST", `/api/games/${id}/answers`, { answers }),
+  pushKey: () => request("GET", "/api/push/key"),
+  pushStatus: () => request("GET", "/api/push/status"),
+  pushSubscribe: (subscription) => request("POST", "/api/push/subscribe", { subscription }),
+  pushUnsubscribe: (endpoint) => request("POST", "/api/push/unsubscribe", { endpoint }),
+  pushPrefs: (prefs) => request("PUT", "/api/push/prefs", prefs),
+  pushTest: () => request("POST", "/api/push/test"),
 };
 
 // Search adapters: turn API results into the generic shape SearchBox shows.
@@ -113,7 +132,26 @@ export const characterSearch = (term, signal) =>
     })),
   );
 
-export const animeSearch = (term, signal) =>
-  api.animeSearch(term, signal).then((d) =>
-    d.results.map((r) => ({ id: r.id, name: r.name ?? r.title, image: r.cover, subtitle: animeMeta(r), myStatus: r.myStatus })),
-  );
+const toMediaResult = (r) => ({
+  id: r.id,
+  type: r.type,
+  name: r.name ?? r.title,
+  image: r.cover,
+  subtitle: animeMeta(r),
+  myStatus: r.myStatus,
+});
+
+export const animeSearch = (term, signal) => api.animeSearch(term, signal, "ANIME").then((d) => d.results.map(toMediaResult));
+
+export const mangaSearch = (term, signal) => api.animeSearch(term, signal, "MANGA").then((d) => d.results.map(toMediaResult));
+
+// Anime and manga together (watchlists): alternating, anime first.
+export const mediaSearch = async (term, signal) => {
+  const [anime, manga] = await Promise.all([animeSearch(term, signal), mangaSearch(term, signal)]);
+  const out = [];
+  for (let i = 0; i < Math.max(anime.length, manga.length) && out.length < 10; i++) {
+    if (anime[i]) out.push(anime[i]);
+    if (manga[i]) out.push({ ...manga[i], extra: "📖 Manga" });
+  }
+  return out;
+};

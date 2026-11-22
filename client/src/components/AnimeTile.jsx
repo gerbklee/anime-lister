@@ -1,4 +1,4 @@
-import { formatLabel } from '../util.js';
+import { formatLabel, mediaHref } from '../util.js';
 import AddToListMenu from './AddToListMenu.jsx';
 import { CatalogueBadge } from './EntryRow.jsx';
 
@@ -8,7 +8,7 @@ const RELATION_LABELS = {
   SIDE_STORY: 'Related to',
   SPIN_OFF: 'Spin-off of',
   ALTERNATIVE: 'Alternative version of',
-  SOURCE: 'Related to',
+  SOURCE: 'Adaptation of',
   SUMMARY: 'Recap of',
   CHARACTER: 'Shares characters with',
   OTHER: 'Related to',
@@ -38,13 +38,14 @@ function airingText(a) {
 
 // Cover card used in Discover. `note` adds a line (e.g. "Because you liked …").
 export default function AnimeTile({ a, onTrailer, note, dateLabel }) {
-  const meta = [formatLabel(a.format), a.episodes ? `${a.episodes} ep` : null, a.studio].filter(Boolean).join(' · ');
+  const count = a.type === 'MANGA' ? (a.chapters ? `${a.chapters} ch` : null) : a.episodes ? `${a.episodes} ep` : null;
+  const meta = [formatLabel(a.format), count, a.studio].filter(Boolean).join(' · ');
   const airing = airingText(a);
   const highlight = a.related?.length > 0;
 
   return (
     <li className={`tile ${highlight ? 'highlight' : ''}`}>
-      <a href={`#/anime/${a.id}`} className="tile-cover" style={{ '--cover-color': a.color || 'var(--surface-2)' }}>
+      <a href={mediaHref(a)} className="tile-cover" style={{ '--cover-color': a.color || 'var(--surface-2)' }}>
         {a.cover && <img src={a.cover} alt={a.title} loading="lazy" />}
         {dateLabel && <span className="tile-date">{dateLabel}</span>}
         <span className="tile-pop" title={`${a.popularity ?? 0} AniList users`}>
@@ -53,7 +54,7 @@ export default function AnimeTile({ a, onTrailer, note, dateLabel }) {
       </a>
       <div className="tile-body">
         {highlight && <span className="tile-related">⭐ {relationText(a.related)}</span>}
-        <a href={`#/anime/${a.id}`} className="tile-title" title={a.title}>
+        <a href={mediaHref(a)} className="tile-title" title={a.title}>
           {a.title}
         </a>
         {meta && <span className="muted tiny tile-meta">{meta}</span>}

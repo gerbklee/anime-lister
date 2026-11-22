@@ -252,7 +252,7 @@ function RatingRow({ r, otherName }) {
   );
 }
 
-function AnimeTab({ data, me, other }) {
+function AnimeTab({ data, me, other, manga = false }) {
   const c = data.catalogue;
   const s = c.stats;
   const otherName = other.username;
@@ -262,7 +262,7 @@ function AnimeTab({ data, me, other }) {
         me={me}
         other={other}
         score={s.score}
-        label="anime taste match"
+        label={manga ? 'manga taste match' : 'anime taste match'}
         details={[
           [`${plural(s.bothSeen, 'anime', 'anime')} you've both seen`, `Overlap ${pct(s.overlap)}`, `Rating similarity ${s.ratingSimilarity == null ? '–' : pct(s.ratingSimilarity)}`],
           [`You: ${s.mine.seen} seen, ${s.mine.rated} rated`, `${otherName}: ${s.theirs.seen} seen, ${s.theirs.rated} rated`],
@@ -361,7 +361,7 @@ function AnimeTab({ data, me, other }) {
         </div>
       </div>
 
-      <h3 className="section-title">📋 Anime lists</h3>
+      <h3 className="section-title">📋 {manga ? 'Manga' : 'Anime'} lists</h3>
       <ListComparison data={data.lists} me={me} other={other} kind="anime" />
     </>
   );
@@ -382,7 +382,7 @@ export default function ComparePage() {
     if (selectedId == null) return undefined;
     let cancelled = false;
     setLoading(true);
-    const req = tab === 'anime' ? api.compareAnime(selectedId) : api.compare(selectedId, 'character');
+    const req = tab === 'characters' ? api.compare(selectedId, 'character') : api.compareAnime(selectedId, tab === 'manga' ? 'MANGA' : 'ANIME');
     req
       .then((d) => {
         if (cancelled) return;
@@ -433,18 +433,21 @@ export default function ComparePage() {
         <button type="button" role="tab" aria-selected={tab === 'anime'} className={tab === 'anime' ? 'active' : ''} onClick={() => setTab('anime')}>
           🎬 Anime
         </button>
+        <button type="button" role="tab" aria-selected={tab === 'manga'} className={tab === 'manga' ? 'active' : ''} onClick={() => setTab('manga')}>
+          📖 Manga
+        </button>
       </div>
 
       <p className="muted small">
         {tab === 'characters'
-          ? "Uses everyone's personal character lists (shared lists are left out). When a character is in several of your lists, their best placement counts, adjusted for list length."
-          : "Uses everyone's anime catalogue (status and ratings) and their personal anime lists."}
+          ? "Uses everyone's character lists (shared lists with each person's own ranking). When a character is in several of your lists, their best placement counts, adjusted for list length."
+          : `Uses everyone's ${tab} catalogue (status and ratings) and their ${tab} lists.`}
       </p>
 
       {error && <div className="banner error">{error}</div>}
 
       {ready && tab === 'characters' && <CharacterTab data={data} me={me} other={data.other} />}
-      {ready && tab === 'anime' && <AnimeTab data={data} me={me} other={data.other} />}
+      {ready && tab !== 'characters' && <AnimeTab data={data} me={me} other={data.other} manga={tab === 'manga'} />}
     </section>
   );
 }

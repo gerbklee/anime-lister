@@ -2,7 +2,8 @@
 const express = require('express');
 const { HttpError, parseId } = require('./http');
 const { usersById } = require('./users');
-const activity = require('./activity');
+const activity = require("./activity");
+const { notify } = require("./notify");
 
 const router = express.Router();
 
@@ -29,6 +30,13 @@ router.post('/threads/:thread/comments', (req, res) => {
   if (!body) throw new HttpError(400, 'Comment is empty.');
   if (body.length > 2000) throw new HttpError(400, 'Comments can be at most 2000 characters.');
   activity.addComment(key, req.user.id, body);
+  const audience = activity.threadAudience(key);
+  notify(audience.userIds, "comments", {
+    title: `💬 ${req.user.username} commented`,
+    body: body.length > 120 ? `${body.slice(0, 117)}…` : body,
+    url: audience.url,
+    tag: `thread-${key}`,
+  }, req.user.id);
   res.status(201).json(activity.listComments(key, req.user.id, usersById()));
 });
 

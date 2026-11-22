@@ -47,15 +47,15 @@ const REC_FIELDS = `
     nodes {
       rating
       mediaRecommendation {
-        id title { romaji english } coverImage { large color } format episodes seasonYear genres
-        averageScore popularity isAdult trailer { id site }
+        id type title { romaji english } coverImage { large color } format episodes chapters seasonYear genres
+        averageScore popularity isAdult trailer { id site } startDate { year }
       }
     }
   }
 `;
 
 const q = {
-  catalogue: db.prepare('SELECT anime_id, status, rating FROM user_anime WHERE user_id = ?'),
+  catalogue: db.prepare("SELECT ua.anime_id, ua.status, ua.rating, COALESCE(a.type, 'ANIME') AS type FROM user_anime ua LEFT JOIN anime a ON a.id = ua.anime_id WHERE ua.user_id = ?"),
   animeTitle: db.prepare('SELECT id, title FROM anime WHERE id = ?'),
   watchlistIds: db.prepare(`
     SELECT DISTINCT e.anilist_id AS id FROM entries e JOIN lists l ON l.id = e.list_id
@@ -89,7 +89,7 @@ function toCard(m) {
     trailer: trailerOf(m.trailer),
     nextAiring: m.nextAiringEpisode ?? null,
     relations: (m.relations?.edges ?? [])
-      .filter((e) => e?.node?.type === 'ANIME')
+      .filter((e) => e?.node?.type === "ANIME" || e?.node?.type === "MANGA")
       .map((e) => ({ id: e.node.id, type: e.relationType })),
   };
 }
@@ -161,12 +161,14 @@ function decorate(card, p) {
 function recCard(m) {
   return {
     id: m.id,
+    type: m.type ?? "ANIME",
+    chapters: m.chapters ?? null,
     title: titleOf(m.title) || 'Unknown',
     cover: m.coverImage?.large ?? null,
     color: m.coverImage?.color ?? null,
     format: m.format ?? null,
     episodes: m.episodes ?? null,
-    seasonYear: m.seasonYear ?? null,
+    seasonYear: m.seasonYear ?? m.startDate?.year ?? null,
     genres: m.genres ?? [],
     averageScore: m.averageScore ?? null,
     popularity: m.popularity ?? 0,
@@ -190,7 +192,7 @@ async function getRecs(ids) {
   let incomplete = false;
   for (let i = 0; i < missing.length; i += 5) {
     const batch = missing.slice(i, i + 5);
-    const query = `query { ${batch.map((b) => `a${b.id}: Media(id: ${b.id}, type: ANIME) { ${REC_FIELDS} }`).join('\n')} }`;
+    const query = `query { ${batch.map((b) => `a${b.id}: Media(id: ${b.id}) { ${REC_FIELDS} }`).join('\n')} }`;
     try {
       const data = await gql(query, {});
       for (const b of batch) {
@@ -216,9 +218,9 @@ function seedWeight(r) {
   return r.status === 'watched' ? 0.4 : 0.3;
 }
 
-async function forYou(me) {
+async function forYou(me, type = "ANIME") {
   const p = personal(me);
-  const seeds = [...p.catalogue.values()].map((r) => ({ id: r.anime_id, weight: seedWeight(r), rating: r.rating }));
+  const seeds = [...p.catalogue.values()].filter((r) => r.type === type).map((r) => ({ id: r.anime_id, weight: seedWeight(r), rating: r.rating }));
   const positive = seeds.filter((s) => s.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, 40);
   const negative = seeds.filter((s) => s.weight < 0).sort((a, b) => a.weight - b.weight).slice(0, 15);
   const used = [...positive, ...negative];
@@ -228,7 +230,7 @@ async function forYou(me) {
   const candidates = new Map();
   for (const seed of used) {
     for (const { votes, card } of recs.get(seed.id) ?? []) {
-      if (card.isAdult || p.catalogue.has(card.id)) continue;
+      if (card.isAdult || p.catalogue.has(card.id) || card.type !== type) continue;
       const c = candidates.get(card.id) ?? { card, score: 0, reasons: [] };
       const contribution = seed.weight * Math.log2(1 + votes);
       c.score += contribution;
@@ -296,7 +298,7 @@ router.get('/discover/upcoming', wrap(async (req, res) => {
 }));
 
 router.get('/discover/foryou', wrap(async (req, res) => {
-  res.json(await forYou(req.user.id));
+  res.json(await forYou(req.user.id, req.query.type === "MANGA" ? "MANGA" : "ANIME"));
 }));
 
 router.get('/discover/similar/:id', wrap(async (req, res) => {

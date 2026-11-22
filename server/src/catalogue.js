@@ -16,12 +16,13 @@ const q = {
   catalogue: db.prepare(`
     SELECT ua.*, a.* , ua.status AS ua_status, ua.created_at AS ua_created, ua.updated_at AS ua_updated
     FROM user_anime ua JOIN anime a ON a.id = ua.anime_id
-    WHERE ua.user_id = ? ORDER BY ua.updated_at DESC`),
+    WHERE ua.user_id = ? AND a.type = ? ORDER BY ua.updated_at DESC`),
   upsert: db.prepare(`
-    INSERT INTO user_anime (user_id, anime_id, status, progress, rating, review, review_spoiler, review_updated_at)
-    VALUES (@userId, @animeId, @status, @progress, @rating, @review, @spoiler, @reviewUpdatedAt)
+    INSERT INTO user_anime (user_id, anime_id, status, progress, progress_volumes, rating, review, review_spoiler, review_updated_at)
+    VALUES (@userId, @animeId, @status, @progress, @volumes, @rating, @review, @spoiler, @reviewUpdatedAt)
     ON CONFLICT (user_id, anime_id) DO UPDATE SET
-      status = excluded.status, progress = excluded.progress, rating = excluded.rating,
+      status = excluded.status, progress = excluded.progress, progress_volumes = excluded.progress_volumes,
+      rating = excluded.rating,
       review = excluded.review, review_spoiler = excluded.review_spoiler,
       review_updated_at = excluded.review_updated_at, updated_at = datetime('now')`),
   remove: db.prepare('DELETE FROM user_anime WHERE user_id = ? AND anime_id = ?'),
@@ -42,7 +43,7 @@ const q = {
     SELECT COALESCE((SELECT rk.position FROM rankings rk WHERE rk.entry_id = e.id AND rk.user_id = @me), e.position) AS position, l.id AS list_id, l.name AS list_name, l.owner_id, l.is_shared,
            (SELECT COUNT(*) FROM entries x WHERE x.list_id = l.id) AS list_size
     FROM entries e JOIN lists l ON l.id = e.list_id
-    WHERE e.anilist_id = @anime AND l.kind = 'anime' AND (
+    WHERE e.anilist_id = @anime AND l.kind IN ('anime', 'manga') AND (
       l.is_shared = 0 OR l.owner_id = @me
       OR EXISTS (SELECT 1 FROM list_members m WHERE m.list_id = l.id AND m.user_id = @me))
     ORDER BY l.id`),
@@ -59,6 +60,7 @@ function toCatalogueEntry(row, users, me) {
     animeId: row.anime_id,
     status: row.status,
     progress: row.progress,
+    progressVolumes: row.progress_volumes ?? 0,
     rating: row.rating,
     review: row.review,
     spoiler: !!row.review_spoiler,
@@ -89,7 +91,8 @@ router.get('/anime/search', wrap(async (req, res) => {
   if (term.length < 2) return res.json({ results: [] });
   if (term.length > 100) throw new HttpError(400, 'Search term is too long');
   const mine = new Map(q.summary.all(req.user.id).map((r) => [r.anime_id, r]));
-  const results = (await searchAnime(term)).map((r) => ({ ...r, myStatus: mine.get(r.id)?.status ?? null }));
+  const type = req.query.type === "MANGA" ? "MANGA" : "ANIME";
+  const results = (await searchAnime(term, type)).map((r) => ({ ...r, myStatus: mine.get(r.id)?.status ?? null }));
   res.json({ results });
 }));
 
@@ -156,12 +159,14 @@ router.get('/catalogue/summary', (req, res) => {
 
 router.get('/users/:id/catalogue', (req, res) => {
   const userId = parseId(req.params.id);
-  const rows = q.catalogue.all(userId);
+  const type = req.query.type === "MANGA" ? "MANGA" : "ANIME";
+  const rows = q.catalogue.all(userId, type);
   res.json(
     rows.map((r) => ({
       anime: toAnimeSummary(r),
       status: r.ua_status,
       progress: r.progress,
+      progressVolumes: r.progress_volumes ?? 0,
       rating: r.rating,
       review: r.review,
       spoiler: !!r.review_spoiler,
@@ -183,12 +188,22 @@ router.put('/catalogue/:animeId', wrap(async (req, res) => {
 
   const anime = await ensureAnime(animeId, { cover: true });
 
+  // Progress: episodes for anime, chapters (and volumes) for manga.
+  const total = anime.type === "MANGA" ? anime.chapters : anime.episodes;
   let progress = existing?.progress ?? 0;
   if (body.progress !== undefined) {
     progress = Math.max(0, Math.floor(Number(body.progress) || 0));
-    if (anime.episodes) progress = Math.min(progress, anime.episodes);
+    if (total) progress = Math.min(progress, total);
   }
-  if (status === 'watched' && anime.episodes && (!existing || existing.status !== 'watched')) progress = anime.episodes;
+  let volumes = existing?.progress_volumes ?? 0;
+  if (body.progressVolumes !== undefined) {
+    volumes = Math.max(0, Math.floor(Number(body.progressVolumes) || 0));
+    if (anime.volumes) volumes = Math.min(volumes, anime.volumes);
+  }
+  if (status === "watched" && (!existing || existing.status !== "watched")) {
+    if (total) progress = total;
+    if (anime.type === "MANGA" && anime.volumes) volumes = anime.volumes;
+  }
 
   const rating = body.rating !== undefined ? parseRating(body.rating) : existing?.rating ?? null;
 
@@ -207,6 +222,7 @@ router.put('/catalogue/:animeId', wrap(async (req, res) => {
       animeId,
       status,
       progress,
+      volumes,
       rating,
       review,
       spoiler,

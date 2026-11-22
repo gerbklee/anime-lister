@@ -6,9 +6,16 @@ import ListView from '../components/ListView.jsx';
 
 const KIND_KEY = 'lists-kind';
 
+const KIND_INFO = {
+  character: { icon: '👤', lists: 'Character lists', word: 'character', example: '“Top 10 Villains”' },
+  anime: { icon: '🎬', lists: 'Anime lists', word: 'anime', example: '“Best openings” or “Top 10 anime”' },
+  manga: { icon: '📖', lists: 'Manga lists', word: 'manga', example: '“Best art” or “Top 10 manga”' },
+};
+
 function savedKind() {
   try {
-    return localStorage.getItem(KIND_KEY) === 'anime' ? 'anime' : 'character';
+    const k = localStorage.getItem(KIND_KEY);
+    return KIND_INFO[k] ? k : 'character';
   } catch {
     return 'character';
   }
@@ -66,14 +73,18 @@ export default function ListsPage({ route }) {
       <button type="button" role="tab" aria-selected={kind === 'anime'} className={kind === 'anime' ? 'active' : ''} onClick={() => switchKind('anime')}>
         🎬 Anime
       </button>
+      <button type="button" role="tab" aria-selected={kind === 'manga'} className={kind === 'manga' ? 'active' : ''} onClick={() => switchKind('manga')}>
+        📖 Manga
+      </button>
     </div>
   );
+  const kindInfo = KIND_INFO[kind];
 
   return (
     <div className="layout">
       <button className="list-switcher" onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen}>
         <span>
-          {kind === 'anime' ? '🎬' : '👤'} {selected ? selected.name : kind === 'anime' ? 'Anime lists' : 'Character lists'}
+          {kindInfo.icon} {selected ? selected.name : kindInfo.lists}
         </span>
         <span aria-hidden="true">{menuOpen ? '▲' : '▼'}</span>
       </button>
@@ -94,10 +105,8 @@ export default function ListsPage({ route }) {
           <ListView key={selected.id} listId={selected.id} onListsChanged={refreshLists} />
         ) : (
           <div className="empty-state">
-            <h2>No {kind === 'anime' ? 'anime' : 'character'} lists yet</h2>
-            <p className="muted">
-              Create one in the sidebar, e.g. {kind === 'anime' ? '“Best openings” or “Top 10 anime”' : '“Top 10 Villains”'}.
-            </p>
+            <h2>No {kindInfo.word} lists yet</h2>
+            <p className="muted">Create one in the sidebar, e.g. {kindInfo.example}.</p>
           </div>
         )}
       </main>

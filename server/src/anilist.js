@@ -35,25 +35,32 @@ const CHARACTER_QUERY = `
   }
 `;
 
+// Anime or manga search ($type: ANIME | MANGA).
 const ANIME_SEARCH_QUERY = `
-  query ($search: String) {
+  query ($search: String, $type: MediaType) {
     Page(perPage: 8) {
-      media(search: $search, type: ANIME, sort: [SEARCH_MATCH], isAdult: false) {
-        id title { romaji english } coverImage { large } format episodes seasonYear
+      media(search: $search, type: $type, sort: [SEARCH_MATCH], isAdult: false) {
+        id type title { romaji english } coverImage { large } format episodes chapters volumes seasonYear
+        startDate { year }
       }
     }
   }
 `;
 
+// Full details of an anime or manga (AniList ids are unique across both).
 const ANIME_QUERY = `
   query ($id: Int) {
-    Media(id: $id, type: ANIME) {
-      id idMal title { romaji english }
+    Media(id: $id) {
+      id idMal type title { romaji english }
       coverImage { extraLarge large color } bannerImage
-      episodes format season seasonYear status genres averageScore
+      episodes chapters volumes duration format season seasonYear startDate { year } status genres averageScore
       description(asHtml: false)
       studios(isMain: true) { nodes { name } }
+      staff(sort: [RELEVANCE], perPage: 2) { edges { role node { name { full } } } }
       trailer { id site }
+      relations {
+        edges { relationType node { id type format status title { romaji english } coverImage { large } startDate { year } } }
+      }
       characters(sort: [ROLE, FAVOURITES_DESC], perPage: 12) {
         edges { role node { id name { full } image { large } favourites } }
       }
@@ -61,11 +68,11 @@ const ANIME_QUERY = `
   }
 `;
 
-// All characters of an anime, most important first: main, then supporting,
-// then background; within each role by number of AniList favourites.
+// All characters of an anime or manga, most important first: main, then
+// supporting, then background; within each role by number of AniList favourites.
 const ANIME_CHARACTERS_QUERY = `
   query ($id: Int, $page: Int) {
-    Media(id: $id, type: ANIME) {
+    Media(id: $id) {
       characters(sort: [ROLE, FAVOURITES_DESC], page: $page, perPage: 25) {
         pageInfo { hasNextPage }
         edges { role node { id name { full } image { large } favourites } }
@@ -141,9 +148,16 @@ function cleanDescription(text) {
 function normalizeAnime(m) {
   const trailerId = m.trailer?.id ? String(m.trailer.id).trim() : null;
   const trailerOk = trailerId && ['youtube', 'dailymotion'].includes(m.trailer.site);
+  const isManga = m.type === 'MANGA';
+  // Manga have no studio; show the author(s) instead.
+  const authors = (m.staff?.edges ?? [])
+    .filter((e) => /story|art|original/i.test(e?.role ?? ''))
+    .map((e) => e.node?.name?.full)
+    .filter(Boolean);
   return {
     id: m.id,
     idMal: m.idMal ?? null,
+    type: m.type ?? 'ANIME',
     title: titleOf(m.title) || 'Unknown',
     titleRomaji: m.title?.romaji ?? null,
     cover: m.coverImage?.extraLarge || m.coverImage?.large || null,
@@ -151,15 +165,32 @@ function normalizeAnime(m) {
     banner: m.bannerImage ?? null,
     format: m.format ?? null,
     episodes: m.episodes ?? null,
+    chapters: m.chapters ?? null,
+    volumes: m.volumes ?? null,
+    duration: m.duration ?? null,
     season: m.season ?? null,
-    seasonYear: m.seasonYear ?? null,
+    seasonYear: m.seasonYear ?? m.startDate?.year ?? null,
     status: m.status ?? null,
     genres: m.genres ?? [],
     averageScore: m.averageScore ?? null,
-    studios: (m.studios?.nodes ?? []).map((s) => s.name).join(', ') || null,
+    studios: isManga
+      ? [...new Set(authors)].join(', ') || null
+      : (m.studios?.nodes ?? []).map((s) => s.name).join(', ') || null,
     description: cleanDescription(m.description),
     trailer: trailerOk ? { site: m.trailer.site, id: trailerId } : null,
     characters: normalizeCast(m.characters?.edges),
+    relations: (m.relations?.edges ?? [])
+      .filter((e) => e?.node && ['ANIME', 'MANGA'].includes(e.node.type))
+      .map((e) => ({
+        id: e.node.id,
+        type: e.node.type,
+        relationType: e.relationType,
+        format: e.node.format ?? null,
+        status: e.node.status ?? null,
+        title: titleOf(e.node.title) || 'Unknown',
+        cover: e.node.coverImage?.large ?? null,
+        year: e.node.startDate?.year ?? null,
+      })),
   };
 }
 
@@ -210,16 +241,19 @@ function searchCharacters(term) {
   });
 }
 
-function searchAnime(term) {
-  return cachedSearch('a', term, async () => {
-    const data = await gql(ANIME_SEARCH_QUERY, { search: term });
+function searchAnime(term, type = 'ANIME') {
+  return cachedSearch(type === 'MANGA' ? 'm' : 'a', term, async () => {
+    const data = await gql(ANIME_SEARCH_QUERY, { search: term, type });
     return (data?.Page?.media ?? []).filter(Boolean).map((m) => ({
       id: m.id,
+      type: m.type,
       title: titleOf(m.title) || 'Unknown',
       cover: m.coverImage?.large ?? null,
       format: m.format ?? null,
       episodes: m.episodes ?? null,
-      seasonYear: m.seasonYear ?? null,
+      chapters: m.chapters ?? null,
+      volumes: m.volumes ?? null,
+      seasonYear: m.seasonYear ?? m.startDate?.year ?? null,
     }));
   });
 }

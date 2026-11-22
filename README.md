@@ -83,7 +83,7 @@ package page on GitHub) and click **Up**.
 
 ## Anime, watchlists and feed
 
-The app has five tabs (a bottom bar on phones): **Lists · Discover · Watchlists · Feed · Compare**. Your profile (tap your photo at the top right) holds **My anime** and **Settings**.
+The app has five tabs (a bottom bar on phones): **Home · Lists · Discover · Watchlists · Us**. Your profile (tap your photo at the top right) holds **My anime · My manga · My type · Stats · Settings**.
 
 - **My anime** (in your profile): your catalogue. Search AniList, mark anime as *Watched*, *Watching* (with episode progress) or *Dropped*, rate them (0.5–5 stars) and write reviews (optionally marked as spoilers). Everyone can browse everyone's catalogue.
 - **Anime pages**: cover, banner, synopsis, trailer, everyone's ratings and reviews (with replies and ❤️ 😂 😮 reactions), the characters from your lists who appear in it, and its main characters with *+ List* buttons. After marking an anime as watched, it suggests ranking its characters.
@@ -109,6 +109,26 @@ Character entries added before this version are linked to their anime in the bac
 - **🏆 Tiers**: any ranking as an S/A/B/C/D tier list (top 10% / 30% / 60% / 85% / rest), with *Save as image*.
 - **Reactions & comments** (😂 😳 🔥 ❤️) on entries in shared lists and other people's lists.
 - **💘 My type** (Profile): per category, your ideal type from your own rankings (higher ranks count more): looks from Safebooru fan-art tags (hair, eyes, features, style), profile facts from AniList (age, height, star sign, blood type), taste (series, genres, voice actor, popularity), a face collage, a comparison with someone else's type, and *Find your next Daddy/Waifu…*: matching characters from anime you've watched. Traits are worked out slowly in the background and cached; looks are approximate.
+
+## Home, manga, stats and games
+
+- **🏠 Home**: episodes airing today/this week (anime you watch or have on a watchlist), *Continue* with +1 buttons and who's ahead, the latest feed items, your "to rank" trays, and **🎲 What should we watch tonight?**: pick how much time you have and a mood; it spins through your watchlists (preferring shows you're both watching) and lands on a pick with a plan, e.g. "Episodes 6–7 (~48 min)".
+- **📖 Manga**: *My manga* in your profile (Reading / Read / Dropped, chapter and volume progress, ratings, reviews), manga pages with their anime adaptations, 📖 Manga lists in the Lists tab, manga in watchlists ("Read it"), the feed, Compare and *Discover → For you*. The calendar flags anime adaptations of manga you've read.
+- **🎵 Openings & endings** on anime pages, from the free [AnimeThemes](https://animethemes.moe) database.
+- **📊 Stats** (profile): hours watched, chapters read, ratings, genres, studios, monthly activity, favourite characters, top rated. **🎁 Wrapped**: a slideshow for any year (slides can be saved as images); **Our Wrapped** (Us tab) for the two of you.
+- **🎮 Games** (Us tab): *Guess the opening*, *Who's this character?*, *Who ranked them higher?* and *Higher or lower*. A challenge has fixed questions that each of you plays on your own phone; points for right answers and speed; head-to-head score.
+
+## Install as app & outside access (Tailscale)
+
+Installing to the home screen and push notifications need HTTPS. [Tailscale](https://tailscale.com) (free for personal use) gives the NAS a private HTTPS address that works from anywhere, without opening ports on your router.
+
+1. Create a Tailscale account and install the Tailscale app on both phones (and log in). Invite your partner to your tailnet (*Users → Invite*) or share the machine with them later.
+2. In the Tailscale admin console → **DNS**: enable **MagicDNS** and **HTTPS Certificates**.
+3. **Settings → Keys → Generate auth key** and paste it into `TS_AUTHKEY` in [deploy/omv-compose.yml](deploy/omv-compose.yml). Also set the two `/srv/...` paths.
+4. In OMV, update the compose file with the new content and click **Up**. After a minute the NAS appears in Tailscale as `animelister`.
+5. On a phone with Tailscale on, open `https://animelister.<your-tailnet>.ts.net`, log in (once per address), then **Profile → Settings → App & notifications**: install the app and turn on notifications. On iPhone: Safari → Share → *Add to Home Screen*, then open the installed app to turn on notifications (iOS 16.4+).
+
+The plain `http://<NAS-IP>:3000` address keeps working at home, just without install/push.
 
 ## Accounts and sharing
 

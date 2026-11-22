@@ -4,6 +4,7 @@ import Modal from './Modal.jsx';
 
 // "Who watched it?" — all watchlist members are pre-selected.
 export default function WatchedDialog({ entry, people, me, onConfirm, onClose }) {
+  const manga = entry.anime?.type === "MANGA";
   const [selected, setSelected] = useState(() => new Set(people.map((p) => p.id)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -29,9 +30,9 @@ export default function WatchedDialog({ entry, people, me, onConfirm, onClose })
   };
 
   return (
-    <Modal title={`Watched ${entry.name}?`} onClose={onClose}>
+    <Modal title={`${manga ? "Read" : "Watched"} ${entry.name}?`} onClose={onClose}>
       <p className="muted small">
-        It will be added as <b>Watched</b> to the catalogue of everyone you select, and removed from this watchlist. Its
+        It will be added as <b>{manga ? "Read" : "Watched"}</b> to the catalogue of everyone you select, and removed from this watchlist. Its
         comments stay on the anime's page.
       </p>
       <div className="people-picks">
@@ -50,7 +51,7 @@ export default function WatchedDialog({ entry, people, me, onConfirm, onClose })
           Cancel
         </button>
         <button className="btn primary" disabled={!selected.size || busy} onClick={confirm}>
-          {busy ? 'Saving…' : '✓ Mark as watched'}
+          {busy ? "Saving…" : manga ? "✓ Mark as read" : "✓ Mark as watched"}
         </button>
       </div>
     </Modal>

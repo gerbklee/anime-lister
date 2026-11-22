@@ -3,6 +3,7 @@ import Avatar from '../components/Avatar.jsx';
 import AnimePage from './AnimePage.jsx';
 import SettingsPage from './SettingsPage.jsx';
 import TypePage from './TypePage.jsx';
+import StatsPage from './StatsPage.jsx';
 
 // Your profile: "My anime" (catalogue), "My type" and Settings.
 // Other people's profiles show their anime and type (read-only).
@@ -16,15 +17,19 @@ export default function ProfilePage({ route, onLogout }) {
   const base = isMe ? '#/profile' : `#/profile/u/${userId}`;
 
   const tabs = [
-    ['anime', base, `🎬 ${isMe ? 'My anime' : `${name}'s anime`}`],
-    ['type', `${base}/type`, `💘 ${isMe ? 'My type' : `${name}'s type`}`],
+    ['anime', base, `🎬 ${isMe ? 'My anime' : 'Anime'}`],
+    ['manga', `${base}/manga`, `📖 ${isMe ? 'My manga' : 'Manga'}`],
+    ['type', `${base}/type`, `💘 ${isMe ? 'My type' : 'Type'}`],
+    ['stats', `${base}/stats`, '📊 Stats'],
     ...(isMe ? [['settings', '#/profile/settings', '⚙️ Settings']] : []),
   ];
 
   let content;
   if (view === 'type') content = <TypePage key={userId} userId={userId} />;
   else if (view === 'settings') content = <SettingsPage onLogout={onLogout} />;
-  else content = <AnimePage key={userId} userId={userId} />;
+  else if (view === 'stats') content = <StatsPage key={userId} userId={userId} />;
+  else if (view === 'manga') content = <AnimePage key={`m${userId}`} userId={userId} type="MANGA" />;
+  else content = <AnimePage key={userId} userId={userId} type="ANIME" />;
 
   return (
     <section className="profile">
