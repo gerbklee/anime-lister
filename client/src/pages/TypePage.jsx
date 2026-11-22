@@ -8,6 +8,7 @@ import { ShipCover } from '../components/ShipBits.jsx';
 
 function shipperTitle(t) {
   if (t.status.crack >= 0.4) return '🤡 Chaos captain';
+  if (t.tropes?.[0]?.share >= 0.35) return `🏷️ ${t.tropes[0].name} enjoyer`;
   if (t.crossover >= 0.4) return '🌌 Crossover cartographer';
   if (t.rarepair >= 0.5) return '💎 Rarepair hunter';
   if (t.poly >= 0.4) return '🫶 The more the merrier';
@@ -56,6 +57,11 @@ function ShippingType({ userId, isMe, name }) {
         {t.ageGap != null && ` Average age gap: ${t.ageGap} years.`}
         {t.heightGap != null && ` Average height gap: ${t.heightGap} cm.`}
       </p>
+      {t.tropes?.length > 0 && (
+        <p className="small favourite-tropes">
+          Favourite tropes: <b>{t.tropes.map((x) => x.name).join(', ')}</b>
+        </p>
+      )}
       <div className="ship-bars">
         {bars.map(([label, v]) => (
           <div key={label} className="ship-bar-row">

@@ -10,6 +10,7 @@ import Reactions from '../components/Reactions.jsx';
 import Thread from '../components/Thread.jsx';
 import FanartBrowser from '../components/FanartBrowser.jsx';
 import { PopularityBadge, ShipCover, ShipOMeter, isWar } from '../components/ShipBits.jsx';
+import { AnthemCard, MomentsCard, TropeEditor, VoteHistory } from '../components/ShipExtras.jsx';
 
 const HC_EMOJIS = ['❤️', '😂', '😳', '🔥'];
 
@@ -99,6 +100,17 @@ export default function ShipPage({ id }) {
   const [hcText, setHcText] = useState('');
   const [busy, setBusy] = useState(false);
   const [threadCount, setThreadCount] = useState(null);
+
+  const [extra, setExtra] = useState(null);
+  const loadExtra = useCallback(() => {
+    api
+      .shipExtra(id)
+      .then(setExtra)
+      .catch(() => setExtra({ memberAnime: [], moments: [], history: [], anthem: null, ao3Url: null }));
+  }, [id]);
+  useEffect(() => {
+    loadExtra();
+  }, [loadExtra]);
 
   const load = useCallback(() => {
     api
@@ -228,6 +240,7 @@ export default function ShipPage({ id }) {
             </div>
             <PopularityBadge ship={ship} />
           </div>
+          <TropeEditor ship={ship} onChange={(tropes) => merge({ tropes })} />
 
           <h4>Your vote</h4>
           <ShipOMeter ship={ship} onChange={merge} />
@@ -265,6 +278,7 @@ export default function ShipPage({ id }) {
                     setEditingName(true);
                   },
                 },
+                extra?.ao3Url && { icon: '📚', label: 'Fanfics on AO3', href: extra.ao3Url, external: true },
                 canDelete && 'divider',
                 canDelete && { icon: '⚓', label: 'Sink ship (delete)', danger: true, onSelect: deleteShip },
               ]}
@@ -281,6 +295,7 @@ export default function ShipPage({ id }) {
 
       <div className="anime-columns">
         <div className="anime-col">
+          <MomentsCard ship={ship} extra={extra} onChanged={loadExtra} />
           <div className="card">
             <h3>💭 Headcanons</h3>
             <form className="headcanon-form" onSubmit={postHeadcanon}>
@@ -314,6 +329,8 @@ export default function ShipPage({ id }) {
 
         <div className="anime-col">
           <FanartGallery ship={ship} onCover={merge} />
+          <AnthemCard ship={ship} extra={extra} onChanged={loadExtra} />
+          <VoteHistory extra={extra} />
           {ship.lists.length > 0 && (
             <div className="card">
               <h3>In OTP lists</h3>

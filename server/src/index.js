@@ -18,6 +18,7 @@ const { statsRouter } = require('./stats');
 const { gamesRouter } = require('./games');
 const { shipsRouter } = require('./ships');
 const { fanartRouter } = require('./fanart');
+const { shipsExtraRouter } = require('./ships-extra');
 const { pushRouter } = require('./notify');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
@@ -58,6 +59,7 @@ app.get('/api/search', wrap(async (req, res) => {
 }));
 
 app.use('/api', listsRouter);
+app.use('/api', shipsExtraRouter); // before shipsRouter: /ships/swipe, /ships/map
 app.use('/api', shipsRouter);
 app.use('/api', fanartRouter);
 app.use('/api', compareRouter);

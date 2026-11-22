@@ -40,6 +40,9 @@ const q = {
   unvote: db.prepare('DELETE FROM ship_votes WHERE ship_id = ? AND user_id = ?'),
   headcanons: db.prepare('SELECT * FROM headcanons WHERE ship_id = ? ORDER BY created_at DESC'),
   headcanonCount: db.prepare('SELECT COUNT(*) AS n FROM headcanons WHERE ship_id = ?'),
+  tropes: db.prepare('SELECT trope FROM ship_tropes WHERE ship_id = ? ORDER BY created_at'),
+  lastHistory: db.prepare('SELECT vote FROM ship_vote_history WHERE ship_id = ? AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1'),
+  addHistory: db.prepare('INSERT INTO ship_vote_history (ship_id, user_id, vote, created_at) VALUES (?, ?, ?, ?)'),
   headcanon: db.prepare('SELECT * FROM headcanons WHERE id = ?'),
   insertHeadcanon: db.prepare('INSERT INTO headcanons (ship_id, user_id, body, created_at) VALUES (?, ?, ?, ?)'),
   deleteHeadcanon: db.prepare('DELETE FROM headcanons WHERE id = ?'),
@@ -86,6 +89,7 @@ function shipSummary(row, users, me) {
     myVote: votes.find((v) => v.user?.id === me)?.vote ?? null,
     createdBy: users.get(row.created_by) ?? null,
     headcanonCount: q.headcanonCount.get(row.id).n,
+    tropes: q.tropes.all(row.id).map((t) => t.trope),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -252,6 +256,11 @@ function shippingType(userId) {
     rarepair: share((s) => s.popularity === 'rarepair'),
     popular: share((s) => s.popularity === 'popular'),
     poly: share((s) => s.members.length > 2),
+    tropes: (() => {
+      const t = new Map();
+      for (const { ship, weight } of ships) for (const name of ship.tropes ?? []) t.set(name, (t.get(name) ?? 0) + weight);
+      return [...t.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, w]) => ({ name, share: Math.round((w / total) * 100) / 100 }));
+    })(),
     ageGap: ageN ? Math.round(ageGap / ageN) : null,
     heightGap: heightN ? Math.round(heightGap / heightN) : null,
     top: ships
@@ -383,6 +392,65 @@ router.get('/ships', (req, res) => {
   res.json({ ships, voteLabels: VOTE_LABELS });
 });
 
+// Remembers vote changes (for "mira went 🤷 → 💍").
+function recordVoteHistory(shipId, userId, vote) {
+  const last = q.lastHistory.get(shipId, userId);
+  if (last && last.vote === vote) return;
+  q.addHistory.run(shipId, userId, vote, Date.now());
+}
+
+// Creates a ship. `silent`: no feed item / notification (ship swipes).
+async function createShip({ characterIds, name, status = 'fanon', user, vote = 3, silent = false }) {
+  const me = user.id;
+  const ids = [...new Set(characterIds.map(Number))];
+  if (ids.length < 2 || ids.length > 4 || !ids.every((id) => Number.isInteger(id) && id > 0)) {
+    throw new HttpError(400, 'A ship needs 2 to 4 different characters.');
+  }
+  const signature = signatureOf(ids);
+  const existing = q.bySignature.get(signature);
+  if (existing) {
+    const err = new HttpError(409, 'This ship already exists.');
+    err.shipId = existing.id;
+    throw err;
+  }
+  const chars = [];
+  for (const id of ids) chars.push(await character(id));
+  const shipName = cleanName(name ?? blendNames(chars.map((c) => c.name)));
+  const now = Date.now();
+  const shipId = db.transaction(() => {
+    const sid = Number(q.insert.run(signature, shipName, STATUSES.includes(status) ? status : 'fanon', me, now, now).lastInsertRowid);
+    chars.forEach((c, i) => q.insertMember.run(sid, c.anilistId, c.name, c.image, c.media.find((m) => m.type === 'ANIME')?.title ?? c.media[0]?.title ?? null, i));
+    if (vote != null) {
+      q.vote.run(sid, me, vote, now);
+      q.addHistory.run(sid, me, vote, now);
+    }
+    if (!silent) activity.record({ userId: me, type: 'ship_create', itemId: sid, data: { name: shipName } });
+    return sid;
+  })();
+  enrichShip(shipId);
+  if (!silent) {
+    notify(
+      [...usersById().keys()],
+      'ships',
+      { title: `💕 ${user.username} shipped ${shipName}`, body: chars.map((c) => c.name).join(' × '), url: `#/ship/${shipId}`, tag: `ship-${shipId}` },
+      me,
+    );
+  }
+  return shipId;
+}
+
+// Fandom-style name: each first name up to its second vowel ("NaruSasu").
+function blendNames(names) {
+  const syllables = (n) => {
+    const vowels = [...n.matchAll(/[aeiouy]+/gi)];
+    const end = vowels.length >= 2 ? vowels[1].index + vowels[1][0].length : n.length;
+    const part = n.slice(0, Math.min(end, 5)).toLowerCase();
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  };
+  const first = names.map((n) => String(n).trim().split(/[\s,]+/)[0]).filter(Boolean);
+  return first.length < 2 ? first[0] ?? 'Ship' : first.map(syllables).join('');
+}
+
 router.post('/ships', wrap(async (req, res) => {
   const me = req.user.id;
   const ids = Array.isArray(req.body?.characterIds) ? [...new Set(req.body.characterIds.map(Number))] : [];
@@ -398,25 +466,8 @@ router.post('/ships', wrap(async (req, res) => {
   }
   const status = STATUSES.includes(req.body?.status) ? req.body.status : 'fanon';
   const name = cleanName(req.body?.name);
-  const chars = [];
-  for (const id of ids) chars.push(await character(id));
-
-  const now = Date.now();
-  const shipId = db.transaction(() => {
-    const sid = Number(q.insert.run(signature, name, status, me, now, now).lastInsertRowid);
-    chars.forEach((c, i) => q.insertMember.run(sid, c.anilistId, c.name, c.image, c.media.find((m) => m.type === 'ANIME')?.title ?? c.media[0]?.title ?? null, i));
-    // Creating a ship counts as shipping it.
-    q.vote.run(sid, me, 3, now);
-    activity.record({ userId: me, type: 'ship_create', itemId: sid, data: { name } });
-    return sid;
-  })();
-  enrichShip(shipId);
-  notify(
-    [...usersById().keys()],
-    'ships',
-    { title: `💕 ${req.user.username} shipped ${name}`, body: chars.map((c) => c.name).join(' × '), url: `#/ship/${shipId}`, tag: `ship-${shipId}` },
-    me,
-  );
+  // Creating a ship counts as shipping it.
+  const shipId = await createShip({ characterIds: ids, name, status, user: req.user, vote: 3 });
   res.status(201).json(shipSummary(q.ship.get(shipId), usersById(), me));
 }));
 
@@ -483,9 +534,11 @@ router.put('/ships/:id/vote', (req, res) => {
   const vote = req.body?.vote;
   if (vote === null) {
     q.unvote.run(row.id, me);
+    recordVoteHistory(row.id, me, null);
   } else {
     if (!Number.isInteger(vote) || vote < 0 || vote > 4) throw new HttpError(400, 'Vote from 0 (No way) to 4 (OTP).');
     q.vote.run(row.id, me, vote, Date.now());
+    recordVoteHistory(row.id, me, vote);
     q.touch.run(Date.now(), row.id);
     activity.record({ userId: me, type: 'ship_vote', itemId: row.id, data: { vote, name: row.name } });
     if (row.created_by && row.created_by !== me) {
@@ -560,4 +613,16 @@ router.use((err, req, res, next) => {
   next(err);
 });
 
-module.exports = { shipsRouter: router, shipSummary, VOTE_LABELS, otpOfYear, shipFight, guessShipQuestions, shipHarderQuestions };
+module.exports = {
+  shipsRouter: router,
+  shipSummary,
+  VOTE_LABELS,
+  otpOfYear,
+  shipFight,
+  guessShipQuestions,
+  shipHarderQuestions,
+  createShip,
+  recordVoteHistory,
+  popularPairings,
+  signatureOf,
+};

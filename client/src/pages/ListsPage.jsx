@@ -4,6 +4,8 @@ import { useApp } from '../AppContext.jsx';
 import ListSidebar from '../components/ListSidebar.jsx';
 import ListView from '../components/ListView.jsx';
 import ShipBoard from './ShipBoard.jsx';
+import ShipSwipe from './ShipSwipe.jsx';
+import ShipMap from './ShipMap.jsx';
 
 const KIND_KEY = 'lists-kind';
 
@@ -130,7 +132,13 @@ export default function ListsPage({ route }) {
         ) : selected ? (
           <ListView key={selected.id} listId={selected.id} onListsChanged={refreshLists} />
         ) : kind === 'ship' ? (
-          <ShipBoard key={route.newWith ?? 'board'} newWith={route.newWith} />
+          route.shipView === 'swipe' ? (
+            <ShipSwipe />
+          ) : route.shipView === 'map' ? (
+            <ShipMap />
+          ) : (
+            <ShipBoard key={route.newWith ?? 'board'} newWith={route.newWith} />
+          )
         ) : (
           <div className="empty-state">
             <h2>No {kindInfo.word} lists yet</h2>

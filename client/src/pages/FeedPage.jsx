@@ -32,6 +32,10 @@ function Sentence({ item, me }) {
       return <>shipped <ShipLink ship={item.ship} /> 💕 ({item.ship?.members.map((m) => m.name).join(' × ')})</>;
     case 'ship_vote':
       return <>voted {voteText(data.vote)} on <ShipLink ship={item.ship} /></>;
+    case 'ship_match':
+      return <>💞 matched on <ShipLink ship={item.ship} />: you both ship it!</>;
+    case 'ship_moment':
+      return <>added a moment to <ShipLink ship={item.ship} /></>;
     case 'headcanon':
       return <>shared a headcanon about <ShipLink ship={item.ship} /></>;
     case 'fanart_save':

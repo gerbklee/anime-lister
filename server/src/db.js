@@ -386,6 +386,42 @@ const MIGRATIONS = {
   9: `
     ALTER TABLE entries ADD COLUMN image_crop TEXT;
   `,
+  // v10: ship tropes, moments, vote history, anthem.
+  10: `
+    CREATE TABLE ship_tropes (
+      ship_id     INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      trope       TEXT    NOT NULL,
+      added_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  INTEGER NOT NULL,
+      PRIMARY KEY (ship_id, trope)
+    );
+    CREATE INDEX idx_ship_tropes_trope ON ship_tropes (trope);
+
+    CREATE TABLE ship_moments (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ship_id     INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      anime_id    INTEGER,
+      anime_title TEXT,
+      episode     INTEGER,
+      body        TEXT    NOT NULL,
+      spoiler     INTEGER NOT NULL DEFAULT 0,
+      user_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_ship_moments_ship ON ship_moments (ship_id);
+
+    CREATE TABLE ship_vote_history (
+      ship_id     INTEGER NOT NULL REFERENCES ships(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      vote        INTEGER,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_ship_vote_history ON ship_vote_history (ship_id, user_id, created_at);
+    -- Start the history with the current votes.
+    INSERT INTO ship_vote_history (ship_id, user_id, vote, created_at) SELECT ship_id, user_id, vote, updated_at FROM ship_votes;
+
+    ALTER TABLE ships ADD COLUMN anthem TEXT;
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

@@ -41,6 +41,8 @@ function readRoute() {
   if (h === '/us' || h === '/compare') return { tab: 'us', view: 'compare' };
   if (h === '/lists') return { tab: 'lists' };
   if (h === '/ships') return { tab: 'lists', ships: true };
+  if (h === '/ships/swipe') return { tab: 'lists', ships: true, shipView: 'swipe' };
+  if (h === '/ships/map') return { tab: 'lists', ships: true, shipView: 'map' };
   if ((m = h.match(/^\/ships\/new\/(\d+)$/))) return { tab: 'lists', ships: true, newWith: Number(m[1]) };
   if ((m = h.match(/^\/ship\/(\d+)$/))) return { tab: 'ship', id: Number(m[1]) };
   return { tab: 'home' };

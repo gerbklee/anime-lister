@@ -126,6 +126,11 @@ Character entries added before this version are linked to their anime in the bac
 - **OTP lists**: 💕 Ships lists work like other lists (personal rankings in shared lists, battles, tiers).
 - **Creating ships**: *+ New ship*, *💕 Ship with…* on character pages and the 💕 next to characters in lists. Character pages also show **who fans ship them with** (most fan art together, e.g. "Levi × Erwin: 208 pictures").
 - Also in: **My type** (your shipping type: canon vs crack, crossovers, rarepairs, age and height gaps), **Compare → 💕 Ships** (shipping match, ship wars), **Wrapped** (OTP of the year; Our Wrapped: the ship you fought about), **Games** (*Guess the ship* from blurred fan art, *Who ships it harder?*), the feed and push notifications (new *Ships* type in Settings).
+- **💘 Ship swipe** (Ship board → Swipe): a card deck of ships you haven't voted on, what fans ship characters from your lists with, and a few random crack pairs. Swipe right 💕, left 🚫, up 💍 (or use the buttons, incl. 🤷/🙂), with undo. New pairings become ships quietly; a left swipe stores 🚫 so it never comes back. When you both ship it: **💞 It's a match** (feed + notification).
+- **🏷️ Tropes**: 27 common ones (enemies to lovers, slow burn, grumpy × sunshine…) plus your own; filter the board by trope; *My type* shows your favourite tropes.
+- **📍 Moments**: the scenes that made you ship it (anime, episode, text), with reactions and replies. Moments with an episode stay hidden until you've watched that far.
+- **🕸️ Ship map**: characters as nodes, ships as lines (colour = canon/fanon/crack, thickness = how hard you ship it, red dashes = ship wars); pinch/drag, tap a character or a line.
+- Also: **🎵 ship anthem** (an opening/ending as theme song), **📈 vote history** ("🤷 → 💍"; Wrapped: *the ship that won you over*), **📚 fanfics on AO3** link.
 
 ## 🎨 Fan art & gallery
 

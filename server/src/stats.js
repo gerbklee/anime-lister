@@ -184,6 +184,7 @@ function wrapped(userId, year) {
     listsCreated: acts.filter((a) => a.type === 'list_create').length,
     shipsCreated: acts.filter((a) => a.type === 'ship_create').length,
     otp: otpOfYear(userId, year),
+    wonOver: require('./ships-extra').wonOver(userId, year),
     favourites: categories,
   };
 }

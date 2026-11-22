@@ -114,6 +114,9 @@ export function ShipCard({ ship, onChange }) {
             <StatusBadge status={ship.status} />
             <PopularityBadge ship={ship} />
           </span>
+          {ship.tropes?.length > 0 && (
+            <span className="trope-line muted tiny">{ship.tropes.slice(0, 3).join(' · ')}</span>
+          )}
         </div>
       </a>
       <div className="ship-card-foot">

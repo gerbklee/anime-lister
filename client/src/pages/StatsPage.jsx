@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { CATEGORIES, formatMinutes, mediaHref, plural } from '../util.js';
+import { CATEGORIES, VOTES, formatMinutes, mediaHref, plural } from '../util.js';
 import Stars from '../components/Stars.jsx';
 import Wrapped from '../components/Wrapped.jsx';
 
@@ -57,6 +57,15 @@ export function personalSlides(w, name) {
       kicker: 'You also',
       big: `${plural(w.reviews, 'review')} written`,
       sub: `${plural(w.charactersAdded, 'character')} added to lists · ${plural(w.listsCreated, 'new list')}`,
+    });
+  }
+  if (w.wonOver) {
+    slides.push({
+      emoji: '💘',
+      kicker: 'The ship that won you over',
+      big: w.wonOver.ship.name,
+      sub: `from ${VOTES[w.wonOver.from].emoji} ${VOTES[w.wonOver.from].label} to ${VOTES[w.wonOver.to].emoji} ${VOTES[w.wonOver.to].label}`,
+      image: w.wonOver.ship.cover ?? w.wonOver.ship.members[0]?.image,
     });
   }
   if (w.otp) {

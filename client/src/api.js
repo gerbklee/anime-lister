@@ -144,6 +144,19 @@ export const api = {
   unhideFanart: (source, id) => request('DELETE', `/api/fanart/hidden/${source}/${id}`),
   hiddenFanart: () => request('GET', '/api/fanart/hidden'),
   gallery: (params = {}) => request('GET', `/api/gallery?${new URLSearchParams(params)}`),
+
+  // Ships: swipe, tropes, moments, anthem, map
+  swipeDeck: () => request('GET', '/api/ships/swipe'),
+  swipe: (card, vote) =>
+    request('POST', '/api/ships/swipe', card.kind === 'ship' ? { shipId: card.ship.id, vote } : { characterIds: card.members.map((m) => m.id), status: card.status, vote }),
+  undoSwipe: (shipId, created, previousVote) => request('POST', '/api/ships/swipe/undo', { shipId, created, previousVote }),
+  shipTropes: () => request('GET', '/api/ship-tropes'),
+  setShipTropes: (id, tropes) => request('PUT', `/api/ships/${id}/tropes`, { tropes }),
+  shipExtra: (id) => request('GET', `/api/ships/${id}/extra`),
+  addMoment: (id, moment) => request('POST', `/api/ships/${id}/moments`, moment),
+  deleteMoment: (id) => request('DELETE', `/api/moments/${id}`),
+  setAnthem: (id, anthem) => request('PUT', `/api/ships/${id}/anthem`, { anthem }),
+  shipMap: () => request('GET', '/api/ships/map'),
 };
 
 // Link to the page of a fan art subject ('character:1' / 'ship:2').

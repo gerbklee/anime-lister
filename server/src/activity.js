@@ -30,6 +30,7 @@ const q = {
   ship: db.prepare('SELECT * FROM ships WHERE id = ?'),
   headcanon: db.prepare('SELECT * FROM headcanons WHERE id = ?'),
   fanart: db.prepare('SELECT id FROM fanart_saved WHERE id = ?'),
+  moment: db.prepare('SELECT * FROM ship_moments WHERE id = ?'),
   get: db.prepare('SELECT * FROM activities WHERE id = ?'),
   canSeeList: db.prepare(`
     SELECT 1 FROM lists l WHERE l.id = @list AND (
@@ -121,6 +122,7 @@ function canUseThread(key, me) {
   if (k.kind === 'headcanon' && k.nums.length === 1) return !!q.headcanon.get(k.nums[0]);
   // Saved fan art is shared by everyone.
   if (k.kind === 'fanart' && k.nums.length === 1) return !!q.fanart.get(k.nums[0]);
+  if (k.kind === 'moment' && k.nums.length === 1) return !!q.moment.get(k.nums[0]);
   // Comments/reactions on a list entry: anyone who can see the list.
   if (k.kind === 'entry' && k.nums.length === 1) {
     const listId = q.entryList.get(k.nums[0])?.list_id;
@@ -193,6 +195,10 @@ function threadAudience(key) {
   }
   if (k.kind === 'activity') return { userIds: [q.get.get(k.nums[0])?.user_id, ...commenters], url: '#/feed' };
   if (k.kind === 'ship') return { userIds: commenters, url: `#/ship/${k.nums[0]}` };
+  if (k.kind === 'moment') {
+    const m = q.moment.get(k.nums[0]);
+    return { userIds: [m?.user_id, ...commenters], url: m ? `#/ship/${m.ship_id}` : '#/' };
+  }
   if (k.kind === 'headcanon') {
     const h = q.headcanon.get(k.nums[0]);
     return { userIds: [h?.user_id, ...commenters], url: h ? `#/ship/${h.ship_id}` : '#/' };

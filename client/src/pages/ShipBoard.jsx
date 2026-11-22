@@ -41,6 +41,7 @@ export default function ShipBoard({ newWith }) {
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const [trope, setTrope] = useState('');
   const [builder, setBuilder] = useState(null); // null = closed, else initial members
 
   const load = useCallback(() => {
@@ -66,7 +67,9 @@ export default function ShipBoard({ newWith }) {
   const term = query.trim().toLowerCase();
   const shown = (ships ?? [])
     .filter((s) => matches(s, filter, me.id))
-    .filter((s) => !term || s.name.toLowerCase().includes(term) || s.members.some((m) => m.name.toLowerCase().includes(term)));
+    .filter((s) => !term || s.name.toLowerCase().includes(term) || s.members.some((m) => m.name.toLowerCase().includes(term)))
+    .filter((s) => !trope || s.tropes?.includes(trope));
+  const usedTropes = [...new Set((ships ?? []).flatMap((s) => s.tropes ?? []))].sort();
 
   return (
     <section className="ship-board">
@@ -78,12 +81,32 @@ export default function ShipBoard({ newWith }) {
           + New ship
         </button>
       </div>
+      <div className="board-actions">
+        <a className="btn ghost board-action" href="#/ships/swipe">
+          💘 Swipe
+        </a>
+        <a className="btn ghost board-action" href="#/ships/map">
+          🕸️ Map
+        </a>
+      </div>
       <p className="muted small">
         Every ship you both made, with your votes. Rank your favourites in an OTP list (sidebar), or open a ship for fan art and headcanons.
       </p>
 
       <div className="ship-filters">
-        <input type="search" placeholder="Filter by name or character…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter ships" />
+        <div className="board-search">
+          <input type="search" placeholder="Filter by name or character…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Filter ships" />
+          {usedTropes.length > 0 && (
+            <select value={trope} onChange={(e) => setTrope(e.target.value)} aria-label="Trope">
+              <option value="">All tropes</option>
+              {usedTropes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
         <div className="chip-row" role="tablist" aria-label="Filter">
           {FILTERS.map(([key, label]) => (
             <button key={key} type="button" role="tab" aria-selected={filter === key} className={`chip ${filter === key ? 'active' : ''}`} onClick={() => setFilter(key)}>
