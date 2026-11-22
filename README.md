@@ -135,7 +135,8 @@ Character entries added before this version are linked to their anime in the bac
 - Danbooru's image server refuses browsers, so its pictures are loaded through the NAS (`/api/fanart/img`).
 - **💖 Our picks**: save pictures (♡ Save, or double-tap in the viewer). They are shared, stored on the NAS and shown first on character and ship pages and in the picture pickers.
 - **🙈 Hide** a picture for both of you, everywhere (undo via the 🙈 counter).
-- **Viewer**: swipe between pictures, credits, reactions on saved pictures, use as profile photo or ship cover.
+- **Viewer**: swipe between pictures, credits, reactions on saved pictures, use as profile photo, ship cover or **in your lists** (pick which lists).
+- **List portraits from any picture, with cropping**: row ⋯ → *Change picture* (fan art, saved picks or official) → *choose the area* (drag, pinch or slider, in the portrait shape), or row ⋯ → *Adjust picture area* to re-crop. The NAS cuts the area out (sharp) and keeps the original, so it can be re-cropped or reset (*Use original*).
 - **Us → 🖼️ Gallery**: everything you both saved, by person and character/ship. Saving shows up in the feed; Our Wrapped has a "Picture of the year". Games prefer your saved pictures.
 
 ## Install as app & outside access (Tailscale)

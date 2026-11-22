@@ -8,6 +8,48 @@ import Avatar from '../components/Avatar.jsx';
 import Modal from '../components/Modal.jsx';
 import { CatalogueBadge } from '../components/EntryRow.jsx';
 import FanartBrowser from '../components/FanartBrowser.jsx';
+import CropDialog from '../components/CropDialog.jsx';
+
+// Use a picture as this character's portrait in one or more of your lists.
+function UseInListsDialog({ url, lists, onClose, onDone }) {
+  const [chosen, setChosen] = useState(() => new Set(lists.map((l) => l.entryId)));
+  const toggle = (id) =>
+    setChosen((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  return (
+    <CropDialog
+      title="Use in my lists"
+      src={url}
+      saveLabel={`Use in ${chosen.size} ${chosen.size === 1 ? 'list' : 'lists'}`}
+      canSave={chosen.size > 0}
+      onClose={onClose}
+      onSave={async (crop) => {
+        for (const id of chosen) await api.updateEntry(id, { imageUrl: url, crop });
+        onDone();
+      }}
+    >
+      <div className="use-in-lists">
+        {lists.map((l) => (
+          <label key={l.entryId} className="check">
+            <input type="checkbox" checked={chosen.has(l.entryId)} onChange={() => toggle(l.entryId)} />
+            <span>
+              {l.list.name}
+              <span className="muted tiny">
+                {' '}
+                #{l.rank}
+                {l.list.isShared ? ' · 👥' : ''}
+              </span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </CropDialog>
+  );
+}
 import { formatPopularity } from '../components/AnimeTile.jsx';
 import { RichText, splitFacts } from '../components/RichText.jsx';
 import { ShipCover, StatusBadge, VoteChips } from '../components/ShipBits.jsx';
@@ -117,9 +159,11 @@ function SpoilerChip({ text }) {
 }
 
 // Pictures: our saved picks, fan art sorted by fan score, official pictures.
-function Gallery({ characterId, name }) {
-  const { setMe, refreshLists } = useApp();
+function Gallery({ characterId, name, lists, onListsChanged }) {
+  const { me, setMe, refreshLists } = useApp();
   const [status, setStatus] = useState(null);
+  const [useIn, setUseIn] = useState(null); // picture URL being used in lists
+  const editable = lists.filter((l) => l.owner?.id === me.id || l.list.isShared);
   const official = useMemo(
     () => ({
       load: async () => {
@@ -131,6 +175,11 @@ function Gallery({ characterId, name }) {
     [characterId],
   );
   const actions = [
+    {
+      icon: '📋',
+      label: editable.length ? 'Use in my lists…' : 'Use in my lists (add to a list first)',
+      onSelect: (item, url) => (editable.length ? setUseIn(url) : setStatus(`Add ${name} to a list first (+ Add to list at the top).`)),
+    },
     {
       icon: "👤",
       label: "Use as profile photo",
@@ -150,6 +199,18 @@ function Gallery({ characterId, name }) {
     <div className="card">
       <FanartBrowser title="🖼️ Pictures" subject={`character:${characterId}`} subjectName={name} official={official} actions={actions} allowSolo />
       {status && <p className="muted small">{status}</p>}
+      {useIn && (
+        <UseInListsDialog
+          url={useIn}
+          lists={editable}
+          onClose={() => setUseIn(null)}
+          onDone={() => {
+            setStatus('✓ Portrait updated');
+            refreshLists();
+            onListsChanged();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -283,7 +344,7 @@ export default function CharacterPage({ id }) {
             </div>
           )}
 
-          <Gallery characterId={c.id} name={c.name} />
+          <Gallery characterId={c.id} name={c.name} lists={c.lists} onListsChanged={() => api.character(id).then(setC).catch(() => {})} />
         </div>
 
         <div className="anime-col">

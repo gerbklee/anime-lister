@@ -90,4 +90,41 @@ async function retryMissingImages() {
   }
 }
 
-module.exports = { cacheImage, isAllowedImageUrl, removeImageIfUnused, retryMissingImages };
+// Cuts the area `crop` ({x, y, w, h} as fractions of the picture) out of a
+// cached image and stores it as a new portrait file. Returns the file name.
+function cleanCrop(crop) {
+  if (!crop || typeof crop !== 'object') return null;
+  const n = (v) => (Number.isFinite(Number(v)) ? Math.min(1, Math.max(0, Number(v))) : NaN);
+  const c = { x: n(crop.x), y: n(crop.y), w: n(crop.w), h: n(crop.h) };
+  if (Object.values(c).some(Number.isNaN) || c.w < 0.02 || c.h < 0.02) return null;
+  c.w = Math.min(c.w, 1 - c.x);
+  c.h = Math.min(c.h, 1 - c.y);
+  return Object.fromEntries(Object.entries(c).map(([k, v]) => [k, Math.round(v * 10000) / 10000]));
+}
+
+async function cropImage(file, crop) {
+  const sharp = require('sharp');
+  const src = path.join(IMAGE_DIR, file);
+  const name = `crop-${crypto.createHash('sha1').update(`${file}|${JSON.stringify(crop)}`).digest('hex').slice(0, 16)}.jpg`;
+  const dest = path.join(IMAGE_DIR, name);
+  if (fs.existsSync(dest)) return name;
+  const img = sharp(src, { failOn: 'none' }).rotate();
+  const meta = await img.metadata();
+  const W = meta.width;
+  const H = meta.height;
+  const left = Math.max(0, Math.min(W - 1, Math.round(crop.x * W)));
+  const top = Math.max(0, Math.min(H - 1, Math.round(crop.y * H)));
+  const width = Math.max(1, Math.min(W - left, Math.round(crop.w * W)));
+  const height = Math.max(1, Math.min(H - top, Math.round(crop.h * H)));
+  const tmp = `${dest}.${process.pid}.tmp`;
+  await img
+    .extract({ left, top, width, height })
+    .resize({ width: 500, height: 700, fit: 'cover', withoutEnlargement: true })
+    .flatten({ background: '#ffffff' })
+    .jpeg({ quality: 86, mozjpeg: true })
+    .toFile(tmp);
+  await fs.promises.rename(tmp, dest);
+  return name;
+}
+
+module.exports = { cacheImage, isAllowedImageUrl, removeImageIfUnused, retryMissingImages, cropImage, cleanCrop };

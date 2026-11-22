@@ -6289,3 +6289,82 @@ h3 {
   font-weight: 600;
   color: #ffd27a;
 }
+
+/* v9: portrait cropper */
+.cropper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.cropper-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--surface-2);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 0 0 1px var(--border), var(--shadow);
+}
+.cropper-frame:active {
+  cursor: grabbing;
+}
+.cropper-frame img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+/* Rule-of-thirds guides */
+.cropper-guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.35) 33.33%, transparent calc(33.33% + 0.5px)),
+    linear-gradient(to right, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.35) 66.66%, transparent calc(66.66% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255, 255, 255, 0.35) 33.33%, transparent calc(33.33% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(66.66% - 0.5px), rgba(255, 255, 255, 0.35) 66.66%, transparent calc(66.66% + 0.5px));
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+.cropper-error {
+  padding: 20px;
+  text-align: center;
+}
+.cropper-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(280px, 100%);
+  color: var(--muted);
+  font-weight: 700;
+}
+.cropper-zoom input {
+  flex: 1;
+  padding: 0;
+  border: none;
+  background: none;
+  accent-color: var(--accent);
+}
+.cropper-hint {
+  margin: 0;
+}
+.use-in-lists {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+/* Layers: page < tab bar (50) < dialogs (190) above the picture viewer (180)
+   < action sheets (200). Dialogs opened from the viewer must be on top. */
+.modal-backdrop {
+  z-index: 190;
+}

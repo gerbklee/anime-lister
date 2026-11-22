@@ -10,6 +10,7 @@ import EntryRow from './EntryRow.jsx';
 import WatchRow from './WatchRow.jsx';
 import MembersPanel from './MembersPanel.jsx';
 import ImagePicker from './ImagePicker.jsx';
+import CropDialog, { PORTRAIT_ASPECT } from './CropDialog.jsx';
 import TrailerModal from './TrailerModal.jsx';
 import WatchedDialog from './WatchedDialog.jsx';
 import Avatar from './Avatar.jsx';
@@ -125,6 +126,7 @@ export default function ListView({ listId, onListsChanged }) {
   const [view, setView] = useState('mine'); // 'mine' | userId | 'combined'
   const [display, setDisplay] = useState('list'); // 'list' | 'tiers'
   const [picking, setPicking] = useState(null); // entry whose picture is being changed
+  const [cropping, setCropping] = useState(null); // entry whose picture area is being adjusted
   const [trailer, setTrailer] = useState(null); // entry whose trailer is playing
   const [watching, setWatching] = useState(null); // entry being marked as watched
   const [battle, setBattle] = useState(null); // { mode, only? }
@@ -657,6 +659,7 @@ export default function ListView({ listId, onListsChanged }) {
                     onUpdate={updateEntry}
                     onDelete={deleteEntry}
                     onChangeImage={() => setPicking(entry)}
+                    onAdjustImage={() => setCropping(entry)}
                   />
                 ),
               )}
@@ -670,12 +673,22 @@ export default function ListView({ listId, onListsChanged }) {
           characterId={picking.anilistId}
           title={`Picture for ${picking.name}`}
           onClose={() => setPicking(null)}
-          onPick={async (url) => replaceEntry(await track(api.updateEntry(picking.id, { imageUrl: url })))}
+          cropAspect={PORTRAIT_ASPECT}
+          onPick={async (url, crop) => replaceEntry(await track(api.updateEntry(picking.id, { imageUrl: url, crop })))}
           onReset={
             picking.customImage
               ? async () => replaceEntry(await track(api.updateEntry(picking.id, { resetImage: true })))
               : undefined
           }
+        />
+      )}
+      {cropping && (
+        <CropDialog
+          title={`Picture area · ${cropping.name}`}
+          src={cropping.imageSource ?? cropping.image}
+          initialCrop={cropping.imageCrop}
+          onClose={() => setCropping(null)}
+          onSave={async (crop) => replaceEntry(await track(api.updateEntry(cropping.id, { crop })))}
         />
       )}
       {trailer && <TrailerModal trailer={trailer.anime.trailer} title={trailer.name} onClose={() => setTrailer(null)} />}

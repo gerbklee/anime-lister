@@ -18,7 +18,7 @@ const express = require('express');
 const { db } = require('./db');
 const { HttpError, wrap, parseId } = require('./http');
 const { getCharacter } = require('./anilist');
-const { cacheImage, isAllowedImageUrl, removeImageIfUnused } = require('./images');
+const { cacheImage, isAllowedImageUrl, removeImageIfUnused, cropImage, cleanCrop } = require('./images');
 const { ensureAnime, saveCharacterLinks, toAnimeSummary } = require('./anime');
 const { usersById } = require('./users');
 const activity = require("./activity");
@@ -63,7 +63,7 @@ const q = {
     VALUES (@listId, @position, @anilistId, @name, @imageFile, @imageUrl, @imageUrl,
             @seriesTitle, @seriesOptions, @addedBy)`),
   updateEntry: db.prepare('UPDATE entries SET note = @note, note_by = @noteBy, series_title = @seriesTitle WHERE id = @id'),
-  setEntryImage: db.prepare('UPDATE entries SET image_file = ?, image_url = ? WHERE id = ?'),
+  setEntryImage: db.prepare('UPDATE entries SET image_file = ?, image_url = ?, image_crop = ? WHERE id = ?'),
   deleteEntry: db.prepare('DELETE FROM entries WHERE id = ?'),
   closeGap: db.prepare('UPDATE entries SET position = position - 1 WHERE list_id = ? AND position > ?'),
   setPosition: db.prepare('UPDATE entries SET position = ? WHERE id = ? AND list_id = ?'),
@@ -145,7 +145,10 @@ function toEntry(row, list, users, me, ranks) {
     const options = parseSeries(row.series_options);
     entry.seriesOptions = options.map((o) => o.title);
     entry.seriesAnimeId = options.find((o) => o.title === row.series_title && o.type === 'ANIME')?.id ?? null;
-    entry.customImage = !!row.original_image_url && row.image_url !== row.original_image_url;
+    entry.customImage = (!!row.original_image_url && row.image_url !== row.original_image_url) || !!row.image_crop;
+    // The full picture behind the portrait, and which part of it is used.
+    entry.imageSource = row.image_url;
+    entry.imageCrop = row.image_crop ? JSON.parse(row.image_crop) : null;
   } else if (kind === 'ship') {
     const { shipSummary } = require('./ships');
     entry.ship = shipSummary(q.shipRow.get(row.anilist_id), users, me);
@@ -495,18 +498,22 @@ router.patch('/entries/:id', wrap(async (req, res) => {
   const { entry, a } = entryWithAccess(req);
   const body = req.body ?? {};
 
-  // Change or reset the picture (character lists only).
-  if (body.imageUrl !== undefined || body.resetImage) {
+  // Change or reset the picture (character lists only), optionally using only
+  // part of it (`crop`). A crop without imageUrl re-crops the current picture.
+  if (body.imageUrl !== undefined || body.resetImage || body.crop !== undefined) {
     if (a.list.kind !== 'character') throw new HttpError(400, 'Only character pictures can be changed.');
-    const url = body.resetImage ? entry.original_image_url : body.imageUrl;
+    const url = body.resetImage ? entry.original_image_url : body.imageUrl ?? entry.image_url;
     if (!url || !isAllowedImageUrl(url)) throw new HttpError(400, 'Please pick one of the suggested images.');
+    const crop = body.resetImage ? null : cleanCrop(body.crop);
+    if (body.crop && !crop) throw new HttpError(400, 'Invalid picture area.');
     let file;
     try {
       file = await cacheImage(url, url === entry.original_image_url ? String(entry.anilist_id) : undefined);
+      if (crop) file = await cropImage(file, crop);
     } catch (err) {
-      throw new HttpError(502, `Could not download that image: ${err.message}`);
+      throw new HttpError(502, `Could not prepare that picture: ${err.message}`);
     }
-    q.setEntryImage.run(file, url, entry.id);
+    q.setEntryImage.run(file, url, crop ? JSON.stringify(crop) : null, entry.id);
     q.bump.run(entry.list_id);
     if (entry.image_file && entry.image_file !== file) removeImageIfUnused(entry.image_file);
   }

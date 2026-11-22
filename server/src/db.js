@@ -382,6 +382,10 @@ const MIGRATIONS = {
       PRIMARY KEY (character_id, source)
     );
   `,
+  // v9: the part of a list picture used as the portrait ({x, y, w, h}, 0–1).
+  9: `
+    ALTER TABLE entries ADD COLUMN image_crop TEXT;
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

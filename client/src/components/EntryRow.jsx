@@ -149,6 +149,7 @@ export default function EntryRow({
   onUpdate,
   onDelete,
   onChangeImage,
+  onAdjustImage,
   social = false,
   extra = null,
 }) {
@@ -175,6 +176,7 @@ export default function EntryRow({
     social && entry.thread && { icon: '💬', label: showThread ? 'Hide comments' : 'Comment', right: commentCount || null, onSelect: () => setShowThread((s) => !s) },
     canSwitchSeries && { icon: '🎬', label: 'Change series shown', onSelect: () => setPickingSeries(true) },
     isCharacter && !readOnly && { icon: '🖼️', label: 'Change picture', onSelect: onChangeImage },
+    isCharacter && !readOnly && entry.imageSource && { icon: '✂️', label: 'Adjust picture area', onSelect: onAdjustImage },
     isCharacter && { icon: '💕', label: `Ship ${entry.name.split(' ')[0]} with…`, href: `#/ships/new/${entry.anilistId}` },
     isCharacter && animeId && { icon: '📺', label: 'Open anime', href: `#/anime/${animeId}` },
     !readOnly && 'divider',
