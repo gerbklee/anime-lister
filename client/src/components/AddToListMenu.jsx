@@ -5,7 +5,7 @@ import { editableLists, useApp } from '../AppContext.jsx';
 const EMPTY_HINT = {
   character: 'Create a character list in the Lists tab first.',
   anime: 'Create an anime list in the Lists tab first.',
-  watchlist: 'Create a watchlist in the To watch tab first.',
+  watchlist: 'Create a watchlist in the Watchlists tab first.',
 };
 
 // "+ Add to list ▾" button with a dropdown of the lists of `kind` you can edit.

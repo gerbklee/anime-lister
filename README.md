@@ -83,12 +83,12 @@ package page on GitHub) and click **Up**.
 
 ## Anime, watchlists and feed
 
-The app has five tabs (a bottom bar on phones): **Lists · Anime · To watch · Feed · Compare**.
+The app has six tabs (a bottom bar on phones): **Lists · Anime · Discover · Watchlists · Feed · Compare**.
 
 - **Anime**: your catalogue. Search AniList, mark anime as *Watched*, *Watching* (with episode progress) or *Dropped*, rate them (0.5–5 stars) and write reviews (optionally marked as spoilers). Everyone can browse everyone's catalogue.
 - **Anime pages**: cover, banner, synopsis, trailer, everyone's ratings and reviews (with replies and ❤️ 😂 😮 reactions), the characters from your lists who appear in it, and its main characters with *+ List* buttons. After marking an anime as watched, it suggests ranking its characters.
 - **Anime lists**: in the Lists tab, switch between 👤 Characters and 🎬 Anime. Anime lists rank anime the same way character lists rank characters.
-- **To watch**: shared watchlists with members. Rank by priority, play trailers in the page, comment on each anime, and use **✓ Watched it** to add it to the catalogues of whoever watched it. Comments stay on the anime page afterwards.
+- **Watchlists**: shared watchlists with members. Rank by priority, play trailers in the page, comment on each anime, and use **✓ Watched it** to add it to the catalogues of whoever watched it. Comments stay on the anime page afterwards.
 - **Feed**: watched / started / dropped, ratings, reviews, list additions, new lists and watchlist activity, with comments and reactions. Activity in shared lists and watchlists is only shown to their members. Quick repeated changes (e.g. re-rating within 10 minutes) are merged into one event.
 - **Compare → Anime**: an anime taste match (watched overlap + rating similarity), ratings side by side, biggest disagreements, favourite genres, recommendations ("rated highly by them, not seen by you") and anime-list rankings.
 - **Discover**:

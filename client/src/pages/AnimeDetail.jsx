@@ -8,6 +8,7 @@ import Thread from '../components/Thread.jsx';
 import Reactions from '../components/Reactions.jsx';
 import TrailerModal from '../components/TrailerModal.jsx';
 import AddToListMenu from '../components/AddToListMenu.jsx';
+import { formatPopularity } from '../components/AnimeTile.jsx';
 
 const SEASONS = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' };
 const STATUS = { FINISHED: 'Finished', RELEASING: 'Airing', NOT_YET_RELEASED: 'Not yet aired', CANCELLED: 'Cancelled', HIATUS: 'On hiatus' };
@@ -176,6 +177,98 @@ function CharacterChip({ c, showOwner, me }) {
   );
 }
 
+const ROLE_LABELS = { MAIN: 'Main', SUPPORTING: 'Supporting', BACKGROUND: 'Background' };
+const COLLAPSED = 12;
+const STEP = 25;
+
+// All characters, most important first (main → supporting → background, then
+// by AniList favourites). Pages of 25 are loaded from AniList as you expand.
+function Cast({ animeId, initial, ranked }) {
+  const [loaded, setLoaded] = useState(initial);
+  const [page, setPage] = useState(0);
+  const [hasNext, setHasNext] = useState(true);
+  const [visible, setVisible] = useState(COLLAPSED);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const loadPage = useCallback(
+    async (p) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const d = await api.animeCharacters(animeId, p);
+        setLoaded((prev) => {
+          const base = p === 1 ? [] : prev;
+          const seen = new Set(base.map((c) => c.id));
+          return [...base, ...d.characters.filter((c) => !seen.has(c.id))];
+        });
+        setPage(p);
+        setHasNext(d.hasNextPage);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [animeId],
+  );
+
+  // Replace the short cached list with the first full page right away.
+  useEffect(() => {
+    loadPage(1);
+  }, [loadPage]);
+
+  const showMore = async () => {
+    const next = visible + STEP;
+    setVisible(next);
+    if (next > loaded.length && hasNext && page > 0) await loadPage(page + 1);
+  };
+
+  if (loaded.length === 0 && !loading) {
+    return error ? <p className="error-text small">{error}</p> : <p className="muted small">AniList lists no characters for this anime.</p>;
+  }
+
+  const shown = loaded.slice(0, visible);
+  const canShowMore = visible < loaded.length || hasNext;
+
+  return (
+    <>
+      <ul className="cast">
+        {shown.map((c) => (
+          <li key={c.id}>
+            {c.image && <img src={c.image} alt="" loading="lazy" />}
+            <div className="cast-info">
+              <b>{c.name}</b>
+              <span className="muted tiny">
+                <span className={`role-tag ${c.role?.toLowerCase()}`}>{ROLE_LABELS[c.role] ?? c.role}</span>
+                {c.favourites > 0 && ` · ❤ ${formatPopularity(c.favourites)}`}
+                {ranked.has(c.id) && ' · ✓ in your lists'}
+              </span>
+            </div>
+            <AddToListMenu kind="character" itemId={c.id} label="+ List" className="btn ghost small-btn" />
+          </li>
+        ))}
+      </ul>
+      {error && <p className="error-text small">{error}</p>}
+      <div className="cast-more">
+        {canShowMore && (
+          <button type="button" className="btn ghost" onClick={showMore} disabled={loading}>
+            {loading ? 'Loading…' : 'Show more'}
+          </button>
+        )}
+        {visible > COLLAPSED && (
+          <button type="button" className="btn ghost" onClick={() => setVisible(COLLAPSED)}>
+            Show less
+          </button>
+        )}
+        <span className="muted tiny">
+          {plural(shown.length, 'character')} shown{!hasNext && visible >= loaded.length ? ' (all)' : ''}
+        </span>
+      </div>
+    </>
+  );
+}
+
 export default function AnimeDetail({ id, suggest }) {
   const { me, refreshCatalogue } = useApp();
   const [data, setData] = useState(null);
@@ -255,7 +348,7 @@ export default function AnimeDetail({ id, suggest }) {
             ▶ Watch trailer
           </button>
         )}
-        <AddToListMenu kind="watchlist" itemId={anime.id} label="🍿 To watch" />
+        <AddToListMenu kind="watchlist" itemId={anime.id} label="🍿 Watchlist" />
         <AddToListMenu kind="anime" itemId={anime.id} label="📋 Anime list" />
         <a className="btn ghost" href={`#/discover/similar/${anime.id}`}>
           🔎 Similar anime
@@ -338,27 +431,9 @@ export default function AnimeDetail({ id, suggest }) {
           )}
 
           <div className={`card ${showSuggest ? 'highlight' : ''}`} ref={suggestRef}>
-            <h3>{showSuggest ? '✨ Rank its characters?' : 'Main characters'}</h3>
+            <h3>{showSuggest ? '✨ Rank its characters?' : 'Characters'}</h3>
             {showSuggest && <p className="muted small">Add characters from {anime.title} to your character lists.</p>}
-            {anime.characters.length === 0 ? (
-              <p className="muted small">AniList lists no characters for this anime.</p>
-            ) : (
-              <ul className="cast">
-                {anime.characters.map((c) => (
-                  <li key={c.id}>
-                    {c.image && <img src={c.image} alt="" loading="lazy" />}
-                    <div className="cast-info">
-                      <b>{c.name}</b>
-                      <span className="muted tiny">
-                        {c.role === 'MAIN' ? 'Main' : 'Supporting'}
-                        {ranked.has(c.id) && ' · ✓ in your lists'}
-                      </span>
-                    </div>
-                    <AddToListMenu kind="character" itemId={c.id} label="+ List" className="btn ghost small-btn" />
-                  </li>
-                ))}
-              </ul>
-            )}
+            <Cast animeId={anime.id} initial={anime.characters} ranked={ranked} />
           </div>
         </div>
       </div>

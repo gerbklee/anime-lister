@@ -2236,6 +2236,22 @@ button.chip {
   flex-direction: column;
 }
 
+.role-tag {
+  font-weight: 600;
+}
+
+.role-tag.main {
+  color: var(--accent);
+}
+
+.cast-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
 .cast-info b {
   overflow: hidden;
   text-overflow: ellipsis;

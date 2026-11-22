@@ -95,7 +95,7 @@ export default function TrailerReel({ items, startIndex = 0, title, onClose }) {
           </button>
           <span className="muted small">{animeMeta(current)}</span>
         </div>
-        <AddToListMenu kind="watchlist" itemId={current.id} label="🍿 To watch" className="btn ghost small-btn" />
+        <AddToListMenu kind="watchlist" itemId={current.id} label="🍿 Watchlist" className="btn ghost small-btn" />
       </div>
       <div className="modal-actions">
         <button type="button" className="btn ghost" onClick={() => go(-1)} disabled={index === 0}>

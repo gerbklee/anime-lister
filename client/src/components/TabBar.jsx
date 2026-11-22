@@ -2,7 +2,7 @@ const TABS = [
   { key: 'lists', href: '#/lists', icon: '📋', label: 'Lists' },
   { key: 'anime', href: '#/anime', icon: '🎬', label: 'Anime' },
   { key: 'discover', href: '#/discover', icon: '🧭', label: 'Discover' },
-  { key: 'watch', href: '#/watch', icon: '🍿', label: 'To watch' },
+  { key: 'watch', href: '#/watch', icon: '🍿', label: 'Watchlists' },
   { key: 'feed', href: '#/feed', icon: '📰', label: 'Feed' },
   { key: 'compare', href: '#/compare', icon: '📊', label: 'Compare' },
 ];

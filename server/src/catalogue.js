@@ -2,7 +2,7 @@
 const express = require('express');
 const { db } = require('./db');
 const { HttpError, wrap, parseId } = require('./http');
-const { searchAnime } = require('./anilist');
+const { searchAnime, fetchAnimeCharacters } = require('./anilist');
 const { ensureAnime, toAnime, toAnimeSummary } = require('./anime');
 const { usersById } = require('./users');
 const activity = require('./activity');
@@ -133,6 +133,16 @@ router.get('/anime/:id', wrap(async (req, res) => {
     });
 
   res.json({ anime: toAnime(row), mine, others: entries.filter((e) => e !== mine), characters, animeLists, watchThreads });
+}));
+
+// All characters of an anime, 25 per page, most important first.
+router.get('/anime/:id/characters', wrap(async (req, res) => {
+  const id = parseId(req.params.id);
+  const page = Math.min(Math.max(Number(req.query.page) || 1, 1), 60);
+  const result = await fetchAnimeCharacters(id, page);
+  const link = db.prepare('INSERT OR IGNORE INTO character_media (character_id, anime_id) VALUES (?, ?)');
+  db.transaction(() => result.characters.forEach((c) => link.run(c.id, id)))();
+  res.json({ page, ...result });
 }));
 
 // ---- Catalogue --------------------------------------------------------------------

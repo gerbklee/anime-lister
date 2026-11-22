@@ -54,8 +54,21 @@ const ANIME_QUERY = `
       description(asHtml: false)
       studios(isMain: true) { nodes { name } }
       trailer { id site }
-      characters(sort: [ROLE, RELEVANCE, ID], perPage: 12) {
-        edges { role node { id name { full } image { large } } }
+      characters(sort: [ROLE, FAVOURITES_DESC], perPage: 12) {
+        edges { role node { id name { full } image { large } favourites } }
+      }
+    }
+  }
+`;
+
+// All characters of an anime, most important first: main, then supporting,
+// then background; within each role by number of AniList favourites.
+const ANIME_CHARACTERS_QUERY = `
+  query ($id: Int, $page: Int) {
+    Media(id: $id, type: ANIME) {
+      characters(sort: [ROLE, FAVOURITES_DESC], page: $page, perPage: 25) {
+        pageInfo { hasNextPage }
+        edges { role node { id name { full } image { large } favourites } }
       }
     }
   }
@@ -146,15 +159,37 @@ function normalizeAnime(m) {
     studios: (m.studios?.nodes ?? []).map((s) => s.name).join(', ') || null,
     description: cleanDescription(m.description),
     trailer: trailerOk ? { site: m.trailer.site, id: trailerId } : null,
-    characters: (m.characters?.edges ?? [])
-      .filter((e) => e?.node)
-      .map((e) => ({
-        id: e.node.id,
-        name: e.node.name?.full ?? 'Unknown',
-        image: e.node.image?.large ?? null,
-        role: e.role,
-      })),
+    characters: normalizeCast(m.characters?.edges),
   };
+}
+
+function normalizeCast(edges) {
+  return (edges ?? [])
+    .filter((e) => e?.node)
+    .map((e) => ({
+      id: e.node.id,
+      name: e.node.name?.full ?? 'Unknown',
+      image: e.node.image?.large ?? null,
+      role: e.role,
+      favourites: e.node.favourites ?? 0,
+    }));
+}
+
+const castCache = new Map();
+
+async function fetchAnimeCharacters(id, page) {
+  const key = `${id}:${page}`;
+  const hit = castCache.get(key);
+  if (hit && Date.now() - hit.at < 60 * 60 * 1000) return hit.value;
+  const data = await gql(ANIME_CHARACTERS_QUERY, { id, page });
+  if (!data?.Media) throw new AniListError(404, 'Anime not found on AniList.');
+  const value = {
+    characters: normalizeCast(data.Media.characters?.edges),
+    hasNextPage: !!data.Media.characters?.pageInfo?.hasNextPage,
+  };
+  castCache.set(key, { at: Date.now(), value });
+  if (castCache.size > 300) castCache.delete(castCache.keys().next().value);
+  return value;
 }
 
 async function cachedSearch(prefix, term, run) {
@@ -201,4 +236,13 @@ async function fetchAnime(id) {
   return normalizeAnime(data.Media);
 }
 
-module.exports = { gql, titleOf, searchCharacters, searchAnime, getCharacter, fetchAnime, AniListError };
+module.exports = {
+  gql,
+  titleOf,
+  searchCharacters,
+  searchAnime,
+  getCharacter,
+  fetchAnime,
+  fetchAnimeCharacters,
+  AniListError,
+};

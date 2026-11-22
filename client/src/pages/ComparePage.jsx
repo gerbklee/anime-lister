@@ -279,7 +279,7 @@ function AnimeTab({ data, me, other }) {
                   </a>
                   <span className="muted tiny">{animeMeta(r.anime)}</span>
                   <Stars value={r.rating} readOnly size={14} />
-                  <AddToListMenu kind="watchlist" itemId={r.anime.id} label="🍿 To watch" className="btn ghost small-btn" />
+                  <AddToListMenu kind="watchlist" itemId={r.anime.id} label="🍿 Watchlist" className="btn ghost small-btn" />
                 </div>
               </li>
             ))}
