@@ -1,36 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import { plural } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Menu from '../components/Menu.jsx';
-import { FanartGrid } from '../components/FanartBrowser.jsx';
-import FanartViewer from '../components/FanartViewer.jsx';
+
 import { useArtActions } from '../components/ArtTools.jsx';
-import { ArtistView, FollowingFeed, SearchView, artistHref, label, setSearchChips } from '../components/ArtSearch.jsx';
+import { ArtResults, ArtistView, FollowingFeed, SearchView, adaptItem, artistHref, label, sendBoardToEagle, setSearchChips, staticStream, useEagle } from '../components/ArtSearch.jsx';
 import GalleryPage from './GalleryPage.jsx';
 
-function ArtGrid({ items, tools, emptyText, extraActions = [], onSave }) {
-  const [open, setOpen] = useState(null);
-  return (
-    <>
-      <FanartGrid items={items} onOpen={setOpen} emptyText={emptyText} />
-      {open != null && items[open] && (
-        <FanartViewer
-          items={items}
-          index={Math.min(open, items.length - 1)}
-          onIndex={setOpen}
-          onClose={() => setOpen(null)}
-          onSave={onSave}
-          {...tools.viewerProps}
-          actions={[...extraActions, ...tools.viewerProps.actions]}
-          showSubject
-        />
-      )}
-    </>
-  );
+// Pictures from For you, Trending and boards in the same grid and viewer as the search.
+function ArtGrid({ items, tools, emptyText, extraActions = [], goSearch }) {
+  const eagle = useEagle();
+  const adapted = useMemo(() => items.map(adaptItem), [items]);
+  return <ArtResults stream={staticStream(adapted)} size={160} tools={tools} eagle={eagle} onSearch={goSearch} emptyText={emptyText} extraActions={extraActions} />;
 }
-
 
 // ---- Home --------------------------------------------------------------------------------------
 
@@ -83,7 +67,7 @@ function BoardCard({ b }) {
   );
 }
 
-function HomeView({ tools, follows }) {
+function HomeView({ tools, follows, goSearch }) {
   const { navigate } = useApp();
   const daily = useLoad(() => api.artDaily(), []);
   const forYou = useLoad(() => api.artForYou(), []);
@@ -91,8 +75,9 @@ function HomeView({ tools, follows }) {
   const boards = useLoad(() => api.boards(), []);
   const gallery = useLoad(() => api.gallery(), []);
   const [showAll, setShowAll] = useState(false);
-  const [dailyOpen, setDailyOpen] = useState(false);
+  const eagle = useEagle();
   const d = daily.data;
+  const dailyItems = useMemo(() => (d?.item ? [adaptItem({ ...d.item, subject: d.subject, subjectName: d.subjectName })] : []), [d]);
 
   return (
     <div className="art-home">
@@ -101,17 +86,22 @@ function HomeView({ tools, follows }) {
       </button>
 
       {d?.item && (
-        <div className="daily-card" onClick={() => setDailyOpen(true)} role="button" tabIndex={0}>
-          <img src={d.item.full} alt="" referrerPolicy="no-referrer" />
-          <div className="daily-info">
-            <span className="daily-kicker">✨ Art of the day</span>
-            <b>{d.subjectName}</b>
-            {d.item.artist && <span className="tiny">by {d.item.artist}</span>}
-          </div>
-        </div>
-      )}
-      {dailyOpen && d?.item && (
-        <FanartViewer items={[{ ...d.item, subject: d.subject, subjectName: d.subjectName }]} index={0} onIndex={() => {}} onClose={() => setDailyOpen(false)} {...tools.viewerProps} showSubject />
+        <ArtResults
+          stream={staticStream(dailyItems)}
+          tools={tools}
+          eagle={eagle}
+          onSearch={goSearch}
+          renderTrigger={(open) => (
+            <div className="daily-card" onClick={() => open(0)} role="button" tabIndex={0}>
+              <img src={d.item.full} alt="" referrerPolicy="no-referrer" />
+              <div className="daily-info">
+                <span className="daily-kicker">✨ Art of the day</span>
+                <b>{d.subjectName}</b>
+                {d.item.artist && <span className="tiny">by {d.item.artist}</span>}
+              </div>
+            </div>
+          )}
+        />
       )}
 
       <Section title="💘 For you">
@@ -123,7 +113,7 @@ function HomeView({ tools, follows }) {
           </p>
         ) : (
           <>
-            <ArtGrid items={showAll ? forYou.data.items : forYou.data.items.slice(0, 9)} tools={tools} emptyText="Add characters to your lists to get art for you." />
+            <ArtGrid items={showAll ? forYou.data.items : forYou.data.items.slice(0, 9)} tools={tools} goSearch={goSearch} emptyText="Add characters to your lists to get art for you." />
             {forYou.data.items.length > 9 && (
               <button type="button" className="btn ghost wide load-more" onClick={() => setShowAll((s) => !s)}>
                 {showAll ? 'Show less' : `Show all ${forYou.data.items.length}`}
@@ -135,7 +125,7 @@ function HomeView({ tools, follows }) {
 
       {trending.data?.items?.length > 0 && (
         <Section title="🔥 Trending in your series">
-          <ArtGrid items={trending.data.items.slice(0, 9)} tools={tools} />
+          <ArtGrid items={trending.data.items.slice(0, 9)} tools={tools} goSearch={goSearch} />
         </Section>
       )}
 
@@ -226,10 +216,11 @@ function BoardsView() {
   );
 }
 
-function BoardView({ id, tools }) {
+function BoardView({ id, tools, goSearch }) {
   const { me, users, navigate } = useApp();
   const [board, setBoard] = useState(null);
   const [error, setError] = useState(null);
+  const [eagleMsg, setEagleMsg] = useState(null);
   const [sharing, setSharing] = useState(false);
   const [username, setUsername] = useState('');
 
@@ -273,6 +264,15 @@ function BoardView({ id, tools }) {
     }
   };
   const others = users.filter((u) => u.id !== me.id && u.id !== board.owner?.id && !board.members.some((m) => m.id === u.id));
+  const toEagle = async () => {
+    setEagleMsg('Sending to Eagle…');
+    try {
+      const { sent, skipped } = await sendBoardToEagle(board, (n, total) => setEagleMsg(`Sending to Eagle… ${n}/${total}`));
+      setEagleMsg(`🦅 ${sent} sent to the Eagle folder “${board.name}”${skipped ? ` (${skipped} unavailable)` : ''}`);
+    } catch (err) {
+      setEagleMsg(err.message);
+    }
+  };
 
   return (
     <div className="board-view">
@@ -288,6 +288,7 @@ function BoardView({ id, tools }) {
         <Menu
           title={board.name}
           items={[
+            board.items.length > 0 && { icon: '🦅', label: 'Send board to Eagle', onSelect: toEagle },
             board.isOwner && { icon: '👥', label: 'Share…', onSelect: () => setSharing((s) => !s) },
             board.isOwner && { icon: '✏️', label: 'Rename', onSelect: rename },
             !board.isOwner && { icon: '🚪', label: 'Leave board', onSelect: leave },
@@ -305,6 +306,7 @@ function BoardView({ id, tools }) {
         </span>
         <span className="muted small">{board.isShared ? `shared · by ${board.owner?.id === me.id ? 'you' : board.owner?.username}` : 'only you'}</span>
       </div>
+      {eagleMsg && <p className="small muted">{eagleMsg}</p>}
       {sharing && (
         <form className="trope-custom card board-share" onSubmit={share}>
           <input list="board-share-users" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Share with (username)" autoCapitalize="none" autoFocus />
@@ -321,6 +323,7 @@ function BoardView({ id, tools }) {
       <ArtGrid
         items={board.items}
         tools={tools}
+        goSearch={goSearch}
         emptyText="Empty board. Open any picture in Art and tap 📌 Board to add it."
         extraActions={[
           {
@@ -336,7 +339,6 @@ function BoardView({ id, tools }) {
     </div>
   );
 }
-
 
 // ---- Artists -----------------------------------------------------------------------------------
 
@@ -382,8 +384,6 @@ function ArtistsView({ tools, goSearch, follows, reloadFollows }) {
 
 // ---- Page --------------------------------------------------------------------------------------
 
-const GENERIC_TAGS = new Set(['solo', '1girl', '1boy', '2girls', 'multiple_girls', 'highres', 'absurdres', 'looking_at_viewer', 'simple_background', 'white_background', 'smile', 'blush', 'long_hair', 'short_hair', 'breasts', 'open_mouth']);
-
 export default function ArtPage({ route }) {
   const { navigate } = useApp();
   const [searchKey, setSearchKey] = useState(0);
@@ -405,25 +405,7 @@ export default function ArtPage({ route }) {
     },
     [navigate],
   );
-  // "More …" on pictures from For you, Trending, boards and the gallery (Danbooru posts).
-  const onSimilar = useCallback(
-    async (item, mode) => {
-      if (mode === 'artist') {
-        goSearch([{ tag: String(item.artist).trim().replace(/\s+/g, '_'), label: item.artist, kind: 'artist' }]);
-        return;
-      }
-      const t = await api.studioPostTags(item.id).catch(() => null);
-      if (!t) return;
-      const chars = t.characters.slice(0, 3).map((c) => ({ tag: c, label: label(c).replace(/ \(.*\)$/, ''), kind: 'character' }));
-      if (mode === 'characters') goSearch(chars.length ? chars : t.series.slice(0, 1).map((s) => ({ tag: s, label: label(s), kind: 'series' })));
-      else {
-        const extra = t.tags.filter((x) => !GENERIC_TAGS.has(x) && !/_(hair|eyes)$/.test(x)).slice(0, 2).map((x) => ({ tag: x, label: label(x), kind: 'tag' }));
-        goSearch([...chars.slice(0, 2), ...extra]);
-      }
-    },
-    [goSearch],
-  );
-  const baseTools = useArtActions({ onSearch: goSearch, onSimilar });
+  const baseTools = useArtActions();
   // Following from a picture updates the Artists tab right away.
   const tools = {
     ...baseTools,
@@ -451,11 +433,11 @@ export default function ArtPage({ route }) {
           </a>
         ))}
       </div>
-      {view === 'home' && <HomeView tools={tools} follows={follows} />}
+      {view === 'home' && <HomeView tools={tools} follows={follows} goSearch={goSearch} />}
       {view === 'search' && <SearchView key={searchKey} tools={tools} />}
       {view === 'boards' && <BoardsView />}
-      {view === 'board' && <BoardView key={route.boardId} id={route.boardId} tools={tools} />}
-      {view === 'gallery' && <GalleryPage />}
+      {view === 'board' && <BoardView key={route.boardId} id={route.boardId} tools={tools} goSearch={goSearch} />}
+      {view === 'gallery' && <GalleryPage tools={tools} goSearch={goSearch} />}
       {view === 'artists' && <ArtistsView tools={tools} goSearch={goSearch} follows={follows} reloadFollows={reloadFollows} />}
       {view === 'artist' && <ArtistView key={route.artist} artistKey={route.artist} tools={tools} onSearch={goSearch} following={follows} onFollowChange={reloadFollows} />}
       {tools.dialogs}

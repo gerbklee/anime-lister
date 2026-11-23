@@ -185,8 +185,6 @@ export const api = {
 
   // Art area
   artAutocomplete: (q, signal) => request('GET', `/api/art/autocomplete?q=${enc(q)}`, undefined, { signal }),
-  artSearch: (params) => request('GET', `/api/art/search?${new URLSearchParams(params)}`),
-  artSimilar: (id, mode) => request('GET', `/api/art/similar?id=${enc(id)}&mode=${mode}`),
   artForYou: () => request('GET', '/api/art/foryou'),
   artTrending: () => request('GET', '/api/art/trending'),
   artDaily: () => request('GET', '/api/art/daily'),
@@ -209,8 +207,9 @@ export const api = {
   studioSeries: (tags, signal) => request('GET', `/api/studio/series?tags=${enc(tags.join(','))}`, undefined, { signal }),
   studioPostTags: (id) => request('GET', `/api/studio/post-tags?id=${enc(id)}`),
   studioResolve: (source, id, scope) => request('GET', `/api/studio/resolve?${new URLSearchParams({ source, id, scope: scope ?? '' })}`),
-  studioSign: (urls) => request('POST', '/api/studio/sign', { urls }),
   studioEagle: (items, opts) => request('POST', '/api/studio/eagle', { items, ...opts }),
+  studioSimilar: (url) => request('POST', '/api/studio/similar', { url }),
+  studioSimilarStatus: (id) => request('GET', `/api/studio/similar/${id}`),
   studioSearches: () => request('GET', '/api/studio/searches'),
   saveStudioSearch: (name, query) => request('POST', '/api/studio/searches', { name, query }),
   deleteStudioSearch: (id) => request('DELETE', `/api/studio/searches/${id}`),
@@ -225,9 +224,6 @@ export const api = {
   follows: () => request('GET', '/api/art/follows'),
   follow: (artist, name) => request('POST', '/api/art/follows', { artist, name }),
   unfollow: (artist) => request('DELETE', `/api/art/follows/${enc(artist)}`),
-  artistFeed: () => request('GET', '/api/art/artists/feed'),
-  whatIs: (url) => request('POST', '/api/art/whatis', { url }),
-  whatIsResult: (id) => request('GET', `/api/art/whatis/${id}`),
 };
 
 // Link to the page of a fan art subject ('character:1' / 'ship:2').

@@ -518,6 +518,19 @@ const MIGRATIONS = {
       fetched_at  INTEGER NOT NULL
     );
   `,
+  // v17: the Studio on/off switch is gone (the search is in the Art tab for everyone).
+  17: `
+    ALTER TABLE users DROP COLUMN studio;
+  `,
+  // v18: small cached values (search results, artist pages) that survive restarts.
+  18: `
+    CREATE TABLE kv_cache (
+      key      TEXT    PRIMARY KEY,
+      value    TEXT    NOT NULL,
+      expires  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_kv_cache_expires ON kv_cache (expires);
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

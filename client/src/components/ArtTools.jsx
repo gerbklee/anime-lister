@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import ImageCropper from './ImageCropper.jsx';
 import Modal from './Modal.jsx';
 
-const pretty = (tag) => String(tag ?? '').replace(/_\(.*\)$/, '').replace(/_/g, ' ');
-const artistTag = (name) => String(name ?? '').trim().replace(/\s+/g, '_');
 
 // ---- Add to board ------------------------------------------------------------------------------
 
@@ -173,114 +171,12 @@ export function WallpaperMaker({ item, onClose }) {
   );
 }
 
-// ---- What is this? -----------------------------------------------------------------------------
-
-export function WhatIsThisDialog({ url, onClose, onSearch, onFollow }) {
-  const [job, setJob] = useState(null);
-  const [error, setError] = useState(null);
-  const timer = useRef(null);
-
-  useEffect(() => {
-    let stopped = false;
-    api
-      .whatIs(url)
-      .then(({ id }) => {
-        const poll = async () => {
-          if (stopped) return;
-          try {
-            const j = await api.whatIsResult(id);
-            setJob(j);
-            if (j.status === 'running') timer.current = setTimeout(poll, 3000);
-          } catch (err) {
-            setError(err.message);
-          }
-        };
-        poll();
-      })
-      .catch((err) => setError(err.message));
-    return () => {
-      stopped = true;
-      clearTimeout(timer.current);
-    };
-  }, [url]);
-
-  const results = job?.results ?? [];
-  return (
-    <Modal title="❓ What is this?" onClose={onClose} center>
-      <div className="whatis">
-        <img className="whatis-query" src={url} alt="" referrerPolicy="no-referrer" />
-        {error && <div className="banner error">{error}</div>}
-        {!error && (!job || job.status === 'running') && (
-          <div className="whatis-waiting">
-            <span className="spinner inline-small" aria-hidden="true" />
-            <div>
-              <b>Looking it up…</b>
-              <p className="muted small">IQDB compares it with millions of pictures. When it's busy this can take 1–2 minutes; you can close this and keep browsing.</p>
-              {job && <span className="muted tiny">{job.seconds}s</span>}
-            </div>
-          </div>
-        )}
-        {job?.status === 'error' && <div className="banner error">{job.error}</div>}
-        {job?.status === 'done' && results.length === 0 && <p className="muted">No match found. It may be too new or not on Danbooru yet.</p>}
-        {results.map((r, i) => (
-          <div key={i} className="whatis-result card">
-            <div className="whatis-head">
-              {r.item?.thumb && <img src={r.item.thumb} alt="" />}
-              <div>
-                <b>{r.similarity}% match</b>
-                {!r.workSafe && <span className="muted tiny"> · not work-safe, not shown</span>}
-                <div className="whatis-links">
-                  <a href={r.postUrl} target="_blank" rel="noreferrer">
-                    Danbooru ↗
-                  </a>
-                  {r.sourceUrl && (
-                    <a href={r.sourceUrl} target="_blank" rel="noreferrer">
-                      Original ↗
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="whatis-chips">
-              {r.artists.map((a) => (
-                <span key={a} className="chip-group">
-                  <button type="button" className="chip kind-artist" onClick={() => onSearch([{ tag: a, label: pretty(a), kind: 'artist' }])}>
-                    🖌️ {pretty(a)}
-                  </button>
-                  {onFollow && (
-                    <button type="button" className="chip small" onClick={() => onFollow(a, pretty(a))} title="Follow artist">
-                      + Follow
-                    </button>
-                  )}
-                </span>
-              ))}
-              {r.characters.slice(0, 4).map((c) => (
-                <button key={c} type="button" className="chip kind-character" onClick={() => onSearch([{ tag: c, label: pretty(c), kind: 'character' }])}>
-                  👤 {pretty(c)}
-                </button>
-              ))}
-              {r.series.slice(0, 2).map((s) => (
-                <button key={s} type="button" className="chip kind-series" onClick={() => onSearch([{ tag: s, label: pretty(s), kind: 'series' }])}>
-                  🎬 {pretty(s)}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </Modal>
-  );
-}
-
-// ---- Viewer actions for art --------------------------------------------------------------------
-
-// Everything you can do with a picture in the Art area. Returns the viewer
-// props (actions + main button) and the dialogs to render.
-export function useArtActions({ onSearch, onSimilar }) {
+// Dialogs and actions the Art tab's viewer uses: boards, wallpapers, following
+// artists, profile photo.
+export function useArtActions() {
   const { setMe, refreshLists } = useApp();
   const [board, setBoard] = useState(null);
   const [wallpaper, setWallpaper] = useState(null);
-  const [whatIs, setWhatIs] = useState(null);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -298,49 +194,6 @@ export function useArtActions({ onSearch, onSimilar }) {
     }
   };
 
-  const isDanbooru = (item) => item.source === 'danbooru';
-  const actions = [
-    { icon: '📱', label: 'Make wallpaper', onSelect: (item) => setWallpaper(item) },
-    { icon: '🖌️', label: (item) => `More by ${item.artist}`, show: (item) => isDanbooru(item) && !!item.artist, onSelect: (item) => onSimilar(item, 'artist') },
-    { icon: '👥', label: 'More with these characters', show: isDanbooru, onSelect: (item) => onSimilar(item, 'characters') },
-    { icon: '🧬', label: 'More like this', show: isDanbooru, onSelect: (item) => onSimilar(item, 'tags') },
-    { icon: '➕', label: (item) => `Follow ${item.artist}`, show: (item) => isDanbooru(item) && !!item.artist, onSelect: (item) => follow(artistTag(item.artist), item.artist) },
-    { icon: '❓', label: 'What is this?', show: (item) => !isDanbooru(item), onSelect: (item) => setWhatIs(item.remoteUrl ?? item.full) },
-    {
-      icon: '👤',
-      label: 'Use as profile photo',
-      onSelect: async (item) => {
-        try {
-          setMe(await api.setAvatar(item.remoteUrl ?? item.full));
-          refreshLists();
-          setToast('✓ Profile photo updated');
-        } catch (err) {
-          setToast(err.message);
-        }
-      },
-    },
-    { icon: '↗️', label: 'Open full size', onSelect: (item) => window.open(item.remoteUrl ?? item.full, '_blank', 'noopener') },
-  ];
-
-  const dialogs = (
-    <>
-      {board && <AddToBoardDialog item={board} onClose={() => setBoard(null)} />}
-      {wallpaper && <WallpaperMaker item={wallpaper} onClose={() => setWallpaper(null)} />}
-      {whatIs && (
-        <WhatIsThisDialog
-          url={whatIs}
-          onClose={() => setWhatIs(null)}
-          onFollow={follow}
-          onSearch={(chips) => {
-            setWhatIs(null);
-            onSearch(chips);
-          }}
-        />
-      )}
-      {toast && <div className="toast">{toast}</div>}
-    </>
-  );
-
   const useAsAvatar = async (url) => {
     try {
       setMe(await api.setAvatar(url));
@@ -351,15 +204,13 @@ export function useArtActions({ onSearch, onSimilar }) {
     }
   };
 
-  return {
-    viewerProps: { actions, primary: { label: '📌 Board', onSelect: (item) => setBoard(item) } },
-    openWhatIs: setWhatIs,
-    // For the multi-source search viewer.
-    openBoard: setBoard,
-    openWallpaper: setWallpaper,
-    follow,
-    useAsAvatar,
-    toast: setToast,
-    dialogs,
-  };
+  const dialogs = (
+    <>
+      {board && <AddToBoardDialog item={board} onClose={() => setBoard(null)} />}
+      {wallpaper && <WallpaperMaker item={wallpaper} onClose={() => setWallpaper(null)} />}
+      {toast && <div className="toast">{toast}</div>}
+    </>
+  );
+
+  return { openBoard: setBoard, openWallpaper: setWallpaper, follow, useAsAvatar, toast: setToast, dialogs };
 }

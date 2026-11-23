@@ -125,6 +125,7 @@ app.listen(PORT, '0.0.0.0', () => {
   startAiringJob();
   startArtJobs();
   startAgeWarm();
+  require('./disk-cache').startPruning();
   retryMissingImages()
     .catch((err) => console.warn('Image retry failed:', err.message))
     .then(() => backfillCharacterLinks())

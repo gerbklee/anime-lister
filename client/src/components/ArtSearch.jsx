@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
+import Menu from './Menu.jsx';
 import { eagleAddOne, eagleFolderTree, eagleFolders, eagleIndexInfo, eagleInfo, folderResolver, itemInEagle, loadEagleIndex, markInEagle, subscribeEagleIndex } from '../eagle.js';
 
 // The Art tab's search: one tag search (Danbooru's tag names) across many
@@ -164,7 +165,7 @@ export function TagInput({ chips, onChange, placeholder }) {
 
 // ---- Eagle -------------------------------------------------------------------------------------
 
-function useEagle() {
+export function useEagle() {
   const [state, setState] = useState({ running: null, folders: [] });
   const check = useCallback(async () => {
     const info = await eagleInfo();
@@ -201,11 +202,11 @@ export function EagleControls({ eagle }) {
     setOpts(next);
     store({ eagle: next });
   };
-  if (eagle.running == null) return <span className="muted small">Looking for Eagle…</span>;
+  if (eagle.running == null) return null;
   if (!eagle.running) {
     return (
-      <button type="button" className="btn ghost small-btn" onClick={eagle.check} title="Open Eagle on this computer, then check again">
-        ○ Eagle not found · retry
+      <button type="button" className="link-btn small muted eagle-off" onClick={eagle.check} title="Eagle isn't open on this computer. Open it, then click to check again.">
+        ○ Eagle
       </button>
     );
   }
@@ -219,19 +220,28 @@ export function EagleControls({ eagle }) {
       >
         ● Eagle{library.ready ? ` · ${library.count.toLocaleString()}` : ' · reading…'}
       </button>
-      <select value={opts.folderId} onChange={(e) => set({ folderId: e.target.value })} aria-label="Eagle folder">
-        <option value="">No folder (inbox)</option>
-        {eagle.folders.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.name}
-          </option>
-        ))}
-      </select>
-      <button type="button" className={`btn ghost small-btn ${open ? 'active' : ''}`} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        ⚙ Export
+      <button
+        type="button"
+        className={`btn ghost small-btn eagle-target ${open ? 'active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Where pictures go in Eagle, and how they're tagged"
+      >
+        → {eagle.folders.find((f) => f.id === opts.folderId)?.name.split(' / ').pop() ?? 'Inbox'} ▾
       </button>
       {open && (
         <span className="eagle-options card">
+          <label>
+            Eagle folder
+            <select value={opts.folderId} onChange={(e) => set({ folderId: e.target.value })}>
+              <option value="">No folder (inbox)</option>
+              {eagle.folders.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
           <label>
             Sort into subfolders
             <select value={opts.sortInto} onChange={(e) => set({ sortInto: e.target.value })}>
@@ -274,7 +284,7 @@ const scopeOf = (chips) => chips.find((c) => c.kind === 'character')?.tag;
 
 // Sends pictures to Eagle: originals (via signed NAS links) with grouped tags,
 // credits, links, optional stars and dates, sorted into folders if chosen.
-async function sendToEagle(items, { queryChips, onProgress }) {
+async function sendToEagle(items, { queryChips = [], onProgress, folderName } = {}) {
   const opts = load().eagle;
   const chars = queryChips.filter((c) => c.kind === 'character').map((c) => c.tag);
   const series = queryChips.filter((c) => c.kind === 'series').map((c) => c.tag);
@@ -283,37 +293,53 @@ async function sendToEagle(items, { queryChips, onProgress }) {
   for (const i of items) {
     let original = i.original;
     if (!original && i.resolve) original = (await api.studioResolve(i.source, i.id, scopeOf(queryChips)).catch(() => null))?.original ?? null;
-    if (original) {
-      readyItems.push(i);
-      ready.push({
-        original,
-        source: i.source,
-        id: i.id,
-        tags: i.tags,
-        // Sites without character tags: what you searched for.
-        characters: i.characters.length ? i.characters : chars,
-        series: i.series.length ? i.series : series,
-        artists: i.artists,
-        width: i.width,
-        height: i.height,
-        score: i.score,
-        ai: i.ai,
-        createdAt: i.createdAt,
-        sourceUrl: i.sourceUrl,
-        postUrl: i.postUrl,
-        sources: i.sources,
+    // Board and gallery pictures: the stored copy, or the site's file (Danbooru's
+    // original is looked up on the server).
+    if (!original && i.legacy) original = i.boardCopy ?? i.rawPreview ?? null;
+    if (!original) continue;
+    const base = {
+      original,
+      source: i.source,
+      id: i.id,
+      tags: i.tags,
+      // Sites without character tags: what you searched for.
+      characters: i.characters.length ? i.characters : chars,
+      series: i.series.length ? i.series : series,
+      artists: i.artists,
+      width: i.width,
+      height: i.height,
+      score: i.score,
+      ai: i.ai,
+      createdAt: i.createdAt,
+      sourceUrl: i.sourceUrl,
+      postUrl: i.postUrl,
+      sources: i.sources,
+      needsTags: !!i.legacy && !i.tags.length,
+    };
+    // Multi-page works: every page.
+    const pages = i.pagesList?.length > 1 ? i.pagesList : null;
+    if (pages) {
+      pages.forEach((pg, n) => {
+        readyItems.push(i);
+        ready.push({ ...base, original: pg.original, page: `${n + 1}/${pages.length}` });
       });
+    } else {
+      readyItems.push(i);
+      ready.push(base);
     }
   }
   const { items: prepared } = await api.studioEagle(ready, { style: opts.style, other: opts.other });
-  const folderFor = opts.sortInto !== 'none' ? folderResolver(await eagleFolderTree()) : null;
+  const tree = folderName || opts.sortInto !== 'none' ? await eagleFolderTree() : null;
+  const folderFor = tree ? folderResolver(tree) : null;
+  // A board goes into its own folder (inside the chosen one).
+  const fixed = folderName ? await folderFor(folderName, opts.folderId || undefined) : null;
   let sent = 0;
   for (const [n, p] of prepared.entries()) {
     if (!p) continue;
-    const folderId = folderFor ? await folderFor(p.folders[opts.sortInto], opts.folderId || undefined) : opts.folderId || undefined;
+    const folderId = fixed ?? (opts.sortInto !== 'none' ? await folderFor(p.folders[opts.sortInto], opts.folderId || undefined) : opts.folderId || undefined);
     await eagleAddOne(
       {
-        url: `${window.location.origin}${p.url}`,
+        url: p.url.startsWith('http') ? p.url : `${window.location.origin}${p.url}`,
         name: p.name,
         website: p.website,
         tags: p.tags,
@@ -327,7 +353,15 @@ async function sendToEagle(items, { queryChips, onProgress }) {
     sent++;
     onProgress?.(sent, prepared.length);
   }
-  return { sent, skipped: items.length - sent };
+  return { sent, skipped: ready.length - sent };
+}
+
+// A whole board into an Eagle folder named after it.
+export async function sendBoardToEagle(board, onProgress) {
+  const info = await eagleInfo();
+  if (!info.running) throw new Error('Eagle is not running on this computer. Open Eagle and try again.');
+  const items = board.items.map(adaptItem);
+  return sendToEagle(items, { folderName: board.name, onProgress });
 }
 
 // ---- Streaming results -----------------------------------------------------------------------------
@@ -351,6 +385,7 @@ function mergeInto(out, byKey, lists) {
         if (!hit.artist && i.artist) hit.artist = i.artist;
         if (i.artistKey && (!hit.artistKey || (hit.artistKey.startsWith('pixiv:') && !i.artistKey.startsWith('pixiv:')))) hit.artistKey = i.artistKey;
         if (!hit.sourceUrl && i.sourceUrl) hit.sourceUrl = i.sourceUrl;
+        if (!hit.pagesList && i.pagesList) Object.assign(hit, { pagesList: i.pagesList, pages: i.pages });
         hit.level = Math.max(hit.level, i.level);
         if (area(i) > area(hit)) {
           Object.assign(hit, { source: i.source, id: i.id, postUrl: i.postUrl, preview: i.preview, original: i.original, originalView: i.originalView, resolve: i.resolve, width: i.width, height: i.height, rawPreview: i.rawPreview });
@@ -447,19 +482,53 @@ export function useArtStream(fetcher, key, { sortByDate = false } = {}) {
 
 // ---- Viewer ------------------------------------------------------------------------------------
 
-function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSend, onAddTag, queryChips, actions, isInEagle }) {
+function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSend, onAddTag, queryChips, actions, isInEagle, extraActions = [], renderInfo }) {
   const item = items[index];
   const [zoom, setZoom] = useState(false);
   const [original, setOriginal] = useState(null);
   const [loaded, setLoaded] = useState(false);
+  const [page, setPage] = useState(0);
+  const [infoOpen, setInfoOpen] = useState(false); // phones: details folded away
+  const [, bump] = useState(0);
   const stage = useRef(null);
   const drag = useRef(null);
+  const touch = useRef(null);
+  const lastTap = useRef(0);
 
   useEffect(() => {
     setZoom(false);
     setOriginal(null);
     setLoaded(false);
+    setPage(0);
   }, [item?.key]);
+
+  // Pictures from For you, Trending, boards and the gallery come without tags
+  // or original: Danbooru fills them in when opened.
+  useEffect(() => {
+    if (!item?.legacy || item.filled || item.source !== 'danbooru') return;
+    item.filled = true;
+    api
+      .studioPostTags(item.id)
+      .then((t) => {
+        Object.assign(item, {
+          characters: t.characters,
+          series: t.series,
+          artists: t.artists,
+          tags: t.tags,
+          artist: item.artist ?? t.artists[0] ?? null,
+          artistKey: t.artists[0] ?? item.artistKey,
+          ...(t.original ? { original: t.original, originalView: t.originalView } : {}),
+          ...(t.width ? { width: t.width, height: t.height } : {}),
+          score: item.score ?? t.score,
+        });
+        bump((n) => n + 1);
+      })
+      .catch(() => {});
+  }, [item]);
+
+  const pages = item?.pagesList ?? null;
+  const shown = pages ? pages[page] : null;
+  const previewUrl = shown?.preview ?? item?.preview;
 
   const go = useCallback(
     (d) => {
@@ -468,12 +537,25 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
     },
     [index, items.length, onIndex],
   );
+  const goPage = useCallback(
+    (d) => {
+      if (!pages) return false;
+      const n = page + d;
+      if (n < 0 || n >= pages.length) return false;
+      setPage(n);
+      setZoom(false);
+      setLoaded(false);
+      return true;
+    },
+    [pages, page],
+  );
 
   const originalUrl = useCallback(async () => {
+    if (shown) return shown.originalView;
     if (item.originalView) return item.originalView;
     if (item.resolve) return (await api.studioResolve(item.source, item.id, scopeOf(queryChips)).catch(() => null))?.originalView ?? null;
     return null;
-  }, [item, queryChips]);
+  }, [item, shown, queryChips]);
 
   const openOriginal = useCallback(async () => {
     if (!item) return;
@@ -481,9 +563,9 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
       setZoom(false);
       return;
     }
-    setOriginal((await originalUrl()) ?? item.preview);
+    setOriginal((await originalUrl()) ?? previewUrl);
     setZoom(true);
-  }, [item, zoom, originalUrl]);
+  }, [item, zoom, originalUrl, previewUrl]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -491,6 +573,8 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
       if (e.key === 'Escape') onClose();
       else if (e.key === 'ArrowRight') go(1);
       else if (e.key === 'ArrowLeft') go(-1);
+      else if (e.key === ']' || e.key === 'PageDown') goPage(1);
+      else if (e.key === '[' || e.key === 'PageUp') goPage(-1);
       else if (e.key === 'z' || e.key === 'Z') openOriginal();
       else if (e.key === ' ' || e.key === 's') {
         e.preventDefault();
@@ -505,7 +589,7 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [go, onClose, openOriginal, onToggle, onSend, item, actions]);
+  }, [go, goPage, onClose, openOriginal, onToggle, onSend, item, actions]);
 
   if (!item) return null;
   const isSel = selected.has(item.key);
@@ -524,19 +608,51 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
     stage.current.scrollLeft = d.left - (e.clientX - d.x);
     stage.current.scrollTop = d.top - (e.clientY - d.y);
   };
+  // Phones: swipe left/right to browse (or turn pages), down to close,
+  // double-tap for the original (then pan by scrolling).
+  const onTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touch.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e) => {
+    const start = touch.current;
+    touch.current = null;
+    if (!start || e.changedTouches.length !== 1) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (!zoom && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (!goPage(dx < 0 ? 1 : -1)) go(dx < 0 ? 1 : -1);
+    } else if (!zoom && dy > 100 && Math.abs(dy) > Math.abs(dx) * 1.5) onClose();
+    else if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        e.preventDefault();
+        openOriginal();
+      }
+      lastTap.current = now;
+    }
+  };
 
   return createPortal(
     <div className="studio-viewer" role="dialog" aria-modal="true" aria-label="Picture viewer">
       <div className="studio-viewer-top">
         <span>
           {index + 1} / {items.length}
+          {pages && (
+            <span className="muted small">
+              {' '}
+              · page {page + 1}/{pages.length}
+            </span>
+          )}
         </span>
-        <span className="muted small hide-mobile">← → browse · Z original 1:1 · Space select · E Eagle · B board · Esc close</span>
+        <span className="muted small hide-mobile">← → browse{pages ? ' · [ ] pages' : ''} · Z original 1:1 · Space select · E Eagle · B board · Esc close</span>
         <button type="button" className="viewer-close" onClick={onClose} aria-label="Close">
           ✕
         </button>
       </div>
-      <div className="studio-viewer-body">
+      <div className={`studio-viewer-body ${infoOpen ? 'info-open' : ''}`}>
         <div
           ref={stage}
           className={`studio-stage ${zoom ? 'zoomed' : ''}`}
@@ -548,12 +664,14 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
             if (!moved && e.button === 0 && e.target === e.currentTarget.querySelector('.studio-img:not(.placeholder)')) openOriginal();
           }}
           onMouseLeave={() => (drag.current = null)}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
         >
           {!loaded && <img className="studio-img placeholder" src={item.thumbLarge ?? item.thumb} alt="" referrerPolicy="no-referrer" />}
           <img
-            key={zoom ? original : item.preview}
+            key={zoom ? original : previewUrl}
             className={`studio-img ${loaded ? '' : 'loading'}`}
-            src={zoom ? original : item.preview}
+            src={zoom ? original : previewUrl}
             alt=""
             referrerPolicy="no-referrer"
             draggable={false}
@@ -582,7 +700,7 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
               📌 Board
             </button>
             <button type="button" className="btn small-btn" onClick={() => onSend([item])} title={inEagle ? 'Already in your Eagle library; sends another copy' : 'Send the original to Eagle on this computer'}>
-              {inEagle ? '🦅 Again' : '🦅 Eagle'}
+              {inEagle ? '🦅 Again' : pages ? `🦅 Eagle (${pages.length})` : '🦅 Eagle'}
             </button>
             <button type="button" className={`btn small-btn ${isSel ? 'saved' : 'ghost'}`} onClick={() => onToggle(item)}>
               {isSel ? '☑ Selected' : '☐ Select'}
@@ -590,14 +708,28 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
             <button type="button" className="btn ghost small-btn" onClick={openOriginal}>
               {zoom ? 'Fit' : '1:1 original'}
             </button>
+            <button type="button" className="btn ghost small-btn info-toggle" onClick={() => setInfoOpen((o) => !o)} aria-expanded={infoOpen}>
+              {infoOpen ? 'Less ▾' : 'More ▴'}
+            </button>
           </div>
+          {pages && (
+            <div className="studio-pages">
+              {pages.map((pg, n) => (
+                <button key={pg.original} type="button" className={`studio-page ${n === page ? 'active' : ''}`} onClick={() => goPage(n - page)} aria-label={`Page ${n + 1}`}>
+                  {n + 1}
+                </button>
+              ))}
+            </div>
+          )}
           <p className="small">
             {inEagle && <span className="in-eagle-pill">🦅 In Eagle</span>}
+            {item.similarity != null && <span className="in-eagle-pill similar-pill">{item.similarity}% match</span>}
             <b>{res(item)}</b>
             {item.score != null && <> · ★ {item.score}</>}
             {item.pages > 1 && <> · {item.pages} pages</>}
             {item.level > 0 && <> · {item.level > 1 ? '🔞' : '🌶️'}</>}
           </p>
+          {renderInfo?.(item)}
           {item.artist && (
             <p className="small">
               🖌️{' '}
@@ -628,6 +760,13 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
             )}
           </p>
           <div className="studio-more">
+            {extraActions
+              .filter((a) => !a.show || a.show(item))
+              .map((a) => (
+                <button key={a.label} type="button" className="btn ghost small-btn" onClick={() => a.onSelect(item)}>
+                  {a.icon} {a.label}
+                </button>
+              ))}
             {item.artistKey && item.artist && (
               <button type="button" className="btn ghost small-btn" onClick={() => actions.search([{ tag: item.artistKey, label: label(item.artist), kind: 'artist' }])}>
                 🖌️ More by {label(item.artist)}
@@ -643,11 +782,11 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
                 🧬 More like this
               </button>
             )}
+            <button type="button" className="btn ghost small-btn" onClick={() => actions.similar(item, shown)} title="Reverse image search: the highest-resolution original and similar pictures">
+              🔎 Original & similar
+            </button>
             <button type="button" className="btn ghost small-btn" onClick={() => actions.wallpaper(item)}>
               📱 Wallpaper
-            </button>
-            <button type="button" className="btn ghost small-btn" onClick={() => actions.whatIs(item)}>
-              ❓ What is this?
             </button>
             {item.level === 0 && item.rawPreview && (
               <button type="button" className="btn ghost small-btn" onClick={() => actions.avatar(item)}>
@@ -700,7 +839,10 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
 
 // tools: from useArtActions (boards, wallpapers, What is this?, follow, profile photo).
 // onSearch(chips): start a new search. onAddTag(chip): add to the current search.
-export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearch, onAddTag, emptyText, eagle, hideInEagle = false }) {
+// extraActions: [{ icon, label, onSelect(item), show?(item) }] for the viewer (e.g. "Remove from board").
+// renderInfo(item): extra lines in the viewer. renderTrigger(open): replaces the grid
+// (e.g. the Art of the day card opens the viewer).
+export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearch, onAddTag, emptyText, eagle, hideInEagle = false, extraActions, renderInfo, renderTrigger, practiceTitle }) {
   const { items: allItems, loading, hasMore, loadMore } = stream;
   const library = useEagleIndex(eagle?.running);
   const items = useMemo(() => (hideInEagle && library.ready ? allItems.filter((i) => !library.has(i)) : allItems), [allItems, hideInEagle, library]);
@@ -710,6 +852,8 @@ export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearc
   const [lastClicked, setLastClicked] = useState(null);
   const [toast, setToast] = useState(null);
   const [sending, setSending] = useState(false);
+  const [similarOf, setSimilarOf] = useState(null);
+  const [practice, setPractice] = useState(null);
   const sentinel = useRef(null);
 
   useEffect(() => {
@@ -771,7 +915,7 @@ export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearc
     () => ({
       board: (i) => tools.openBoard({ ...i, scope, thumb: i.thumbLarge ?? i.thumb, full: i.preview }),
       wallpaper: (i) => tools.openWallpaper({ ...i, remoteUrl: undefined, full: i.originalView ?? i.preview }),
-      whatIs: (i) => tools.openWhatIs(i.original ?? i.rawPreview ?? i.preview),
+      similar: (i, page) => setSimilarOf({ item: i, url: page?.original ?? i.original ?? i.rawPreview ?? i.boardCopy ?? null }),
       avatar: (i) => tools.useAsAvatar(i.rawPreview),
       follow: (key, name) => tools.follow(key, name),
       search: (chips) => {
@@ -783,48 +927,63 @@ export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearc
   );
 
   const big = size > 220;
+  const practiceItems = selected.size ? [...selected.values()] : items;
   return (
     <>
-      <div className="studio-grid" style={{ '--studio-size': `${size}px` }}>
-        {items.map((i, n) => (
-          <button
-            key={i.key}
-            type="button"
-            className={`studio-tile ${selected.has(i.key) ? "selected" : ""} ${library.ready && library.has(i) ? "in-eagle" : ""}`}
-            onClick={(e) => onTileClick(e, i, n)}
-            title={`${res(i)} · ${i.sources.map((s) => SOURCE_NAMES[s.source]).join(', ')}${i.artist ? ` · ${label(i.artist)}` : ''}`}
-          >
-            <img src={big ? (i.thumbLarge ?? i.thumb) : i.thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-            <span className="studio-tile-res">{res(i)}</span>
-            {library.ready && library.has(i) && (
-              <span className="studio-tile-eagle" title="Already in your Eagle library">
-                🦅 In Eagle
-              </span>
-            )}
-            <span className="studio-tile-src">
-              {i.sources.map((s) => SOURCE_ICONS[s.source]).join('')}
-              {i.level > 0 ? (i.level > 1 ? ' 🔞' : ' 🌶️') : ''}
-            </span>
-            <span
-              className="studio-tile-check"
-              role="checkbox"
-              aria-checked={selected.has(i.key)}
-              aria-label="Select"
-              onClick={(e) => {
-                e.stopPropagation();
-                toggle(i);
-                setLastClicked(n);
-              }}
+      {renderTrigger ? (
+        renderTrigger((n) => setOpen(n))
+      ) : (
+        <div className={`studio-grid ${selected.size ? 'selecting' : ''}`} style={{ '--studio-size': `${size}px` }}>
+          {items.map((i, n) => (
+            <button
+              key={i.key}
+              type="button"
+              className={`studio-tile ${selected.has(i.key) ? 'selected' : ''} ${library.ready && library.has(i) ? 'in-eagle' : ''}`}
+              onClick={(e) => onTileClick(e, i, n)}
+              title={`${res(i)} · ${i.sources.map((s) => SOURCE_NAMES[s.source] ?? s.source).join(', ')}${i.artist ? ` · ${label(i.artist)}` : ''}`}
             >
-              {selected.has(i.key) ? '✓' : ''}
-            </span>
-          </button>
-        ))}
-      </div>
-      {hiddenCount > 0 && <p className="muted tiny center">{hiddenCount} already in Eagle hidden.</p>}
-      {!loading && !items.length && <p className="muted center">{hiddenCount ? 'Everything here is already in Eagle.' : (emptyText ?? 'No pictures match. Try fewer tags, a smaller minimum size, or more sites.')}</p>}
-      {loading && <p className="muted center small">{items.length ? 'Loading more…' : 'Searching…'}</p>}
-      {hasMore && <div ref={sentinel} />}
+              <img src={big ? (i.thumbLarge ?? i.thumb) : i.thumb} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+              {res(i) && <span className="studio-tile-res">{res(i)}</span>}
+              {library.ready && library.has(i) && (
+                <span className="studio-tile-eagle" title="Already in your Eagle library">
+                  🦅 In Eagle
+                </span>
+              )}
+              <span className="studio-tile-src">
+                {i.pages > 1 ? `▤${i.pages} ` : ''}
+                {i.sources.map((s) => SOURCE_ICONS[s.source] ?? '').join('')}
+                {i.level > 0 ? (i.level > 1 ? ' 🔞' : ' 🌶️') : ''}
+              </span>
+              <span
+                className="studio-tile-check"
+                role="checkbox"
+                aria-checked={selected.has(i.key)}
+                aria-label="Select"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggle(i);
+                  setLastClicked(n);
+                }}
+              >
+                {selected.has(i.key) ? '✓' : ''}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      {!renderTrigger && (
+        <>
+          {hiddenCount > 0 && <p className="muted tiny center">{hiddenCount} already in Eagle hidden.</p>}
+          {!loading && !items.length && <p className="muted center">{hiddenCount ? 'Everything here is already in Eagle.' : (emptyText ?? 'No pictures match. Try fewer tags, a smaller minimum size, or more sites.')}</p>}
+          {loading && <p className="muted center small">{items.length ? 'Loading more…' : 'Searching…'}</p>}
+          {hasMore && <div ref={sentinel} />}
+          {items.length > 1 && selected.size === 0 && practiceTitle !== false && (
+            <button type="button" className="btn ghost small-btn practice-launch" onClick={() => setPractice(items)} title="Timed drawing practice with these pictures">
+              ✏️ Practice with {items.length}
+            </button>
+          )}
+        </>
+      )}
 
       {selected.size > 0 && (
         <div className="studio-selection">
@@ -833,6 +992,9 @@ export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearc
           </span>
           <button type="button" className="btn primary small-btn" onClick={() => send([...selected.values()])} disabled={sending || !eagle?.running} title={eagle?.running ? undefined : 'Open Eagle on this computer'}>
             🦅 Send to Eagle
+          </button>
+          <button type="button" className="btn ghost small-btn" onClick={() => setPractice(practiceItems)}>
+            ✏️ Practice
           </button>
           <button
             type="button"
@@ -873,9 +1035,297 @@ export function ArtResults({ stream, size = 180, tools, queryChips = [], onSearc
           queryChips={queryChips}
           actions={actions}
           isInEagle={library.ready ? library.has : null}
+          extraActions={extraActions}
+          renderInfo={renderInfo}
         />
       )}
+      {similarOf && <SimilarDialog of={similarOf} tools={tools} eagle={eagle} onSearch={onSearch} onClose={() => setSimilarOf(null)} />}
+      {practice && <GesturePractice items={practice} onClose={() => setPractice(null)} />}
     </>
+  );
+}
+
+// Static lists (For you, boards, the gallery) in the same grid.
+export const staticStream = (items) => ({ items, loading: false, hasMore: false, loadMore: () => {}, sources: {}, tags: null, error: null });
+
+// Pictures from For you, Trending, boards and the gallery (the older format)
+// for the grid and viewer. Danbooru ones get their tags when opened.
+export function adaptItem(i) {
+  const key = `${i.source}:${i.id}`;
+  const local = typeof i.full === 'string' && i.full.startsWith('/images/') ? i.full : null;
+  const artistTag = i.source === 'danbooru' && i.artist ? String(i.artist).trim().replace(/\s+/g, '_') : null;
+  return {
+    ...i,
+    key: i.savedId ? `saved:${i.savedId}` : i.itemId ? `board:${i.itemId}` : key,
+    keys: [key],
+    sources: [{ source: i.source, id: i.id, postUrl: i.postUrl }],
+    thumb: i.thumb,
+    thumbLarge: i.thumb,
+    preview: i.full ?? i.thumb,
+    original: null,
+    originalView: i.full ?? null,
+    boardCopy: local,
+    rawPreview: i.remoteUrl ?? null,
+    width: i.width ?? null,
+    height: i.height ?? null,
+    score: i.score ?? null,
+    artist: i.artist ?? null,
+    artists: artistTag ? [artistTag] : [],
+    artistKey: artistTag,
+    characters: [],
+    series: [],
+    tags: [],
+    level: Number(i.spicy) || 0,
+    ai: false,
+    pages: 1,
+    pagesList: null,
+    legacy: true,
+  };
+}
+
+// ---- Original & similar ----------------------------------------------------------------------------
+
+function SimilarDialog({ of, tools, eagle, onSearch, onClose }) {
+  const [job, setJob] = useState({ status: 'starting', seconds: 0 });
+  useEffect(() => {
+    let stop = false;
+    let timer;
+    (async () => {
+      try {
+        if (!of.url) throw new Error('No picture file to compare for this one.');
+        const { id } = await api.studioSimilar(of.url);
+        const poll = async () => {
+          if (stop) return;
+          const s = await api.studioSimilarStatus(id);
+          setJob(s);
+          if (s.status === 'running') timer = setTimeout(poll, 3000);
+        };
+        poll();
+      } catch (err) {
+        setJob({ status: 'error', error: err.message });
+      }
+    })();
+    return () => {
+      stop = true;
+      clearTimeout(timer);
+    };
+  }, [of]);
+  const items = job.items ?? [];
+  return createPortal(
+    <div className="similar-dialog" role="dialog" aria-modal="true" aria-label="Original and similar pictures">
+      <div className="similar-head">
+        <h3>🔎 Original & similar</h3>
+        <button type="button" className="viewer-close" onClick={onClose} aria-label="Close">
+          ✕
+        </button>
+      </div>
+      {job.status === 'error' && <p className="error-text">{job.error}</p>}
+      {(job.status === 'running' || job.status === 'starting') && (
+        <p className="muted">
+          <span className="spinner inline-small" aria-hidden="true" /> {job.stage === 'checking' ? 'Checking the matches…' : 'Asking iqdb.org (Danbooru, Yande.re, Konachan, Gelbooru, Zerochan)…'} {job.seconds ? `${job.seconds}s` : ''}
+          <br />
+          <span className="tiny">This usually takes 30–60 seconds.</span>
+        </p>
+      )}
+      {job.status === 'done' && (
+        <>
+          <p className="muted small">
+            {items.length
+              ? `Closest first; the top one is the original or its largest copy (${res(items[0])}).`
+              : 'No matches found on the supported sites.'}
+          </p>
+          <ArtResults stream={staticStream(items)} tools={tools} eagle={eagle} onSearch={(chips) => (onClose(), onSearch(chips))} practiceTitle={false} renderInfo={() => null} />
+        </>
+      )}
+    </div>,
+    document.body,
+  );
+}
+
+// ---- Gesture practice -------------------------------------------------------------------------------
+
+const SESSIONS = [
+  { key: '30s', label: '30 seconds each', plan: [30] },
+  { key: '1m', label: '1 minute each', plan: [60] },
+  { key: '2m', label: '2 minutes each', plan: [120] },
+  { key: '5m', label: '5 minutes each', plan: [300] },
+  { key: '10m', label: '10 minutes each', plan: [600] },
+  { key: 'class', label: 'Class: 10×30s, 5×1m, 2×5m, 1×10m', plan: [...Array(10).fill(30), ...Array(5).fill(60), 300, 300, 600] },
+];
+const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+
+// Timed drawing practice: one picture at a time with a countdown.
+export function GesturePractice({ items, onClose }) {
+  const [setup, setSetup] = useState(true);
+  const [session, setSession] = useState('1m');
+  const [count, setCount] = useState(Math.min(20, items.length));
+  const [shuffle, setShuffle] = useState(true);
+  const [mirror, setMirror] = useState(false);
+  const [grey, setGrey] = useState(false);
+  const [queue, setQueue] = useState([]);
+  const [at, setAt] = useState(0);
+  const [left, setLeft] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [done, setDone] = useState([]);
+  const [finished, setFinished] = useState(false);
+
+  const start = () => {
+    const pool = shuffle ? [...items].sort(() => Math.random() - 0.5) : [...items];
+    const s = SESSIONS.find((x) => x.key === session);
+    const n = s.key === 'class' ? s.plan.length : count;
+    const q = Array.from({ length: Math.min(n, pool.length) }, (_, k) => ({ item: pool[k], seconds: s.plan[Math.min(k, s.plan.length - 1)] }));
+    setQueue(q);
+    setAt(0);
+    setLeft(q[0]?.seconds ?? 0);
+    setDone([]);
+    setFinished(false);
+    setPaused(false);
+    setSetup(false);
+  };
+  const next = useCallback(
+    (d = 1) => {
+      setDone((list) => (d > 0 && queue[at] ? [...list, queue[at]] : list));
+      const n = at + d;
+      if (n >= queue.length) {
+        setFinished(true);
+        return;
+      }
+      if (n < 0) return;
+      setAt(n);
+      setLeft(queue[n].seconds);
+    },
+    [at, queue],
+  );
+
+  useEffect(() => {
+    if (setup || finished || paused) return undefined;
+    const t = setInterval(() => setLeft((s) => s - 1), 1000);
+    return () => clearInterval(t);
+  }, [setup, finished, paused]);
+  useEffect(() => {
+    if (!setup && !finished && left <= 0 && queue.length) next(1);
+  }, [left, setup, finished, queue.length, next]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose();
+      if (setup || finished) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        setPaused((p) => !p);
+      } else if (e.key === 'ArrowRight') next(1);
+      else if (e.key === 'ArrowLeft') next(-1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setup, finished, next, onClose]);
+
+  const cur = queue[at];
+  const total = done.reduce((s, x) => s + x.seconds, 0);
+  return createPortal(
+    <div className="practice" role="dialog" aria-modal="true" aria-label="Gesture practice">
+      {setup ? (
+        <div className="practice-setup card">
+          <h3>✏️ Gesture practice</h3>
+          <p className="muted small">{items.length} pictures. One at a time with a timer; draw until it runs out.</p>
+          <label>
+            Session
+            <select value={session} onChange={(e) => setSession(e.target.value)}>
+              {SESSIONS.map((s) => (
+                <option key={s.key} value={s.key}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {session !== 'class' && (
+            <label>
+              Pictures
+              <input type="number" min="1" max={items.length} value={count} onChange={(e) => setCount(Math.max(1, Math.min(items.length, Number(e.target.value) || 1)))} />
+            </label>
+          )}
+          <label className="switch-row small">
+            <input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />
+            <span>Shuffle</span>
+          </label>
+          <label className="switch-row small">
+            <input type="checkbox" checked={mirror} onChange={(e) => setMirror(e.target.checked)} />
+            <span>Mirror pictures</span>
+          </label>
+          <label className="switch-row small">
+            <input type="checkbox" checked={grey} onChange={(e) => setGrey(e.target.checked)} />
+            <span>Greyscale (values only)</span>
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="btn ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <div className="spacer" />
+            <button type="button" className="btn primary" onClick={start}>
+              Start
+            </button>
+          </div>
+        </div>
+      ) : finished ? (
+        <div className="practice-setup card">
+          <h3>🎉 Done!</h3>
+          <p className="small">
+            {done.length === 1 ? '1 drawing' : `${done.length} drawings`} in {clock(total)}.
+          </p>
+          <div className="practice-done">
+            {done.map((d, k) => (
+              <img key={k} src={d.item.thumbLarge ?? d.item.thumb} alt="" referrerPolicy="no-referrer" />
+            ))}
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="btn ghost" onClick={() => setSetup(true)}>
+              Again
+            </button>
+            <div className="spacer" />
+            <button type="button" className="btn primary" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="practice-stage" onClick={() => setPaused((p) => !p)}>
+            {cur && (
+              <img
+                key={cur.item.key}
+                src={cur.item.pagesList?.[0]?.preview ?? cur.item.preview}
+                alt=""
+                referrerPolicy="no-referrer"
+                style={{ transform: mirror ? 'scaleX(-1)' : undefined, filter: grey ? 'grayscale(1)' : undefined }}
+              />
+            )}
+            {paused && <span className="practice-paused">⏸ Paused</span>}
+          </div>
+          <div className="practice-bar">
+            <span className={`practice-clock ${left <= 5 ? 'ending' : ''}`}>{clock(Math.max(0, left))}</span>
+            <span className="muted small">
+              {at + 1} / {queue.length}
+            </span>
+            <div className="practice-progress">
+              <div style={{ width: `${cur ? (1 - left / cur.seconds) * 100 : 0}%` }} />
+            </div>
+            <button type="button" className="btn ghost small-btn" onClick={() => next(-1)} disabled={at === 0}>
+              ←
+            </button>
+            <button type="button" className="btn ghost small-btn" onClick={() => setPaused((p) => !p)}>
+              {paused ? '▶' : '⏸'}
+            </button>
+            <button type="button" className="btn ghost small-btn" onClick={() => next(1)}>
+              Skip →
+            </button>
+            <button type="button" className="btn ghost small-btn" onClick={() => setFinished(true)}>
+              End
+            </button>
+          </div>
+        </>
+      )}
+    </div>,
+    document.body,
   );
 }
 
@@ -906,7 +1356,7 @@ export function SearchView({ tools, onSearch }) {
   const [query, setQuery] = useState(() => load().query);
   const [size, setSize] = useState(() => load().size);
   const [hideInEagle, setHideInEagle] = useState(() => load().hideInEagle);
-  const [showPresets, setShowPresets] = useState(false);
+  const [panel, setPanel] = useState(null); // 'filters' | 'presets' | null
   const [searches, setSearches] = useState([]);
   const [error, setError] = useState(null);
   const status = useStatus();
@@ -950,6 +1400,11 @@ export function SearchView({ tools, onSearch }) {
     const s = await api.saveStudioSearch(name, query).catch((e) => setError(e.message));
     if (s) setSearches((list) => [...list, s].sort((a, b) => a.name.localeCompare(b.name)));
   };
+  const deleteSearch = async (s) => {
+    if (!window.confirm(`Delete the saved search “${s.name}”?`)) return;
+    await api.deleteStudioSearch(s.id).catch(() => {});
+    setSearches((list) => list.filter((x) => x.id !== s.id));
+  };
 
   const available = (status?.sources ?? []).filter((s) => s.available);
   const enabled = (k) => !query.sources || query.sources.includes(k);
@@ -959,16 +1414,49 @@ export function SearchView({ tools, onSearch }) {
     const next = current.includes(k) ? current.filter((x) => x !== k) : [...current, k];
     update({ sources: next.length === all.length ? null : next });
   };
-  const notes = Object.values(stream.sources).filter((s) => s.state === 'error' || s.state === 'skipped');
+  // How many filters differ from the defaults (shown on the Filters button).
+  const active = [
+    query.minScore > 0,
+    query.sketch !== 'include',
+    query.solo,
+    query.ai !== 'hide',
+    query.comics !== 'hide',
+    hideInEagle && eagle.running,
+    !!query.sources,
+  ].filter(Boolean).length;
+  const presetCount = query.chips.filter((c) => PRESETS.some(([, tags]) => tags.includes(c.tag))).length;
+  const ok = Object.values(stream.sources).filter((s) => s.state === 'ok');
+  const problems = Object.values(stream.sources).filter((s) => s.state === 'error' || s.state === 'skipped');
+  const toggle = (name) => setPanel((p) => (p === name ? null : name));
 
   return (
     <div className="studio">
-      <div className="studio-head">
+      <div className="art-search-top">
         <TagInput chips={query.chips} onChange={(chips) => update({ chips })} />
-        <EagleControls eagle={eagle} />
+        <div className="art-search-buttons">
+          <button type="button" className={`btn ghost small-btn ${panel === 'filters' ? 'active' : ''}`} onClick={() => toggle('filters')} aria-expanded={panel === 'filters'}>
+            ⚙ Filters{active ? ` · ${active}` : ''}
+          </button>
+          <button type="button" className={`btn ghost small-btn ${panel === 'presets' ? 'active' : ''}`} onClick={() => toggle('presets')} aria-expanded={panel === 'presets'}>
+            🎯 Presets{presetCount ? ` · ${presetCount}` : ''}
+          </button>
+          <Menu
+            title="Saved searches"
+            label="Saved searches"
+            icon="📁"
+            text={searches.length ? `Saved · ${searches.length}` : 'Saved'}
+            className="btn ghost small-btn"
+            items={[
+              ...searches.map((s) => ({ icon: '🔍', label: s.name, onSelect: () => update({ ...DEFAULT_QUERY, ...s.query }) })),
+              searches.length > 0 && 'divider',
+              { icon: '💾', label: 'Save this search…', onSelect: saveSearch },
+              ...searches.map((s) => ({ icon: '🗑️', label: `Delete “${s.name}”`, danger: true, onSelect: () => deleteSearch(s) })),
+            ].filter(Boolean)}
+          />
+        </div>
       </div>
 
-      <div className="studio-bar">
+      <div className="art-search-row">
         <div className="segmented small" role="radiogroup" aria-label="Sort">
           {[
             ['best', 'Best'],
@@ -979,78 +1467,108 @@ export function SearchView({ tools, onSearch }) {
             </button>
           ))}
         </div>
-        <select value={query.minEdge} onChange={(e) => update({ minEdge: Number(e.target.value) })} aria-label="Minimum size">
+        <select className="quiet-select" value={query.minEdge} onChange={(e) => update({ minEdge: Number(e.target.value) })} aria-label="Minimum size">
           {[0, 1000, 1500, 2000, 3000, 4000, 6000].map((v) => (
             <option key={v} value={v}>
               {v ? `≥ ${v}px` : 'Any size'}
             </option>
           ))}
         </select>
-        <select value={query.orient} onChange={(e) => update({ orient: e.target.value })} aria-label="Shape">
+        <select className="quiet-select" value={query.orient} onChange={(e) => update({ orient: e.target.value })} aria-label="Shape">
           <option value="">Any shape</option>
           <option value="portrait">Portrait</option>
           <option value="landscape">Landscape</option>
           <option value="square">Square</option>
         </select>
-        <select value={query.minScore} onChange={(e) => update({ minScore: Number(e.target.value) })} aria-label="Minimum score">
-          {[0, 10, 25, 50, 100, 250].map((v) => (
-            <option key={v} value={v}>
-              {v ? `★ ≥ ${v}` : 'Any score'}
-            </option>
-          ))}
-        </select>
-        <select value={query.sketch} onChange={(e) => update({ sketch: e.target.value })} aria-label="Sketches and lineart">
-          <option value="include">Sketches: include</option>
-          <option value="exclude">Sketches: hide</option>
-          <option value="only">Sketches only</option>
-        </select>
-        <label className="switch-row small">
-          <input type="checkbox" checked={query.solo} onChange={(e) => update({ solo: e.target.checked })} />
-          <span>Solo</span>
-        </label>
-        <label className="switch-row small">
-          <input type="checkbox" checked={query.ai === 'hide'} onChange={(e) => update({ ai: e.target.checked ? 'hide' : 'show' })} />
-          <span>Hide AI</span>
-        </label>
-        <label className="switch-row small">
-          <input type="checkbox" checked={query.comics === 'hide'} onChange={(e) => update({ comics: e.target.checked ? 'hide' : 'show' })} />
-          <span>Hide comics</span>
-        </label>
-        {eagle.running && (
-          <label className="switch-row small" title="Leave out pictures that are already in your Eagle library">
-            <input
-              type="checkbox"
-              checked={hideInEagle}
-              onChange={(e) => {
-                setHideInEagle(e.target.checked);
-                store({ hideInEagle: e.target.checked });
-              }}
-            />
-            <span>Hide in Eagle</span>
-          </label>
-        )}
-        <button type="button" className={`btn ghost small-btn ${showPresets ? 'active' : ''}`} onClick={() => setShowPresets((s) => !s)}>
-          🎯 Presets
-        </button>
-        <label className="studio-size small" title="Thumbnail size">
-          🔍
-          <input
-            type="range"
-            min="110"
-            max="360"
-            step="10"
-            value={size}
-            onChange={(e) => {
-              setSize(Number(e.target.value));
-              store({ size: Number(e.target.value) });
-            }}
-            aria-label="Thumbnail size"
-          />
-        </label>
+        <span className="spacer" />
+        <EagleControls eagle={eagle} />
+        <input
+          className="art-size-slider"
+          type="range"
+          min="110"
+          max="360"
+          step="10"
+          value={size}
+          onChange={(e) => {
+            setSize(Number(e.target.value));
+            store({ size: Number(e.target.value) });
+          }}
+          aria-label="Thumbnail size"
+          title="Thumbnail size"
+        />
       </div>
 
-      {showPresets && (
-        <div className="studio-presets card">
+      {panel === 'filters' && (
+        <div className="art-panel card">
+          <div className="art-panel-grid">
+            <label>
+              Minimum score
+              <select value={query.minScore} onChange={(e) => update({ minScore: Number(e.target.value) })}>
+                {[0, 10, 25, 50, 100, 250].map((v) => (
+                  <option key={v} value={v}>
+                    {v ? `★ ${v} or more` : 'Any'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Sketches and lineart
+              <select value={query.sketch} onChange={(e) => update({ sketch: e.target.value })}>
+                <option value="include">Include</option>
+                <option value="exclude">Hide</option>
+                <option value="only">Only these</option>
+              </select>
+            </label>
+          </div>
+          <div className="art-panel-switches">
+            <label className="switch-row small">
+              <input type="checkbox" checked={query.solo} onChange={(e) => update({ solo: e.target.checked })} />
+              <span>Solo only</span>
+            </label>
+            <label className="switch-row small">
+              <input type="checkbox" checked={query.ai === 'hide'} onChange={(e) => update({ ai: e.target.checked ? 'hide' : 'show' })} />
+              <span>Hide AI-generated</span>
+            </label>
+            <label className="switch-row small">
+              <input type="checkbox" checked={query.comics === 'hide'} onChange={(e) => update({ comics: e.target.checked ? 'hide' : 'show' })} />
+              <span>Hide comics</span>
+            </label>
+            {eagle.running && (
+              <label className="switch-row small">
+                <input
+                  type="checkbox"
+                  checked={hideInEagle}
+                  onChange={(e) => {
+                    setHideInEagle(e.target.checked);
+                    store({ hideInEagle: e.target.checked });
+                  }}
+                />
+                <span>Hide pictures already in Eagle</span>
+              </label>
+            )}
+          </div>
+          <div>
+            <span className="muted small">Sites</span>
+            <div className="studio-sources">
+              {available.map((s) => (
+                <button key={s.key} type="button" className={`studio-source ${enabled(s.key) ? 'on' : ''}`} onClick={() => toggleSource(s.key)}>
+                  <span className="studio-source-icon">{SOURCE_ICONS[s.key]}</span> {s.label}
+                </button>
+              ))}
+              {(status?.sources ?? [])
+                .filter((s) => !s.available)
+                .map((s) => (
+                  <span key={s.key} className="studio-source off muted" title={s.note}>
+                    {s.label} (needs setup)
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {panel === 'presets' && (
+        <div className="art-panel card studio-presets">
           {PRESETS.map(([group, tags]) => (
             <div key={group} className="studio-preset-group">
               <span className="muted small">{group}</span>
@@ -1067,68 +1585,13 @@ export function SearchView({ tools, onSearch }) {
         </div>
       )}
 
-      <div className="studio-sources">
-        {available.map((s) => {
-          const st = stream.sources[s.key];
-          const on = enabled(s.key);
-          return (
-            <button key={s.key} type="button" className={`studio-source ${on ? 'on' : ''} ${st?.state ?? ''}`} onClick={() => toggleSource(s.key)} title={st?.note ?? (on ? 'Click to leave out' : 'Click to include')}>
-              <span className="studio-source-icon">{SOURCE_ICONS[s.key]}</span> {s.label}
-              {on && !st && stream.loading && <span className="spinner inline-small" aria-hidden="true" />}
-              {on && st?.state === 'ok' && <span className="muted tiny"> {st.count}</span>}
-              {on && st?.state === 'skipped' && <span className="muted tiny"> –</span>}
-              {on && st?.state === 'error' && <span className="tiny"> ⚠</span>}
-            </button>
-          );
-        })}
-        {(status?.sources ?? [])
-          .filter((s) => !s.available)
-          .map((s) => (
-            <span key={s.key} className="studio-source off muted" title={s.note}>
-              {s.label} (setup)
-            </span>
-          ))}
-        <span className="spacer" />
-        <select
-          value=""
-          onChange={(e) => {
-            const s = searches.find((x) => String(x.id) === e.target.value);
-            if (s) update({ ...DEFAULT_QUERY, ...s.query });
-          }}
-          aria-label="Saved searches"
-        >
-          <option value="">📁 Saved searches{searches.length ? ` (${searches.length})` : ''}</option>
-          {searches.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="btn ghost small-btn" onClick={saveSearch}>
-          💾 Save
-        </button>
-        {searches.length > 0 && (
-          <select
-            value=""
-            onChange={async (e) => {
-              const id = Number(e.target.value);
-              if (!id || !window.confirm('Delete this saved search?')) return;
-              await api.deleteStudioSearch(id).catch(() => {});
-              setSearches((list) => list.filter((s) => s.id !== id));
-            }}
-            aria-label="Delete a saved search"
-          >
-            <option value="">🗑</option>
-            {searches.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {notes.length > 0 && <p className="muted tiny studio-notes">{notes.map((s) => `${s.label}: ${s.note}`).join(' · ')}</p>}
+      {(ok.length > 0 || problems.length > 0) && (
+        <p className="art-status muted tiny" title={problems.map((s) => `${s.label}: ${s.note}`).join('\n') || undefined}>
+          {ok.map((s) => `${s.label} ${s.count}`).join(' · ')}
+          {problems.length > 0 && <> · {problems.map((s) => `${s.label} –`).join(' · ')}</>}
+          {stream.loading && ' · …'}
+        </p>
+      )}
       {(error || stream.error) && <p className="error-text small">{error || stream.error}</p>}
 
       <ArtResults

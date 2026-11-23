@@ -1,15 +1,10 @@
-// The Art area: search by tags/colour, "more like this", boards (personal,
-// can be shared), wallpapers, followed artists, art of the day, "for you",
-// trending, and "What is this?" (reverse image search via IQDB).
-//
-// Searches use Danbooru (work-safe only). It allows 2 search terms (order:score
-// counts as one, rating:g is free), so the rarest term goes to Danbooru and
-// the rest are checked here against each picture's own tags.
-const crypto = require('crypto');
-const fs = require('fs');
+// The Art area: boards (personal, can be shared), wallpapers, followed artists,
+// art of the day, "for you", trending and search suggestions. The multi-site
+// search, "Original & similar", artist pages and the Eagle export live in
+// studio.js.
 const path = require('path');
 const express = require('express');
-const { db, IMAGE_DIR } = require('./db');
+const { db } = require('./db');
 const { HttpError, wrap, parseId } = require('./http');
 const { cacheImage, isAllowedImageUrl, removeImageIfUnused, cropImage, cleanCrop } = require('./images');
 const { usersById, getUser } = require('./users');
@@ -28,23 +23,15 @@ function unproxy(url) {
 }
 const isPictureUrl = (url) => isAllowedImageUrl(url) || !!studio.domainOf(url);
 
-const COLOURS = {
-  red: 'red_theme', orange: 'orange_theme', yellow: 'yellow_theme', green: 'green_theme', blue: 'blue_theme',
-  purple: 'purple_theme', pink: 'pink_theme', black: 'black_theme', white: 'white_theme', pastel: 'pastel_colors',
-};
 const CATEGORY = { 0: 'tag', 1: 'artist', 3: 'series', 4: 'character' };
-const GENERIC = new Set(['solo', '1girl', '1boy', '2girls', '2boys', 'multiple_girls', 'multiple_boys', 'highres', 'absurdres', 'looking_at_viewer', 'simple_background', 'white_background', 'upper_body', 'commentary', 'commentary_request', 'translated', 'english_commentary', 'artist_name', 'signature', 'twitter_username', 'male_focus', 'female_focus']);
-const PAGE = 60;
 const FIELDS = `${fanart.DB_FIELDS},tag_string`;
 
 const cache = fanart.memo(30 * 60 * 1000, 400);
 const forYouCache = fanart.memo(3 * 3600 * 1000, 20);
 const forYouFresh = new Map(); // user -> time of last (re)build
-const longCache = fanart.memo(3 * 3600 * 1000, 200);
 
 const q = {
   shipsByName: db.prepare(`SELECT id, name FROM ships WHERE name LIKE @q OR EXISTS (SELECT 1 FROM ship_members m WHERE m.ship_id = ships.id AND m.name LIKE @q) LIMIT 4`),
-  shipMembers: db.prepare('SELECT character_id FROM ship_members WHERE ship_id = ? ORDER BY position'),
   boardsFor: db.prepare(`
     SELECT b.* FROM art_boards b
     WHERE b.owner_id = @me OR EXISTS (SELECT 1 FROM art_board_members m WHERE m.board_id = b.id AND m.user_id = @me)
@@ -112,14 +99,6 @@ const fetchPosts = (tags, page = 1, limit = 200) =>
     ),
   );
 
-async function tagCounts(tags) {
-  if (!tags.length) return new Map();
-  const rows = await cache(`c|${[...tags].sort().join(',')}`, () =>
-    fanart.danbooru(`/tags.json?limit=100&only=name,post_count&search%5Bname_comma%5D=${encodeURIComponent(tags.join(','))}`),
-  );
-  return new Map((Array.isArray(rows) ? rows : []).map((r) => [r.name, r.post_count]));
-}
-
 const strip = (item) => {
   const { all, ...rest } = item;
   return fanart.publicItem(rest);
@@ -139,76 +118,6 @@ function filterItems(items, { shape, quality, solo }) {
   });
 }
 
-// Search Danbooru for pictures with all `tags`. Returns sorted items (with `all`).
-// With spicy art on, the general-only results are merged in too, so pictures
-// that fail the adults-only check never leave a search empty.
-async function searchTags(tags, opts = {}) {
-  if (!opts.spicy) return searchTagsOnce(tags, opts);
-  const [spicyRes, safeRes] = await Promise.all([searchTagsOnce(tags, opts), searchTagsOnce(tags, { ...opts, spicy: false })]);
-  const seen = new Map();
-  for (const i of [...spicyRes.items, ...safeRes.items]) if (!seen.has(i.id)) seen.set(i.id, i);
-  const merged = [...seen.values()].sort((a, b) => (opts.sort === 'new' ? Number(b.id) - Number(a.id) : b.score - a.score));
-  return { items: merged, hasMore: spicyRes.hasMore || safeRes.hasMore };
-}
-
-async function searchTagsOnce(tags, { sort = 'best', page = 1, spicy = false } = {}) {
-  const R = fanart.ratingFor(spicy);
-  const allowed = fanart.spicyFilter(spicy);
-  const uniq = [...new Set(tags.filter(Boolean))];
-  if (!uniq.length) throw new HttpError(400, 'Search for something first.');
-  const counts = await tagCounts(uniq);
-  const known = uniq.filter((t) => counts.has(t));
-  if (!known.length) return { items: [], hasMore: false };
-  const ordered = [...known].sort((a, b) => counts.get(a) - counts.get(b));
-  const hasAll = (i) => ordered.every((t) => i.all.has(t));
-
-  // One term: page straight through Danbooru.
-  if (ordered.length === 1 || (ordered.length === 2 && sort === 'new')) {
-    const raw = await fetchPosts(`${ordered.join(' ')} ${R}${sort === 'best' ? ' order:score' : ''}`, page);
-    return { items: raw.filter(allowed), hasMore: raw.length >= 150 };
-  }
-
-  // Several terms: build a pool once (cached), filter locally, page through it.
-  const pool = await longCache(`pool|${ordered.join(' ')}|${sort}|${R}`, async () => {
-    const seen = new Map();
-    const add = (list) => list.filter((i) => hasAll(i) && allowed(i)).forEach((i) => !seen.has(i.id) && seen.set(i.id, i));
-    if (sort === 'best') {
-      for (let p = 1; p <= 3; p++) {
-        const raw = await fetchPosts(`${ordered[0]} ${R} order:score`, p);
-        add(raw);
-        if (raw.length < 150 || seen.size >= 200) break;
-      }
-    }
-    if (sort !== 'best' || seen.size < 40) {
-      for (let p = 1; p <= 3; p++) {
-        const raw = await fetchPosts(`${ordered[0]} ${ordered[1]} ${R}`, p);
-        add(raw);
-        if (raw.length < 150) break;
-      }
-    }
-    const list = [...seen.values()];
-    return sort === 'best' ? list.sort((a, b) => b.score - a.score) : list.sort((a, b) => Number(b.id) - Number(a.id));
-  });
-  const start = (page - 1) * PAGE;
-  return { items: pool.slice(start, start + PAGE), hasMore: pool.length > start + PAGE };
-}
-
-// Chips can name ships ("ship:12"); they expand to the members' tags.
-async function expandTags(raw) {
-  const out = [];
-  for (const t of raw) {
-    const m = String(t).match(/^ship:(\d+)$/);
-    if (!m) {
-      if (/^[^\s,]{1,80}$/.test(t)) out.push(t);
-      continue;
-    }
-    for (const r of q.shipMembers.all(Number(m[1]))) {
-      const tag = await fanart.danbooruTag(r.character_id).catch(() => null);
-      if (tag) out.push(tag.tag);
-    }
-  }
-  return out;
-}
 
 function markSaved(items, me) {
   const hidden = fanart.hiddenKeys();
@@ -445,70 +354,6 @@ function startArtJobs() {
   setInterval(() => followJob().catch(() => {}), 3 * 3600 * 1000);
 }
 
-// ---- What is this? (IQDB) -----------------------------------------------------------------
-
-// IQDB can take a minute or two when busy, so queries run in the background
-// and the app polls for the result.
-const jobs = new Map();
-
-async function iqdbSearch(fileBuffer, fileName) {
-  const form = new FormData();
-  form.append('file', new Blob([fileBuffer]), fileName);
-  const res = await fetch('https://danbooru.iqdb.org/', {
-    method: 'POST',
-    body: form,
-    headers: { 'User-Agent': 'AnimeHub/1.0 (self-hosted)' },
-    signal: AbortSignal.timeout(180_000),
-  });
-  const html = await res.text();
-  const matches = [];
-  // Each result table: a link to the Danbooru post and "NN% similarity".
-  for (const table of html.split('<table>').slice(1)) {
-    const id = table.match(/danbooru\.donmai\.us\/posts\/(\d+)/)?.[1];
-    const sim = Number(table.match(/(\d+)% similarity/)?.[1]);
-    if (id && sim) matches.push({ id, similarity: sim });
-  }
-  return matches;
-}
-
-async function runWhatIs(job, url) {
-  try {
-    let buf;
-    if (url.startsWith('/images/')) {
-      const file = path.join(IMAGE_DIR, path.basename(url));
-      buf = await fs.promises.readFile(file);
-    } else {
-      const file = await cacheImage(url, undefined, { trusted: true });
-      buf = await fs.promises.readFile(path.join(IMAGE_DIR, file));
-    }
-    // Small JPEGs are enough for IQDB and upload faster.
-    const sharp = require('sharp');
-    const small = await sharp(buf, { failOn: 'none' }).resize({ width: 500, height: 500, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
-    const matches = (await iqdbSearch(small, 'query.jpg')).filter((m) => m.similarity >= 60).slice(0, 4);
-    const results = [];
-    for (const m of matches) {
-      const p = await fanart.danbooru(`/posts/${m.id}.json?only=${FIELDS},tag_string_copyright`).catch(() => null);
-      if (!p) continue;
-      const item = p.rating === 'g' ? toItem(p) : null;
-      results.push({
-        similarity: m.similarity,
-        postUrl: `https://danbooru.donmai.us/posts/${m.id}`,
-        workSafe: p.rating === 'g',
-        item: item ? strip(item) : null,
-        artists: String(p.tag_string_artist ?? '').split(' ').filter(Boolean),
-        characters: String(p.tag_string_character ?? '').split(' ').filter(Boolean),
-        series: String(p.tag_string_copyright ?? '').split(' ').filter(Boolean),
-        sourceUrl: /^https?:\/\//.test(p.source ?? '') ? p.source : null,
-      });
-    }
-    job.status = 'done';
-    job.results = results;
-  } catch (err) {
-    job.status = 'error';
-    job.error = /timeout|aborted/i.test(err.message) ? 'IQDB is very busy right now. Try again in a few minutes.' : err.message;
-  }
-}
-
 // ---- Routes ----------------------------------------------------------------------------------
 
 const router = express.Router();
@@ -532,58 +377,6 @@ router.get('/art/autocomplete', wrap(async (req, res) => {
       return { tag: r.value, label, kind, count: r.post_count, series };
     });
   res.json({ suggestions: [...ships, ...tags] });
-}));
-
-router.get('/art/search', wrap(async (req, res) => {
-  const raw = String(req.query.tags ?? '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 6);
-  const tags = await expandTags(raw);
-  if (req.query.color && COLOURS[req.query.color]) tags.push(COLOURS[req.query.color]);
-  const sort = req.query.sort === 'new' ? 'new' : 'best';
-  const page = Math.max(1, Math.min(30, Number(req.query.page) || 1));
-  const { items, hasMore } = await searchTags(tags, { sort, page, spicy: isSpicy(req.user.id) });
-  const filtered = filterItems(items, { shape: req.query.shape, quality: req.query.quality, solo: req.query.solo === '1' });
-  res.json({ items: markSaved(filtered, req.user.id), hasMore, page, tags });
-}));
-
-// More like this: same artist, same characters, or similar contents.
-router.get('/art/similar', wrap(async (req, res) => {
-  const id = String(req.query.id ?? '');
-  if (!/^\d+$/.test(id)) throw new HttpError(400, 'Only works for Danbooru pictures (use "What is this?" first).');
-  const p = await fanart.danbooru(`/posts/${id}.json?only=${FIELDS}`);
-  const mode = ['artist', 'characters', 'tags'].includes(req.query.mode) ? req.query.mode : 'tags';
-  const artists = String(p.tag_string_artist ?? '').split(' ').filter(Boolean);
-  const chars = String(p.tag_string_character ?? '').split(' ').filter(Boolean);
-  let tags;
-  if (mode === 'artist') {
-    if (!artists.length) throw new HttpError(404, 'No artist known for this picture.');
-    tags = [artists[0]];
-  } else if (mode === 'characters') {
-    if (!chars.length) throw new HttpError(404, 'No characters tagged on this picture.');
-    tags = chars.slice(0, 2);
-  } else {
-    const general = String(p.tag_string_general ?? '').split(' ').filter((t) => t && !GENERIC.has(t));
-    const counts = await tagCounts(general.slice(0, 60));
-    const distinctive = general
-      .filter((t) => (counts.get(t) ?? 0) >= 800 && (counts.get(t) ?? 0) <= 150000)
-      .sort((a, b) => counts.get(a) - counts.get(b))
-      .slice(0, 2);
-    tags = [...chars.slice(0, 1), ...distinctive];
-    if (!tags.length) throw new HttpError(404, 'Not enough tags to find similar pictures.');
-  }
-  // Very specific combinations can find nothing: loosen step by step.
-  const [c0] = chars;
-  const attempts = mode === 'tags'
-    ? [tags, c0 && tags.length > 2 ? [c0, tags[1]] : null, tags.length > 1 ? tags.filter((t) => t !== c0) : null, c0 ? [c0] : null].filter((a) => a && a.length)
-    : [tags];
-  let used = tags;
-  let found = [];
-  for (const attempt of attempts) {
-    const { items } = await searchTags(attempt, { sort: 'best', spicy: isSpicy(req.user.id) });
-    found = filterItems(items.filter((i) => i.id !== id), {});
-    used = attempt;
-    if (found.length >= 6) break;
-  }
-  res.json({ tags: used, items: markSaved(found, req.user.id).slice(0, 60) });
 }));
 
 router.get('/art/foryou', wrap(async (req, res) => {
@@ -761,35 +554,4 @@ router.delete('/art/follows/:artist', (req, res) => {
   res.status(204).end();
 });
 
-router.get('/art/artists/feed', wrap(async (req, res) => {
-  const follows = q.follows.all(req.user.id).slice(0, 15);
-  const lists = await Promise.all(
-    follows.map((f) =>
-      fetchPosts(`${f.artist} ${fanart.ratingFor(isSpicy(req.user.id))}`, 1, 24)
-        .then((items) => filterItems(items.filter(fanart.spicyFilter(isSpicy(req.user.id))), {}).map((i) => ({ ...i, artistName: f.name })))
-        .catch(() => []),
-    ),
-  );
-  const items = lists.flat().sort((a, b) => Number(b.id) - Number(a.id)).slice(0, 80);
-  res.json({ items: markSaved(items, req.user.id) });
-}));
-
-// What is this? Start a reverse image search for a picture in the app.
-router.post('/art/whatis', (req, res) => {
-  const url = unproxy(String(req.body?.url ?? ''));
-  if (!url.startsWith('/images/') && !isPictureUrl(url)) throw new HttpError(400, 'Use a picture from the app or a link from AniList, Danbooru, Zerochan, Wallhaven or Safebooru.');
-  for (const [k, j] of jobs) if (Date.now() - j.started > 30 * 60 * 1000) jobs.delete(k);
-  const id = crypto.randomBytes(8).toString('hex');
-  const job = { id, user: req.user.id, status: 'running', started: Date.now() };
-  jobs.set(id, job);
-  runWhatIs(job, url);
-  res.status(202).json({ id, status: 'running' });
-});
-
-router.get('/art/whatis/:id', (req, res) => {
-  const job = jobs.get(req.params.id);
-  if (!job || job.user !== req.user.id) throw new HttpError(404, 'Search not found (it may have expired).');
-  res.json({ status: job.status, results: job.results ?? null, error: job.error ?? null, seconds: Math.round((Date.now() - job.started) / 1000) });
-});
-
-module.exports = { artRouter: router, startArtJobs, COLOURS };
+module.exports = { artRouter: router, startArtJobs };

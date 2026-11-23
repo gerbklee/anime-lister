@@ -30,6 +30,7 @@ const fanart = require('./fanart');
 const { zerochan, wallhaven, zerochanLevel, zcPath } = require('./fanart-sources');
 const { isSpicy, adultTags, hasMinorTag } = require('./adult');
 const pixiv = require('./pixiv');
+const diskCache = require('./disk-cache');
 
 const UA = { 'User-Agent': 'AnimeHub/1.0 (self-hosted reference viewer)' };
 const DB_LEVEL = { g: 0, s: 1, q: 2, e: 2 };
@@ -95,9 +96,18 @@ function domainOf(url) {
 // What the browser loads: through the NAS where the site needs it, else direct.
 const view = (url) => (url && MUST_PROXY.includes(domainOf(url)) ? `/api/studio/img?u=${encodeURIComponent(url)}` : url);
 
+// Serves a picture from the disk cache, or fetches it (streaming it on while
+// keeping a copy for next time).
 async function pipeImage(url, res) {
   const domain = domainOf(url);
   if (!domain) throw new HttpError(400, 'Invalid image');
+  const hit = diskCache.imageHit(url);
+  if (hit) {
+    res.set('Content-Type', hit.type);
+    res.set('Cache-Control', 'private, max-age=604800, immutable');
+    await new Promise((resolve, reject) => res.sendFile(hit.file, (err) => (err && !res.headersSent ? reject(err) : resolve())));
+    return;
+  }
   const headers = { ...UA, ...(REFERERS[domain] ? { Referer: REFERERS[domain] } : {}) };
   const upstream = await fetch(url, { headers, signal: AbortSignal.timeout(60_000) });
   const type = upstream.headers.get('content-type') ?? '';
@@ -106,12 +116,21 @@ async function pipeImage(url, res) {
   const len = upstream.headers.get('content-length');
   if (len) res.set('Content-Length', len);
   res.set('Cache-Control', 'private, max-age=604800, immutable');
+  const chunks = [];
+  let size = 0;
+  let complete = false;
   await new Promise((resolve, reject) => {
     const body = Readable.fromWeb(upstream.body);
+    body.on('data', (c) => {
+      size += c.length;
+      if (size <= 30 * 1024 * 1024) chunks.push(c);
+    });
+    body.on('end', () => (complete = true));
     body.on('error', reject);
     res.on('close', resolve);
     body.pipe(res);
   });
+  if (complete && size <= 30 * 1024 * 1024) diskCache.imageStore(url, type, Buffer.concat(chunks)).catch(() => {});
 }
 
 // Signed links let Eagle (which has no login cookie) download originals from
@@ -132,9 +151,11 @@ async function tagInfo(tags) {
   const out = new Map();
   const missing = [];
   for (const t of tags) {
-    const hit = TAG_INFO.get(t);
-    if (hit && Date.now() - hit.at < 24 * 3600 * 1000) out.set(t, hit);
-    else missing.push(t);
+    const hit = TAG_INFO.get(t) ?? diskCache.kvGet(`tag|${t}`);
+    if (hit && Date.now() - hit.at < 24 * 3600 * 1000) {
+      TAG_INFO.set(t, hit);
+      out.set(t, hit);
+    } else missing.push(t);
   }
   // 100 tags per request (the Eagle export can ask about hundreds at once).
   const chunks = [];
@@ -147,7 +168,11 @@ async function tagInfo(tags) {
         const r = byName.get(t);
         const info = { category: r?.category ?? 0, count: r?.post_count ?? 0, known: !!r, at: Date.now() };
         out.set(t, info);
-        if (rows) TAG_INFO.set(t, info); // don't remember failures
+        if (rows) {
+          // don't remember failures
+          TAG_INFO.set(t, info);
+          diskCache.kvSet(`tag|${t}`, info, 24 * 3600 * 1000);
+        }
       }
     }),
   );
@@ -328,15 +353,52 @@ function applyDanbooru(item, p, ctx) {
 
 // Keeps the items that pass: Danbooru's verdict where it has the picture,
 // else `fallback` (the source's own strict rule).
+// The same Pixiv work on Danbooru (sites often keep a different file of it, so
+// the hash doesn't match). A work can have several posts (pages) with
+// different ratings: the strictest counts, and all their characters must pass.
+async function danbooruByPixiv(ids) {
+  const out = new Map();
+  const list = [...new Set(ids.filter((id) => /^\d{1,12}$/.test(id ?? '')))];
+  const LEVEL_RATING = ['g', 's', 'q'];
+  for (let i = 0; i < list.length; i += 100) {
+    const chunk = list.slice(i, i + 100);
+    const rows = await dbDirect(`/posts.json?limit=200&only=pixiv_id,rating,tag_string,tag_string_character,tag_string_artist,tag_string_copyright&tags=${encodeURIComponent(`pixiv_id:${chunk.join(',')}`)}`).catch(() => null);
+    if (!Array.isArray(rows)) throw new Error('Danbooru check unavailable');
+    for (const p of rows) {
+      if (!p.pixiv_id || !(p.rating in DB_LEVEL)) continue;
+      const id = String(p.pixiv_id);
+      const had = out.get(id);
+      if (!had) {
+        out.set(id, { ...p });
+        continue;
+      }
+      const level = Math.max(DB_LEVEL[had.rating], DB_LEVEL[p.rating]);
+      const join = (a, b) => [...new Set(`${a ?? ''} ${b ?? ''}`.split(' ').filter(Boolean))].join(' ');
+      out.set(id, {
+        rating: LEVEL_RATING[level],
+        tag_string: join(had.tag_string, p.tag_string),
+        tag_string_character: join(had.tag_string_character, p.tag_string_character),
+        tag_string_artist: join(had.tag_string_artist, p.tag_string_artist),
+        tag_string_copyright: join(had.tag_string_copyright, p.tag_string_copyright),
+      });
+    }
+  }
+  return out;
+}
+
 async function crossCheck(items, ctx, fallback) {
-  let known;
+  let byMd5 = null;
+  let byPixiv = null;
   try {
-    known = await danbooruByMd5(items.map((i) => i.md5));
+    byMd5 = await danbooruByMd5(items.map((i) => i.md5));
+    // Not found by file: try the Pixiv work.
+    const missing = items.filter((i) => !(i.md5 && byMd5.has(i.md5)) && i.pixivId);
+    if (missing.length) byPixiv = await danbooruByPixiv(missing.map((i) => i.pixivId));
   } catch {
-    known = null; // Danbooru down: only pictures that are safe by the strict rule
+    // Danbooru down: whatever wasn't found yet is judged by the strict rule
   }
   return items.filter((i) => {
-    const p = i.md5 && known?.get(i.md5);
+    const p = (i.md5 && byMd5?.get(i.md5)) || (i.pixivId && byPixiv?.get(i.pixivId));
     if (p) return applyDanbooru(i, p, ctx);
     return fallback(i);
   });
@@ -609,6 +671,11 @@ function pixivItems(illusts) {
     if (p.type === 'ugoira' || p.x_restrict !== 0 || (p.sanity_level ?? 0) > 2) continue;
     const original = p.meta_single_page?.original_image_url ?? p.meta_pages?.[0]?.image_urls?.original;
     if (!original) continue;
+    // Every page of a multi-page work (the viewer browses them, Eagle gets them all).
+    const pageList = (p.meta_pages ?? [])
+      .slice(0, 60)
+      .map((mp) => ({ original: mp.image_urls?.original, preview: view(mp.image_urls?.large ?? mp.image_urls?.medium) }))
+      .filter((pg) => pg.original);
     const tags = (p.tags ?? []).map((t) => t.translated_name || t.name);
     items.push(
       finish(
@@ -637,6 +704,7 @@ function pixivItems(illusts) {
           ai: p.illust_ai_type === 2,
           comic: p.type === 'manga',
           pages: p.page_count ?? 1,
+          pagesList: pageList.length > 1 ? pageList : null,
         },
         tags,
       ),
@@ -656,7 +724,7 @@ const SITE_NAMES = [
   ['tumblr.com', 'Tumblr'], ['youtube.com', 'YouTube'], ['weibo.com', 'Weibo'], ['lofter.com', 'Lofter'], ['misskey.io', 'Misskey'],
 ];
 function artistInfo(key) {
-  return artistCache(key, async () => {
+  return artistCache(key, () => diskCache.kv(`artist|${key}`, 24 * 3600 * 1000, async () => {
     const px = String(key).match(/^pixiv:(\d+)$/)?.[1];
     const query = px ? `search%5Burl_matches%5D=${encodeURIComponent(`https://www.pixiv.net/users/${px}`)}` : `search%5Bname%5D=${encodeURIComponent(key)}`;
     const rows = await dbDirect(`/artists.json?${query}&only=name,other_names,urls%5Burl,is_active%5D&limit=1`);
@@ -671,7 +739,7 @@ function artistInfo(key) {
       .filter((l) => l.site && /^https?:\/\//.test(l.url) && !seen.has(l.site) && seen.add(l.site));
     if (px && !links.some((l) => l.site === 'Pixiv')) links.unshift({ url: `https://www.pixiv.net/users/${px}`, site: 'Pixiv' });
     return { key, tag: a?.name ?? null, name: (a?.name ?? key).replace(/_/g, ' '), otherNames: a?.other_names ?? [], pixivIds, links };
-  });
+  }));
 }
 
 function moebooru(key, label, base) {
@@ -753,6 +821,7 @@ const publicItem = (i) => ({
   level: i.level,
   ai: i.ai,
   pages: i.pages ?? 1,
+  pagesList: i.pagesList ? i.pagesList.map((pg) => ({ preview: pg.preview, original: pg.original, originalView: view(pg.original) })) : null,
   createdAt: i.createdAt ?? null,
   pixivUser: i.pixivUser ?? null,
   artistKey: i.artistKey ?? null,
@@ -778,6 +847,7 @@ function parseFilters(qs) {
 // the new name, so the search uses it too.
 const ALIASES = new Map(); // tag -> { to, at }
 async function resolveAliases(tags) {
+  for (const t of tags) if (!ALIASES.has(t)) { const d = diskCache.kvGet(`alias|${t}`); if (d) ALIASES.set(t, d); }
   const unknown = tags.filter((t) => !ALIASES.has(t) || Date.now() - ALIASES.get(t).at > 24 * 3600 * 1000);
   const plainTags = unknown.filter((t) => TAG_RE.test(t) && !t.includes(':'));
   const chunks = [];
@@ -789,7 +859,11 @@ async function resolveAliases(tags) {
       ).catch(() => null);
       if (!Array.isArray(rows)) return;
       const map = new Map(rows.map((r) => [r.antecedent_name, r.consequent_name]));
-      for (const t of chunk) ALIASES.set(t, { to: map.get(t) ?? t, at: Date.now() });
+      for (const t of chunk) {
+        const v = { to: map.get(t) ?? t, at: Date.now() };
+        ALIASES.set(t, v);
+        diskCache.kvSet(`alias|${t}`, v, 24 * 3600 * 1000);
+      }
     }),
   );
   while (ALIASES.size > 20000) ALIASES.delete(ALIASES.keys().next().value);
@@ -866,9 +940,13 @@ async function runSource(ctx, k) {
   if (why) return { key: k, label: s.label, state: 'skipped', note: why, items: [] };
   try {
     const cacheKey = `${k}|${ctx.tags.join(' ')}|${ctx.pixivUsers.join(' ')}|${ctx.sort}|${ctx.page}|${ctx.level}|${ctx.adultScope ?? ''}|${ctx.filters.orient}`;
-    const r = await pageCache(cacheKey, () => s.search(ctx));
-    const items = r.items.filter((i) => passesFilters(i, ctx.filters));
-    return { key: k, label: s.label, state: 'ok', count: items.length, more: !!r.more, note: r.note ?? null, items: merge([items]).map(publicItem) };
+    // On disk too (survives restarts): newest-first for 30 minutes, best for 6 hours.
+    const diskKey = `search|${cacheKey}|${JSON.stringify(ctx.filters)}`;
+    return await diskCache.kv(diskKey, ctx.sort === 'new' ? 30 * 60 * 1000 : 6 * 3600 * 1000, async () => {
+      const r = await pageCache(cacheKey, () => s.search(ctx));
+      const items = r.items.filter((i) => passesFilters(i, ctx.filters));
+      return { key: k, label: s.label, state: 'ok', count: items.length, more: !!r.more, note: r.note ?? null, items: merge([items]).map(publicItem) };
+    });
   } catch (err) {
     return { key: k, label: s.label, state: 'error', note: err.message, items: [] };
   }
@@ -1000,10 +1078,155 @@ async function lookupSeries(tag) {
 // pictures from For you and Trending).
 router.get('/studio/post-tags', wrap(async (req, res) => {
   if (!/^\d+$/.test(String(req.query.id ?? ''))) throw new HttpError(400, 'Invalid picture');
-  const p = await dbDirect(`/posts/${req.query.id}.json?only=tag_string_character,tag_string_copyright,tag_string_artist,tag_string_general`);
+  const p = await dbDirect(`/posts/${req.query.id}.json?only=rating,tag_string,tag_string_character,tag_string_copyright,tag_string_artist,tag_string_general,file_url,image_width,image_height,score`);
   const split = (s) => String(s ?? '').split(' ').filter(Boolean);
-  res.json({ characters: split(p.tag_string_character), series: split(p.tag_string_copyright), artists: split(p.tag_string_artist), tags: split(p.tag_string_general) });
+  // The original file only when this picture may be shown to you at full size.
+  const item = danbooruItem({ ...p, id: req.query.id, file_ext: 'jpg' });
+  const ok = item && fanart.spicyFilter(isSpicy(req.user.id))(item);
+  res.json({
+    characters: split(p.tag_string_character),
+    series: split(p.tag_string_copyright),
+    artists: split(p.tag_string_artist),
+    tags: split(p.tag_string_general),
+    original: ok ? (p.file_url ?? null) : null,
+    originalView: ok ? view(p.file_url) : null,
+    width: p.image_width ?? null,
+    height: p.image_height ?? null,
+    score: p.score ?? null,
+  });
 }));
+
+// ---- Original & similar (reverse image search on iqdb.org) ----------------------------------------
+//
+// iqdb.org compares a picture with Danbooru, Yande.re, Konachan, Gelbooru,
+// Zerochan and others. Matches are re-fetched from their site and go through
+// the same rules as the search, then come back largest first, so the original
+// (or the highest-resolution copy) is on top, followed by similar pictures.
+// It can take a minute when iqdb.org is busy, so it runs as a job.
+
+const similarJobs = new Map();
+const MATCH_SITES = [
+  [/danbooru\.donmai\.us\/posts\/(\d+)/, 'danbooru'],
+  [/yande\.re\/post\/show\/(\d+)/, 'yandere'],
+  [/konachan\.com\/post\/show\/(\d+)/, 'konachan'],
+  [/gelbooru\.com\/index\.php\?page=post&(?:amp;)?s=view&(?:amp;)?id=(\d+)/, 'gelbooru'],
+  [/zerochan\.net\/(\d+)/, 'zerochan'],
+];
+
+async function pictureBytes(url) {
+  if (/^\/images\/[\w.-]+$/.test(url)) return require('fs').promises.readFile(require('path').join(require('./db').IMAGE_DIR, url.slice(8)));
+  const domain = domainOf(url);
+  if (!domain) throw new Error('Not a picture from a supported site');
+  const r = await fetch(url, { headers: { ...UA, ...(REFERERS[domain] ? { Referer: REFERERS[domain] } : {}) }, signal: AbortSignal.timeout(60_000) });
+  if (!r.ok) throw new Error(`Couldn't load the picture (${r.status})`);
+  return Buffer.from(await r.arrayBuffer());
+}
+
+async function iqdbMatches(buf) {
+  const sharp = require('sharp');
+  const small = await sharp(buf, { failOn: 'none' }).resize({ width: 500, height: 500, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+  const form = new FormData();
+  form.append('file', new Blob([small]), 'query.jpg');
+  const res = await fetch('https://iqdb.org/', { method: 'POST', body: form, headers: UA, signal: AbortSignal.timeout(180_000) });
+  const html = await res.text();
+  const out = [];
+  for (const table of html.split('<table>').slice(1)) {
+    if (table.includes('Your image')) continue;
+    const similarity = Number(table.match(/(\d+)% similarity/)?.[1]);
+    if (!similarity) continue;
+    for (const [re, source] of MATCH_SITES) {
+      const id = table.match(re)?.[1];
+      if (id) out.push({ source, id, similarity });
+    }
+  }
+  return out;
+}
+
+// One match as a search result, with the search's rules (null if not allowed).
+async function matchItem({ source, id }, ctx) {
+  if (source === 'danbooru') {
+    const p = await dbDirect(`/posts/${id}.json?only=${DB_FIELDS}`).catch(() => null);
+    const item = danbooruItem(p);
+    return item && fanart.spicyFilter(ctx.level)(item) ? item : null;
+  }
+  if (source === 'yandere' || source === 'konachan') {
+    const base = source === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
+    const rows = await moeQueues[source](() => getJson(`${base}/post.json?limit=1&tags=${encodeURIComponent(`id:${id}`)}`)).catch(() => null);
+    const item = moebooruItem(source, base, Array.isArray(rows) ? rows[0] : null);
+    return item ? ((await crossCheck([item], ctx, (i) => otherLevelOk(i, ctx)))[0] ?? null) : null;
+  }
+  if (source === 'gelbooru' && SOURCES.gelbooru.available()) {
+    const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&id=${id}&api_key=${encodeURIComponent(process.env.GELBOORU_API_KEY)}&user_id=${encodeURIComponent(process.env.GELBOORU_USER_ID)}`;
+    const data = await gbQueue(() => getJson(url)).catch(() => null);
+    const item = gelbooruItem(Array.isArray(data?.post) ? data.post[0] : null);
+    return item ? ((await crossCheck([item], ctx, (i) => otherLevelOk(i, ctx)))[0] ?? null) : null;
+  }
+  if (source === 'zerochan') {
+    const r = await zerochan(`/${id}?json`).catch(() => null);
+    const p = r?.data;
+    if (!p?.id) return null;
+    const tags = Array.isArray(p.tags) ? p.tags : [];
+    const level = zerochanLevel(tags, 0); // safe pictures only here
+    if (level == null) return null;
+    const item = finish(
+      {
+        source: 'zerochan', id: String(p.id), postUrl: `https://www.zerochan.net/${p.id}`, sourceUrl: /^https?:\/\//.test(p.source ?? '') ? p.source : null,
+        thumb: p.medium ?? p.small, preview: p.large ?? p.full, rawPreview: p.large ?? null, original: p.full ?? p.large,
+        width: p.width, height: p.height, score: null, artists: [], characters: [], series: [], tags, level, md5: p.md5 ?? null, pixivId: pixivIdFrom(p.source), createdAt: null,
+      },
+      tags,
+    );
+    return (await crossCheck([item], ctx, (i) => otherLevelOk(i, ctx, { needTag: false })))[0] ?? null;
+  }
+  return null;
+}
+
+async function runSimilar(job, url, userId) {
+  try {
+    const buf = await pictureBytes(url);
+    job.stage = 'iqdb';
+    const matches = (await iqdbMatches(buf)).filter((m) => m.similarity >= 50).slice(0, 24);
+    job.stage = 'checking';
+    const ctx = { level: isSpicy(userId), adultScope: null };
+    const found = [];
+    for (const m of matches) {
+      const item = await matchItem(m, ctx).catch(() => null);
+      if (item && passesFilters(item, { ...parseFilters({}), comics: 'show' })) found.push({ item, similarity: m.similarity });
+    }
+    // Copies of the same picture merge (largest kept); closest and largest first.
+    const best = new Map();
+    for (const f of found) {
+      const k = f.item.keys[0];
+      const had = best.get(k);
+      if (!had || f.similarity > had.similarity) best.set(k, f);
+    }
+    const lists = [[...best.values()].sort((a, b) => b.similarity - a.similarity || (b.item.width * b.item.height) - (a.item.width * a.item.height)).map((f) => f.item)];
+    const merged = merge(lists).map(publicItem);
+    const simByKey = new Map(found.map((f) => [f.item.keys[0], f.similarity]));
+    job.items = merged.map((i) => ({ ...i, similarity: Math.max(...i.keys.map((k) => simByKey.get(k) ?? 0)) }));
+    job.status = 'done';
+  } catch (err) {
+    job.status = 'error';
+    job.error = /timeout|aborted/i.test(err.message) ? 'iqdb.org is very busy right now. Try again in a few minutes.' : err.message;
+  }
+}
+
+router.post('/studio/similar', (req, res) => {
+  const url = String(req.body?.url ?? '');
+  if (!/^\/images\/[\w.-]+$/.test(url) && !domainOf(url)) throw new HttpError(400, 'Use a picture from the Art search, a board or the gallery.');
+  for (const [k, j] of similarJobs) if (Date.now() - j.started > 30 * 60 * 1000) similarJobs.delete(k);
+  const id = crypto.randomBytes(8).toString('hex');
+  const job = { id, user: req.user.id, status: 'running', stage: 'loading', started: Date.now() };
+  similarJobs.set(id, job);
+  runSimilar(job, url, req.user.id);
+  res.status(202).json({ id });
+});
+
+router.get('/studio/similar/:id', (req, res) => {
+  const job = similarJobs.get(req.params.id);
+  if (!job || job.user !== req.user.id) throw new HttpError(404, 'Search not found (it may have expired).');
+  res.json({ status: job.status, stage: job.stage, items: job.items ?? null, error: job.error ?? null, seconds: Math.round((Date.now() - job.started) / 1000) });
+});
 
 router.get('/studio/series', wrap(async (req, res) => {
   const tags = String(req.query.tags ?? '').split(',').filter((t) => TAG_RE.test(t)).slice(0, 12);
@@ -1032,12 +1255,6 @@ router.get('/studio/img', wrap(async (req, res) => {
   await pipeImage(String(req.query.u ?? ''), res);
 }));
 
-// Signed links for Eagle, for originals from the allowed sites.
-router.post('/studio/sign', (req, res) => {
-  const urls = Array.isArray(req.body?.urls) ? req.body.urls.slice(0, 200) : [];
-  res.json({ urls: urls.map((u) => (typeof u === 'string' && domainOf(u) ? signedPath(u) : null)) });
-});
-
 // Everything Eagle needs for each picture: a signed download link, a name,
 // grouped tags (eagle-tags.js), a note with credits and links, a star rating
 // from popularity, the posting date, and names for sorting into folders.
@@ -1047,6 +1264,21 @@ router.post('/studio/eagle', wrap(async (req, res) => {
   const items = Array.isArray(req.body?.items) ? req.body.items.slice(0, 200) : [];
   const opts = { style: req.body?.style === 'plain' ? 'plain' : 'grouped', other: req.body?.other === true };
   const arr = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 300) : []);
+  // Board pictures don't keep their tags: for Danbooru ones, ask Danbooru (also
+  // for the original file, since boards store a smaller copy).
+  const needDb = items.filter((i) => i.needsTags && i.source === 'danbooru' && /^\d+$/.test(String(i.id))).map((i) => String(i.id));
+  for (let n = 0; n < needDb.length; n += 100) {
+    const ids = needDb.slice(n, n + 100);
+    const rows = await dbDirect(`/posts.json?limit=200&only=id,file_url,tag_string_general,tag_string_character,tag_string_copyright,tag_string_artist,score,created_at&tags=${encodeURIComponent(`id:${ids.join(',')}`)}`).catch(() => []);
+    const byId = new Map((Array.isArray(rows) ? rows : []).map((p) => [String(p.id), p]));
+    for (const i of items) {
+      const p = i.source === 'danbooru' && byId.get(String(i.id));
+      if (!p) continue;
+      const split = (s) => String(s ?? '').split(' ').filter(Boolean);
+      Object.assign(i, { tags: split(p.tag_string_general), characters: split(p.tag_string_character), series: split(p.tag_string_copyright), artists: split(p.tag_string_artist), score: p.score, createdAt: Date.parse(p.created_at) || null });
+      if (p.file_url) i.original = p.file_url;
+    }
+  }
   // Ask Danbooru what kind of tag each one is (character, series, artist…) for
   // sites that don't say.
   // Tags from other sites go through Danbooru's aliases first, so one character
@@ -1067,7 +1299,10 @@ router.post('/studio/eagle', wrap(async (req, res) => {
   const info = await tagInfo([...new Set(items.filter((i) => i.source !== 'danbooru').flatMap((i) => i.tags))].filter((t) => TAG_RE.test(t)));
   const { eagleTags, starsFor, personName, seriesName, plain, SITE_NAMES: SITES } = require('./eagle-tags');
   const out = items.map((i) => {
-    const original = typeof i.original === 'string' && domainOf(i.original) ? i.original : null;
+    // A site's file (downloaded by Eagle through a signed link), or a copy
+    // stored on the NAS (/images/…, e.g. from a board).
+    const local = typeof i.original === 'string' && /^\/images\/[\w.-]+$/.test(i.original) ? i.original : null;
+    const original = local ?? (typeof i.original === 'string' && domainOf(i.original) ? i.original : null);
     if (!original) return null;
     const item = { ...i, tags: arr(i.tags), characters: arr(i.characters), series: arr(i.series), artists: arr(i.artists), sources: Array.isArray(i.sources) ? i.sources.slice(0, 10) : [] };
     const tags = eagleTags(item, info, opts);
@@ -1076,7 +1311,8 @@ router.post('/studio/eagle', wrap(async (req, res) => {
     const chars = opts.style === 'plain' ? item.characters.map(personName) : pick('Character');
     const series = opts.style === 'plain' ? item.series.map(seriesName) : pick('Series');
     const artist = opts.style === 'plain' ? item.artists.map(plain)[0] : pick('Artist')[0];
-    const name = [chars.slice(0, 3).join(', '), series[0], artist && `by ${artist}`].filter(Boolean).join(' – ') || `${SITES[i.source] ?? i.source} ${i.id}`;
+    const page = typeof i.page === 'string' && /^\d+\/\d+$/.test(i.page) ? ` (p${i.page})` : '';
+    const name = ([chars.slice(0, 3).join(', '), series[0], artist && `by ${artist}`].filter(Boolean).join(' – ') || `${SITES[i.source] ?? i.source} ${i.id}`) + page;
     const date = Number(i.createdAt) || null;
     const annotation = [
       [artist && `Artist: ${artist}`, i.width && i.height && `${i.width}×${i.height}`, date && `posted ${new Date(date).toISOString().slice(0, 10)}`, i.score != null && `★ ${i.score} on ${SITES[i.source] ?? i.source}`].filter(Boolean).join(' · '),
@@ -1087,7 +1323,7 @@ router.post('/studio/eagle', wrap(async (req, res) => {
       .filter(Boolean)
       .join('\n');
     return {
-      url: signedPath(original),
+      url: local ?? signedPath(original),
       name: name.slice(0, 200),
       website: (typeof i.sourceUrl === 'string' && i.sourceUrl) || (typeof i.postUrl === 'string' ? i.postUrl : ''),
       tags,

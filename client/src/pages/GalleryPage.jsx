@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, subjectHref } from '../api.js';
 import { useApp } from '../AppContext.jsx';
 import { plural } from '../util.js';
-import { FanartGrid } from '../components/FanartBrowser.jsx';
-import FanartViewer from '../components/FanartViewer.jsx';
+import Avatar from '../components/Avatar.jsx';
+import Reactions from '../components/Reactions.jsx';
+import { ArtResults, adaptItem, staticStream, useEagle } from '../components/ArtSearch.jsx';
 
 // Everything you both saved, newest first.
-export default function GalleryPage() {
+// goSearch(chips): "More like this" and friends start a search in the Art tab.
+export default function GalleryPage({ tools, goSearch }) {
   const { me, users } = useApp();
   const [by, setBy] = useState('');
   const [subject, setSubject] = useState('');
@@ -14,7 +16,6 @@ export default function GalleryPage() {
   const [subjects, setSubjects] = useState([]);
   const [error, setError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [viewer, setViewer] = useState(null);
 
   const params = useCallback((extra = {}) => Object.fromEntries(Object.entries({ by, subject, ...extra }).filter(([, v]) => v)), [by, subject]);
 
@@ -51,6 +52,8 @@ export default function GalleryPage() {
   };
 
   const items = data?.items ?? [];
+  const adapted = useMemo(() => items.map(adaptItem), [items]);
+  const eagle = useEagle();
   const total = subjects.reduce((s, x) => s + x.count, 0);
 
   return (
@@ -96,25 +99,42 @@ export default function GalleryPage() {
         <p className="muted">Loading…</p>
       ) : (
         <>
-          <FanartGrid items={items} onOpen={(index) => setViewer(index)} emptyText="Nothing saved yet. Open a character or ship, find a picture you love and tap ♡ Save." />
+          <ArtResults
+            stream={staticStream(adapted)}
+            size={160}
+            tools={tools}
+            eagle={eagle}
+            onSearch={goSearch}
+            emptyText="Nothing saved yet. Open a character or ship, find a picture you love and tap ♡ Save."
+            extraActions={[
+              { icon: '💔', label: 'Remove from gallery', onSelect: unsave },
+              { icon: '🙈', label: 'Hide for both of you', onSelect: hide },
+            ]}
+            renderInfo={(item) => (
+              <>
+                <p className="small">
+                  {item.savedBy && (
+                    <>
+                      <Avatar user={item.savedBy} size={18} /> saved by {item.savedBy.username}
+                    </>
+                  )}
+                  {item.subject && (
+                    <>
+                      {' · '}
+                      <a href={subjectHref(item.subject)}>{item.subjectName ?? 'Open'}</a>
+                    </>
+                  )}
+                </p>
+                {item.savedId && <Reactions target={`fanart:${item.savedId}`} initial={item.reactions} emojis={['❤️', '😂', '😳', '🔥']} />}
+              </>
+            )}
+          />
           {data.nextBefore && (
             <button type="button" className="btn ghost wide load-more" onClick={more} disabled={loadingMore}>
               {loadingMore ? 'Loading…' : 'Load more'}
             </button>
           )}
         </>
-      )}
-      {viewer != null && items.length > 0 && (
-        <FanartViewer
-          items={items}
-          index={Math.min(viewer, items.length - 1)}
-          onIndex={setViewer}
-          onClose={() => setViewer(null)}
-          onUnsave={unsave}
-          onHide={hide}
-          showSubject
-          actions={[{ icon: '↗️', label: 'Open full size', onSelect: (item) => window.open(item.remoteUrl ?? item.full, '_blank', 'noopener') }]}
-        />
       )}
     </div>
   );
