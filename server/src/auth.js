@@ -193,8 +193,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', (req, res) => {
   if (!req.user) return res.status(401).json({ error: 'Not logged in' });
   const { isSpicy } = require('./adult');
-  const { isStudio } = require('./studio');
-  res.json({ ...req.user, spicyArt: isSpicy(req.user.id), studio: isStudio(req.user.id) });
+  res.json({ ...req.user, spicyArt: isSpicy(req.user.id) });
 });
 
 // Changing the password logs out all other devices.

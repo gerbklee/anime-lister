@@ -510,6 +510,14 @@ const MIGRATIONS = {
       value  TEXT
     );
   `,
+  // v16: the series a Danbooru character tag belongs to (for search suggestions).
+  16: `
+    CREATE TABLE tag_series (
+      tag         TEXT    PRIMARY KEY,
+      series      TEXT,
+      fetched_at  INTEGER NOT NULL
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

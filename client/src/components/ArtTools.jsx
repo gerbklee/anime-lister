@@ -341,9 +341,25 @@ export function useArtActions({ onSearch, onSimilar }) {
     </>
   );
 
+  const useAsAvatar = async (url) => {
+    try {
+      setMe(await api.setAvatar(url));
+      refreshLists();
+      setToast('✓ Profile photo updated');
+    } catch (err) {
+      setToast(err.message);
+    }
+  };
+
   return {
     viewerProps: { actions, primary: { label: '📌 Board', onSelect: (item) => setBoard(item) } },
     openWhatIs: setWhatIs,
+    // For the multi-source search viewer.
+    openBoard: setBoard,
+    openWallpaper: setWallpaper,
+    follow,
+    useAsAvatar,
+    toast: setToast,
     dialogs,
   };
 }

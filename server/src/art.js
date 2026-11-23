@@ -16,6 +16,17 @@ const { usersById, getUser } = require('./users');
 const { notify } = require('./notify');
 const fanart = require('./fanart');
 const { isSpicy, allAdults } = require('./adult');
+const studio = require('./studio');
+
+const STUDIO_SOURCES = new Set(['yandere', 'konachan', 'gelbooru', 'pixiv']);
+
+// Pictures the app shows through its own proxies ("/api/studio/img?u=…"):
+// the site's address behind them.
+function unproxy(url) {
+  const m = String(url ?? '').match(/^\/api\/(?:studio|fanart)\/img\?u=([^&]+)/);
+  return m ? decodeURIComponent(m[1]) : url;
+}
+const isPictureUrl = (url) => isAllowedImageUrl(url) || !!studio.domainOf(url);
 
 const COLOURS = {
   red: 'red_theme', orange: 'orange_theme', yellow: 'yellow_theme', green: 'green_theme', blue: 'blue_theme',
@@ -392,6 +403,7 @@ async function followJob() {
     byArtist.get(f.artist).push(f);
   }
   for (const [artist, followers] of byArtist) {
+    if (artist.startsWith('pixiv:')) continue; // Pixiv-only artists: no notifications yet
     try {
       const raw = await fanart.danbooru(`/posts.json?limit=20&only=${FIELDS}&tags=${encodeURIComponent(`${artist} rating:g`)}`);
       const items = (Array.isArray(raw) ? raw : []).map(toItem).filter(Boolean);
@@ -466,7 +478,7 @@ async function runWhatIs(job, url) {
       const file = path.join(IMAGE_DIR, path.basename(url));
       buf = await fs.promises.readFile(file);
     } else {
-      const file = await cacheImage(url);
+      const file = await cacheImage(url, undefined, { trusted: true });
       buf = await fs.promises.readFile(path.join(IMAGE_DIR, file));
     }
     // Small JPEGs are enough for IQDB and upload faster.
@@ -505,13 +517,20 @@ router.get('/art/autocomplete', wrap(async (req, res) => {
   const term = String(req.query.q ?? '').trim();
   if (term.length < 2) return res.json({ suggestions: [] });
   const query = term.toLowerCase().replace(/\s+/g, '_');
-  const rows = await cache(`ac|${query}`, () =>
-    fanart.danbooru(`/autocomplete.json?search%5Bquery%5D=${encodeURIComponent(query)}&search%5Btype%5D=tag_query&limit=10`),
-  ).catch(() => []);
+  // Straight to Danbooru (not through the background queue), so typing stays quick.
+  const rows = await studio
+    .dbDirect(`/autocomplete.json?search%5Bquery%5D=${encodeURIComponent(query)}&search%5Btype%5D=tag_query&limit=10`)
+    .catch(() => []);
   const ships = q.shipsByName.all({ q: `%${term}%` }).map((s) => ({ tag: `ship:${s.id}`, label: s.name, kind: 'ship', count: null }));
   const tags = (Array.isArray(rows) ? rows : [])
     .filter((r) => CATEGORY[r.category])
-    .map((r) => ({ tag: r.value, label: r.value.replace(/_/g, ' '), kind: CATEGORY[r.category], count: r.post_count }));
+    .map((r) => {
+      const kind = CATEGORY[r.category];
+      // Characters show their series; unknown ones are filled in by /studio/series.
+      const series = kind === 'character' ? studio.knownSeries(r.value) : undefined;
+      const label = kind === 'character' ? r.value.replace(/_\([^)]*\)$/, '').replace(/_/g, ' ') : r.value.replace(/_/g, ' ');
+      return { tag: r.value, label, kind, count: r.post_count, series };
+    });
   res.json({ suggestions: [...ships, ...tags] });
 }));
 
@@ -647,23 +666,29 @@ router.get('/art/boards-with', (req, res) => {
 
 router.post('/art/boards/:id/items', wrap(async (req, res) => {
   const { board } = boardAccess(parseId(req.params.id), req.user.id);
-  const { source, id, subject } = req.body?.item ?? {};
+  const { source, id, subject, scope } = req.body?.item ?? {};
   const existing = q.itemByPost.get(board.id, source, String(id));
   if (existing) return res.json(itemView(existing, usersById()));
-  // Spicy pictures: Danbooru checks every tagged character; for other sources
-  // the picture must come from a character/ship of known adults.
-  let spicy = isSpicy(req.user.id);
-  if (spicy && source !== 'danbooru') {
-    const info = subject ? await fanart.subjectInfo(subject).catch(() => null) : null;
-    spicy = info && (await allAdults(info.memberIds)) ? spicy : 0;
+  let post;
+  if (STUDIO_SOURCES.has(source)) {
+    // Yande.re, Konachan, Gelbooru, Pixiv: re-checked with the search's rules.
+    post = await studio.fetchPost(source, id, { level: isSpicy(req.user.id), scope: typeof scope === 'string' ? scope : null }).catch(() => null);
+  } else {
+    // Spicy pictures: Danbooru checks every tagged character; for other sources
+    // the picture must come from a character/ship of known adults.
+    let spicy = isSpicy(req.user.id);
+    if (spicy && source !== 'danbooru') {
+      const info = subject ? await fanart.subjectInfo(subject).catch(() => null) : null;
+      spicy = info && (await allAdults(info.memberIds)) ? spicy : 0;
+    }
+    post = await fanart.fetchPost(source, id, { spicy });
   }
-  const post = await fanart.fetchPost(source, id, { spicy });
   if (!post) throw new HttpError(400, 'That picture is no longer available or not allowed here.');
   let imageFile;
   let thumbFile;
   try {
-    imageFile = await cacheImage(post.remoteUrl);
-    thumbFile = await cacheImage(post.remoteThumb ?? post.remoteUrl);
+    imageFile = await cacheImage(post.remoteUrl, undefined, { trusted: true });
+    thumbFile = await cacheImage(post.remoteThumb ?? post.remoteUrl, undefined, { trusted: true });
   } catch (err) {
     throw new HttpError(502, `Could not download the picture: ${err.message}`);
   }
@@ -702,13 +727,13 @@ router.delete('/art/boards/:id/items/:itemId', (req, res) => {
 // Wallpaper: crop a picture to the phone's or a desktop's shape.
 const TARGETS = { phone: { width: 1290, height: 2796 }, desktop: { width: 2560, height: 1440 } };
 router.post('/art/wallpaper', wrap(async (req, res) => {
-  const url = String(req.body?.url ?? '');
+  const url = unproxy(String(req.body?.url ?? ''));
   const target = TARGETS[req.body?.target] ? req.body.target : 'phone';
   const crop = cleanCrop(req.body?.crop);
   if (!crop) throw new HttpError(400, 'Choose the area first.');
   let file;
   if (url.startsWith('/images/')) file = path.basename(url);
-  else if (isAllowedImageUrl(url)) file = await cacheImage(url);
+  else if (isPictureUrl(url)) file = await cacheImage(url, undefined, { trusted: true });
   else throw new HttpError(400, 'Please pick one of the pictures in the app.');
   const out = await cropImage(file, crop, { ...TARGETS[target], prefix: 'wall', quality: 92 });
   res.json({ url: `/images/${out}`, target });
@@ -720,9 +745,12 @@ router.get('/art/follows', (req, res) => {
 });
 
 router.post('/art/follows', wrap(async (req, res) => {
-  const artist = String(req.body?.artist ?? '').trim();
+  let artist = String(req.body?.artist ?? '').trim();
   if (!/^[^\s,]{1,80}$/.test(artist)) throw new HttpError(400, 'Invalid artist');
-  const latest = await fanart.danbooru(`/posts.json?limit=1&only=id&tags=${encodeURIComponent(`${artist} rating:g`)}`).catch(() => []);
+  // A Pixiv artist ("pixiv:<id>") that Danbooru knows is followed by their Danbooru
+  // name, so every site is covered; otherwise by the Pixiv account.
+  if (/^pixiv:\d+$/.test(artist)) artist = (await studio.artistInfo(artist).catch(() => null))?.tag ?? artist;
+  const latest = artist.startsWith('pixiv:') ? [] : await fanart.danbooru(`/posts.json?limit=1&only=id&tags=${encodeURIComponent(`${artist} rating:g`)}`).catch(() => []);
   const name = (typeof req.body?.name === 'string' && req.body.name.trim()) || artist.replace(/_/g, ' ');
   q.follow.run(req.user.id, artist, name.slice(0, 80), Number(latest?.[0]?.id ?? 0), Date.now());
   res.status(201).json({ ok: true });
@@ -748,8 +776,8 @@ router.get('/art/artists/feed', wrap(async (req, res) => {
 
 // What is this? Start a reverse image search for a picture in the app.
 router.post('/art/whatis', (req, res) => {
-  const url = String(req.body?.url ?? '');
-  if (!url.startsWith('/images/') && !isAllowedImageUrl(url)) throw new HttpError(400, 'Use a picture from the app or a link from AniList, Danbooru, Zerochan, Wallhaven or Safebooru.');
+  const url = unproxy(String(req.body?.url ?? ''));
+  if (!url.startsWith('/images/') && !isPictureUrl(url)) throw new HttpError(400, 'Use a picture from the app or a link from AniList, Danbooru, Zerochan, Wallhaven or Safebooru.');
   for (const [k, j] of jobs) if (Date.now() - j.started > 30 * 60 * 1000) jobs.delete(k);
   const id = crypto.randomBytes(8).toString('hex');
   const job = { id, user: req.user.id, status: 'running', started: Date.now() };

@@ -28,6 +28,31 @@ async function request(method, url, body, { signal } = {}) {
   return data;
 }
 
+// Reads a response of one JSON object per line as it arrives (fast sources first).
+export async function streamJson(url, onObject, { signal } = {}) {
+  const res = await fetch(url, { credentials: 'same-origin', signal });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    if (res.status === 401) onUnauthorized();
+    throw new Error(data?.error || `Request failed (${res.status})`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl;
+    while ((nl = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 1);
+      if (line.trim()) onObject(JSON.parse(line));
+    }
+  }
+  if (buffer.trim()) onObject(JSON.parse(buffer));
+}
+
 const enc = encodeURIComponent;
 
 export const api = {
@@ -173,14 +198,19 @@ export const api = {
   shareBoard: (id, username) => request('POST', `/api/art/boards/${id}/members`, { username }),
   removeBoardMember: (id, userId) => request('DELETE', `/api/art/boards/${id}/members/${userId}`),
   boardsWith: (item) => request('GET', `/api/art/boards-with?source=${enc(item.source)}&id=${enc(item.id)}`),
-  addToBoard: (id, item) => request('POST', `/api/art/boards/${id}/items`, { item: { source: item.source, id: item.id, subject: item.subject } }),
+  addToBoard: (id, item) =>
+    request('POST', `/api/art/boards/${id}/items`, { item: { source: item.source, id: item.id, subject: item.subject, scope: item.scope } }),
   setSpicy: (level) => request('PUT', '/api/me/spicy', { level }),
-  // Studio
-  setStudio: (on) => request('PUT', '/api/me/studio', { on }),
+  // Art search (multi-source)
   studioStatus: () => request('GET', '/api/studio/status'),
-  studioSearch: (params, signal) => request('GET', `/api/studio/search?${new URLSearchParams(params)}`, undefined, { signal }),
+  studioSearch: (params, onObject, signal) => streamJson(`/api/studio/search?${new URLSearchParams(params)}`, onObject, { signal }),
+  studioFollowing: (onObject, signal) => streamJson('/api/studio/following', onObject, { signal }),
+  studioArtist: (key) => request('GET', `/api/studio/artist?key=${enc(key)}`),
+  studioSeries: (tags, signal) => request('GET', `/api/studio/series?tags=${enc(tags.join(','))}`, undefined, { signal }),
+  studioPostTags: (id) => request('GET', `/api/studio/post-tags?id=${enc(id)}`),
   studioResolve: (source, id, scope) => request('GET', `/api/studio/resolve?${new URLSearchParams({ source, id, scope: scope ?? '' })}`),
   studioSign: (urls) => request('POST', '/api/studio/sign', { urls }),
+  studioEagle: (items, opts) => request('POST', '/api/studio/eagle', { items, ...opts }),
   studioSearches: () => request('GET', '/api/studio/searches'),
   saveStudioSearch: (name, query) => request('POST', '/api/studio/searches', { name, query }),
   deleteStudioSearch: (id) => request('DELETE', `/api/studio/searches/${id}`),

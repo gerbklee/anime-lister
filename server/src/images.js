@@ -10,6 +10,19 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 // Only images from these sites are downloaded (AniList, MyAnimeList, Safebooru).
 const ALLOWED_HOSTS = ['anilist.co', 'myanimelist.net', 'safebooru.org', 'donmai.us', 'zerochan.net', 'wallhaven.cc'];
+// Extra sites the Art search uses. Only for pictures the server has checked itself
+// (boards, wallpapers, "What is this?"), never for portraits or profile photos.
+const TRUSTED_HOSTS = ['yande.re', 'konachan.com', 'gelbooru.com', 'pximg.net'];
+const REFERERS = { 'pximg.net': 'https://app-api.pixiv.net/' };
+const hostIn = (url, hosts) => {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return null;
+    return hosts.find((h) => u.hostname === h || u.hostname.endsWith(`.${h}`)) ?? null;
+  } catch {
+    return null;
+  }
+};
 
 function isAllowedImageUrl(url) {
   try {
@@ -25,9 +38,10 @@ function isAllowedImageUrl(url) {
 
 // Downloads `url` as "<baseName>.<ext>" (or a hash-based name if baseName is
 // omitted) and returns the file name, or null if there is no URL.
-async function cacheImage(url, baseName) {
+async function cacheImage(url, baseName, { trusted = false } = {}) {
   if (!url) return null;
-  if (!isAllowedImageUrl(url)) throw new Error('Images can only come from AniList, MyAnimeList or the supported fan art sites.');
+  const extra = trusted ? hostIn(url, TRUSTED_HOSTS) : null;
+  if (!isAllowedImageUrl(url) && !extra) throw new Error('Images can only come from AniList, MyAnimeList or the supported fan art sites.');
 
   let ext = path.extname(new URL(url).pathname).toLowerCase();
   if (!ALLOWED_EXT.has(ext)) ext = '.jpg';
@@ -39,7 +53,7 @@ async function cacheImage(url, baseName) {
 
   const res = await fetch(url, {
     signal: AbortSignal.timeout(20_000),
-    headers: { 'User-Agent': 'AnimeLister/1.0 (self-hosted)' },
+    headers: { 'User-Agent': 'AnimeLister/1.0 (self-hosted)', ...(REFERERS[extra] ? { Referer: REFERERS[extra] } : {}) },
   });
   if (!res.ok) throw new Error(`Image download failed (${res.status})`);
   const type = res.headers.get('content-type') || '';

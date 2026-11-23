@@ -1,31 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { plural, timeAgo } from '../util.js';
+import { plural } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
-import FilterPanel from '../components/FilterPanel.jsx';
 import Menu from '../components/Menu.jsx';
 import { FanartGrid } from '../components/FanartBrowser.jsx';
 import FanartViewer from '../components/FanartViewer.jsx';
 import { useArtActions } from '../components/ArtTools.jsx';
+import { ArtistView, FollowingFeed, SearchView, artistHref, label, setSearchChips } from '../components/ArtSearch.jsx';
 import GalleryPage from './GalleryPage.jsx';
 
-const COLOURS = [
-  ['red', '#e5484d'], ['orange', '#f28c28'], ['yellow', '#f5c518'], ['green', '#30a46c'], ['blue', '#3e63dd'],
-  ['purple', '#8e4ec6'], ['pink', '#e93d82'], ['black', '#222'], ['white', '#f4f4f4'], ['pastel', 'linear-gradient(135deg,#ffd1dc,#c9e4ff,#d5f5d0)'],
-];
-const KIND_ICONS = { character: '👤', ship: '💕', series: '🎬', artist: '🖌️', tag: '🏷️' };
-const SEARCH_KEY = 'art-search';
-
-function loadSearch() {
-  try {
-    return { chips: [], color: '', sort: 'best', shape: '', quality: '', solo: false, ...JSON.parse(sessionStorage.getItem(SEARCH_KEY) ?? '{}') };
-  } catch {
-    return { chips: [], color: '', sort: 'best', shape: '', quality: '', solo: false };
-  }
-}
-
-// A grid that opens the art viewer.
 function ArtGrid({ items, tools, emptyText, extraActions = [], onSave }) {
   const [open, setOpen] = useState(null);
   return (
@@ -47,259 +31,6 @@ function ArtGrid({ items, tools, emptyText, extraActions = [], onSave }) {
   );
 }
 
-// ---- Search ------------------------------------------------------------------------------------
-
-function ChipInput({ chips, onChange }) {
-  const [text, setText] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
-
-  useEffect(() => {
-    const term = text.trim();
-    if (term.length < 2) {
-      setSuggestions([]);
-      return undefined;
-    }
-    const controller = new AbortController();
-    const t = setTimeout(() => {
-      api
-        .artAutocomplete(term, controller.signal)
-        .then((d) => {
-          setSuggestions(d.suggestions);
-          setActive(0);
-        })
-        .catch(() => {});
-    }, 250);
-    return () => {
-      clearTimeout(t);
-      controller.abort();
-    };
-  }, [text]);
-
-  const add = (chip) => {
-    if (!chips.some((c) => c.tag === chip.tag)) onChange([...chips, chip].slice(0, 6));
-    setText('');
-    setSuggestions([]);
-  };
-  const onKeyDown = (e) => {
-    if (e.key === 'ArrowDown') setActive((a) => Math.min(a + 1, suggestions.length - 1));
-    if (e.key === 'ArrowUp') setActive((a) => Math.max(a - 1, 0));
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      if (suggestions[active]) add(suggestions[active]);
-      else if (text.trim()) add({ tag: text.trim().toLowerCase().replace(/\s+/g, '_'), label: text.trim(), kind: 'tag' });
-    }
-    if (e.key === 'Backspace' && !text && chips.length) onChange(chips.slice(0, -1));
-  };
-
-  return (
-    <div className="chip-input">
-      <div className="chip-input-box">
-        <span aria-hidden="true">🔍</span>
-        {chips.map((c) => (
-          <span key={c.tag} className={`chip kind-${c.kind}`}>
-            {KIND_ICONS[c.kind] ?? '🏷️'} {c.label}
-            <button type="button" className="chip-remove" onClick={() => onChange(chips.filter((x) => x.tag !== c.tag))} aria-label={`Remove ${c.label}`}>
-              ✕
-            </button>
-          </span>
-        ))}
-        <input
-          type="search"
-          value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          onKeyDown={onKeyDown}
-          placeholder={chips.length ? 'Add more…' : 'Character, ship, series, artist, "rain", "kimono"…'}
-          aria-label="Search art"
-        />
-      </div>
-      {open && suggestions.length > 0 && (
-        <ul className="suggestions chip-suggestions" role="listbox">
-          {suggestions.map((s, i) => (
-            <li key={s.tag} role="option" aria-selected={i === active} className={`suggestion ${i === active ? 'active' : ''}`} onMouseDown={(e) => e.preventDefault()} onClick={() => add(s)}>
-              <span className="chip-kind">{KIND_ICONS[s.kind]}</span>
-              <span className="suggestion-text">
-                <span className="suggestion-name">{s.label}</span>
-                <span className="muted tiny">
-                  {s.kind}
-                  {s.count != null ? ` · ${s.count.toLocaleString()} pictures` : ''}
-                </span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function SearchView({ search, setSearch, similar, clearSimilar, tools }) {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [page, setPage] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [link, setLink] = useState('');
-
-  const params = useCallback(
-    (p) => ({
-      tags: search.chips.map((c) => c.tag).join(','),
-      ...(search.color ? { color: search.color } : {}),
-      sort: search.sort,
-      ...(search.shape ? { shape: search.shape } : {}),
-      ...(search.quality ? { quality: search.quality } : {}),
-      ...(search.solo ? { solo: 1 } : {}),
-      page: p,
-    }),
-    [search],
-  );
-
-  useEffect(() => {
-    setError(null);
-    setData(null);
-    setPage(1);
-    if (similar) {
-      api
-        .artSimilar(similar.item.id, similar.mode)
-        .then((d) => setData({ items: d.items, hasMore: false, tags: d.tags }))
-        .catch((err) => setError(err.message));
-      return;
-    }
-    if (!search.chips.length && !search.color) return;
-    api
-      .artSearch(params(1))
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [search, similar, params]);
-
-  const more = async () => {
-    setLoadingMore(true);
-    try {
-      const d = await api.artSearch(params(page + 1));
-      setData((cur) => ({ ...d, items: [...cur.items, ...d.items.filter((n) => !cur.items.some((o) => o.id === n.id))] }));
-      setPage((p) => p + 1);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
-  const set = (patch) => setSearch((s) => ({ ...s, ...patch }));
-  const activeFilters = [search.sort !== 'best', !!search.shape, !!search.quality, search.solo].filter(Boolean).length;
-  const modeLabels = { artist: `More by ${similar?.item.artist}`, characters: 'More with these characters', tags: 'More like this' };
-
-  return (
-    <div className="art-search">
-      {similar ? (
-        <div className="similar-head card">
-          <img src={similar.item.thumb} alt="" />
-          <div>
-            <b>{modeLabels[similar.mode]}</b>
-            {data?.tags && <div className="muted tiny">{data.tags.map((t) => t.replace(/_/g, ' ')).join(' + ')}</div>}
-          </div>
-          <button type="button" className="icon-btn" onClick={clearSimilar} aria-label="Back to search">
-            ✕
-          </button>
-        </div>
-      ) : (
-        <>
-          <ChipInput chips={search.chips} onChange={(chips) => set({ chips })} />
-          <div className="colour-dots" role="radiogroup" aria-label="Colour">
-            {COLOURS.map(([name, css]) => (
-              <button
-                key={name}
-                type="button"
-                role="radio"
-                aria-checked={search.color === name}
-                aria-label={name}
-                title={name}
-                className={`colour-dot ${search.color === name ? 'on' : ''}`}
-                style={{ background: css }}
-                onClick={() => set({ color: search.color === name ? '' : name })}
-              />
-            ))}
-          </div>
-          <FilterPanel active={activeFilters} onReset={() => set({ sort: 'best', shape: '', quality: '', solo: false })} summary={data ? plural(data.items.length, 'picture') : null}>
-            <div className="segmented small" role="radiogroup" aria-label="Sort">
-              {[
-                ['best', '⭐ Best'],
-                ['new', '🆕 Newest'],
-              ].map(([k, l]) => (
-                <button key={k} type="button" className={search.sort === k ? 'active' : ''} onClick={() => set({ sort: k })}>
-                  {l}
-                </button>
-              ))}
-            </div>
-            <div className="segmented small" role="radiogroup" aria-label="Shape">
-              {[
-                ['', 'Any shape'],
-                ['portrait', 'Portrait'],
-                ['landscape', 'Landscape'],
-                ['phone', '📱 Phone'],
-              ].map(([k, l]) => (
-                <button key={k} type="button" className={search.shape === k ? 'active' : ''} onClick={() => set({ shape: k })}>
-                  {l}
-                </button>
-              ))}
-            </div>
-            <div className="segmented small" role="radiogroup" aria-label="Quality">
-              {[
-                ['', 'Any size'],
-                ['hd', 'HD'],
-                ['4k', '4K'],
-              ].map(([k, l]) => (
-                <button key={k} type="button" className={search.quality === k ? 'active' : ''} onClick={() => set({ quality: k })}>
-                  {l}
-                </button>
-              ))}
-            </div>
-            <label className="check small">
-              <input type="checkbox" checked={search.solo} onChange={(e) => set({ solo: e.target.checked })} /> Solo only
-            </label>
-          </FilterPanel>
-        </>
-      )}
-
-      {error && <div className="banner error">{error}</div>}
-      {!similar && !search.chips.length && !search.color ? (
-        <div className="art-search-empty">
-          <p className="muted">Combine anything: a character, a ship, a series, an artist, and things in the picture like “rain”, “kimono” or “smile”. Or pick a colour.</p>
-          <form
-            className="trope-custom"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (link.trim()) tools.openWhatIs(link.trim());
-            }}
-          >
-            <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="❓ Paste a picture link to find out what it is" aria-label="Picture link" />
-            <button type="submit" className="btn ghost" disabled={!link.trim()}>
-              Look up
-            </button>
-          </form>
-        </div>
-      ) : !data && !error ? (
-        <p className="muted">Searching…</p>
-      ) : (
-        data && (
-          <>
-            <ArtGrid items={data.items} tools={tools} emptyText="Nothing found. Try fewer or different words." />
-            {data.hasMore && (
-              <button type="button" className="btn ghost wide load-more" onClick={more} disabled={loadingMore}>
-                {loadingMore ? 'Loading…' : 'Load more'}
-              </button>
-            )}
-          </>
-        )
-      )}
-    </div>
-  );
-}
 
 // ---- Home --------------------------------------------------------------------------------------
 
@@ -352,14 +83,13 @@ function BoardCard({ b }) {
   );
 }
 
-function HomeView({ tools, goSearch }) {
+function HomeView({ tools, follows }) {
   const { navigate } = useApp();
   const daily = useLoad(() => api.artDaily(), []);
   const forYou = useLoad(() => api.artForYou(), []);
   const trending = useLoad(() => api.artTrending(), []);
   const boards = useLoad(() => api.boards(), []);
   const gallery = useLoad(() => api.gallery(), []);
-  const follows = useLoad(() => api.follows(), []);
   const [showAll, setShowAll] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
   const d = daily.data;
@@ -367,7 +97,7 @@ function HomeView({ tools, goSearch }) {
   return (
     <div className="art-home">
       <button type="button" className="art-search-launch" onClick={() => navigate('#/art/search')}>
-        <span aria-hidden="true">🔍</span> Search art: characters, ships, artists, “rain”, colours…
+        <span aria-hidden="true">🔍</span> Search art on every site: characters, ships, artists, poses, colours…
       </button>
 
       {d?.item && (
@@ -434,16 +164,16 @@ function HomeView({ tools, goSearch }) {
       )}
 
       <Section title="🖌️ Artists you follow" link="#/art/artists">
-        {follows.data?.follows?.length ? (
+        {follows?.length ? (
           <div className="chip-row">
-            {follows.data.follows.slice(0, 10).map((f) => (
-              <button key={f.artist} type="button" className="chip kind-artist" onClick={() => goSearch([{ tag: f.artist, label: f.name, kind: 'artist' }])}>
+            {follows.slice(0, 10).map((f) => (
+              <a key={f.artist} className="chip kind-artist" href={artistHref(f.artist)}>
                 🖌️ {f.name}
-              </button>
+              </a>
             ))}
           </div>
         ) : (
-          <p className="muted small">Follow artists from any Danbooru picture (⋯ → Follow) to see their new art here.</p>
+          <p className="muted small">Follow artists from any picture in the search (➕ Follow next to the artist) to see their new art from every site here.</p>
         )}
       </Section>
     </div>
@@ -607,37 +337,34 @@ function BoardView({ id, tools }) {
   );
 }
 
+
 // ---- Artists -----------------------------------------------------------------------------------
 
-function ArtistsView({ tools, goSearch }) {
-  const [follows, setFollows] = useState(null);
-  const [feed, setFeed] = useState(null);
-  const load = useCallback(() => {
-    api.follows().then((d) => setFollows(d.follows)).catch(() => setFollows([]));
-    api.artistFeed().then((d) => setFeed(d.items)).catch(() => setFeed([]));
-  }, []);
-  useEffect(() => {
-    load();
-  }, [load]);
+// Everyone you follow, and their newest work from every site.
+function ArtistsView({ tools, goSearch, follows, reloadFollows }) {
   const unfollow = async (f) => {
     if (!window.confirm(`Unfollow ${f.name}?`)) return;
     await api.unfollow(f.artist);
-    load();
+    reloadFollows();
   };
   return (
-    <div className="artists-view">
+    <div className="artists-view studio">
       {!follows ? (
         <p className="muted">Loading…</p>
       ) : follows.length === 0 ? (
-        <p className="muted">You don't follow anyone yet. Open a picture, tap ⋯ → <b>Follow</b> the artist. You'll get a notification when they post new art.</p>
+        <p className="muted">
+          You don't follow anyone yet. Open a picture and tap <b>➕ Follow</b> next to the artist, or open an artist's page from any picture. You'll get a
+          notification when they post new art on Danbooru.
+        </p>
       ) : (
         <>
           <div className="chip-row">
             {follows.map((f) => (
               <span key={f.artist} className="chip-group">
-                <button type="button" className="chip kind-artist" onClick={() => goSearch([{ tag: f.artist, label: f.name, kind: 'artist' }])}>
+                <a className="chip kind-artist" href={artistHref(f.artist)} title="Their work on every site">
                   🖌️ {f.name}
-                </button>
+                  {f.artist.startsWith('pixiv:') && <span className="chip-series"> · Pixiv</span>}
+                </a>
                 <button type="button" className="chip small" onClick={() => unfollow(f)} aria-label={`Unfollow ${f.name}`} title="Unfollow">
                   ✕
                 </button>
@@ -645,7 +372,8 @@ function ArtistsView({ tools, goSearch }) {
             ))}
           </div>
           <h3>🆕 Latest from your artists</h3>
-          {!feed ? <p className="muted small">Loading…</p> : <ArtGrid items={feed} tools={tools} emptyText="Nothing new yet." />}
+          <p className="muted tiny">From Danbooru, Yande.re, Konachan, Gelbooru and Pixiv (where connected), newest first.</p>
+          <FollowingFeed tools={tools} onSearch={goSearch} version={follows.length} />
         </>
       )}
     </div>
@@ -654,40 +382,56 @@ function ArtistsView({ tools, goSearch }) {
 
 // ---- Page --------------------------------------------------------------------------------------
 
+const GENERIC_TAGS = new Set(['solo', '1girl', '1boy', '2girls', 'multiple_girls', 'highres', 'absurdres', 'looking_at_viewer', 'simple_background', 'white_background', 'smile', 'blush', 'long_hair', 'short_hair', 'breasts', 'open_mouth']);
+
 export default function ArtPage({ route }) {
   const { navigate } = useApp();
-  const [search, setSearchState] = useState(loadSearch);
-  const [similar, setSimilar] = useState(null);
+  const [searchKey, setSearchKey] = useState(0);
+  const [follows, setFollows] = useState(null);
   const view = route.view ?? 'home';
 
-  const setSearch = useCallback((fn) => {
-    setSearchState((s) => {
-      const next = typeof fn === 'function' ? fn(s) : fn;
-      try {
-        sessionStorage.setItem(SEARCH_KEY, JSON.stringify(next));
-      } catch {
-        // not important
-      }
-      return next;
-    });
+  const reloadFollows = useCallback(() => {
+    api.follows().then((d) => setFollows(d.follows)).catch(() => setFollows([]));
   }, []);
+  useEffect(() => {
+    reloadFollows();
+  }, [reloadFollows]);
 
   const goSearch = useCallback(
     (chips) => {
-      setSimilar(null);
-      setSearch((s) => ({ ...s, chips, color: '' }));
-      navigate('#/art/search');
-    },
-    [navigate, setSearch],
-  );
-  const onSimilar = useCallback(
-    (item, mode) => {
-      setSimilar({ item, mode });
+      setSearchChips(chips);
+      setSearchKey((k) => k + 1);
       navigate('#/art/search');
     },
     [navigate],
   );
-  const tools = useArtActions({ onSearch: goSearch, onSimilar });
+  // "More …" on pictures from For you, Trending, boards and the gallery (Danbooru posts).
+  const onSimilar = useCallback(
+    async (item, mode) => {
+      if (mode === 'artist') {
+        goSearch([{ tag: String(item.artist).trim().replace(/\s+/g, '_'), label: item.artist, kind: 'artist' }]);
+        return;
+      }
+      const t = await api.studioPostTags(item.id).catch(() => null);
+      if (!t) return;
+      const chars = t.characters.slice(0, 3).map((c) => ({ tag: c, label: label(c).replace(/ \(.*\)$/, ''), kind: 'character' }));
+      if (mode === 'characters') goSearch(chars.length ? chars : t.series.slice(0, 1).map((s) => ({ tag: s, label: label(s), kind: 'series' })));
+      else {
+        const extra = t.tags.filter((x) => !GENERIC_TAGS.has(x) && !/_(hair|eyes)$/.test(x)).slice(0, 2).map((x) => ({ tag: x, label: label(x), kind: 'tag' }));
+        goSearch([...chars.slice(0, 2), ...extra]);
+      }
+    },
+    [goSearch],
+  );
+  const baseTools = useArtActions({ onSearch: goSearch, onSimilar });
+  // Following from a picture updates the Artists tab right away.
+  const tools = {
+    ...baseTools,
+    follow: async (artist, name) => {
+      await baseTools.follow(artist, name);
+      reloadFollows();
+    },
+  };
 
   const tabs = [
     ['home', '#/art', '✨ Home'],
@@ -696,23 +440,24 @@ export default function ArtPage({ route }) {
     ['gallery', '#/art/gallery', '💖 Gallery'],
     ['artists', '#/art/artists', '🖌️ Artists'],
   ];
-  const activeTab = view === 'board' ? 'boards' : view;
+  const activeTab = view === 'board' ? 'boards' : view === 'artist' ? 'artists' : view;
 
   return (
     <section className="art-page">
       <div className="tabs compact profile-tabs" role="tablist">
-        {tabs.map(([key, href, label]) => (
+        {tabs.map(([key, href, text]) => (
           <a key={key} href={href} role="tab" aria-selected={activeTab === key} className={`tab-link ${activeTab === key ? 'active' : ''}`}>
-            {label}
+            {text}
           </a>
         ))}
       </div>
-      {view === 'home' && <HomeView tools={tools} goSearch={goSearch} />}
-      {view === 'search' && <SearchView search={search} setSearch={setSearch} similar={similar} clearSimilar={() => setSimilar(null)} tools={tools} />}
+      {view === 'home' && <HomeView tools={tools} follows={follows} />}
+      {view === 'search' && <SearchView key={searchKey} tools={tools} />}
       {view === 'boards' && <BoardsView />}
       {view === 'board' && <BoardView key={route.boardId} id={route.boardId} tools={tools} />}
       {view === 'gallery' && <GalleryPage />}
-      {view === 'artists' && <ArtistsView tools={tools} goSearch={goSearch} />}
+      {view === 'artists' && <ArtistsView tools={tools} goSearch={goSearch} follows={follows} reloadFollows={reloadFollows} />}
+      {view === 'artist' && <ArtistView key={route.artist} artistKey={route.artist} tools={tools} onSearch={goSearch} following={follows} onFollowChange={reloadFollows} />}
       {tools.dialogs}
     </section>
   );

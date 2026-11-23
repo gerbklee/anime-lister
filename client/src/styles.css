@@ -7802,3 +7802,111 @@ button.chip {
 .studio-links a {
   color: #9db4ff;
 }
+
+/* Art search additions */
+.chip-series,
+.suggestion-series {
+  color: var(--muted);
+  font-weight: 400;
+}
+.chip-series {
+  font-size: 0.85em;
+}
+.studio-head .studio-search {
+  flex: 1;
+  min-width: 260px;
+  margin-bottom: 0;
+}
+.studio-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.studio-info .btn.ghost,
+.studio-info .btn:not(.primary) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f2f2f7;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.studio-info .btn.saved {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.studio-info .link-btn {
+  margin-left: 8px;
+}
+.studio-info a {
+  color: #9db4ff;
+}
+.artist-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.artist-head h2 {
+  margin: 0 0 4px;
+}
+.artist-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.spinner.inline-small {
+  margin-left: 4px;
+}
+.studio-eagle {
+  position: relative;
+}
+.eagle-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: min(340px, calc(100vw - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  box-shadow: var(--shadow-lift);
+}
+.eagle-options label:not(.switch-row) {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.studio-tile-eagle {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #2f9e6a;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.7rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  line-height: 1.4;
+  pointer-events: none;
+}
+.in-eagle-pill {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(48, 164, 108, 0.25);
+  color: #7ee2b0;
+  font-size: 0.8rem;
+}
+button.eagle-on {
+  color: #30a46c;
+  font-weight: 600;
+}
+.studio-tile.in-eagle img {
+  opacity: 0.55;
+}
+.studio-tile.in-eagle:hover img {
+  opacity: 1;
+}

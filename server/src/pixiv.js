@@ -124,4 +124,16 @@ async function searchIllusts(word, { sort = 'best', page = 1 } = {}) {
   return { illusts: r.illusts ?? [], more: !!r.next_url, sortedBy: 'newest' };
 }
 
-module.exports = { isConnected, connectedAs, loginUrl, connect, disconnect, searchIllusts, REFERER };
+// One page (30) of an artist's own works, newest first.
+async function userIllusts(userId, { page = 1 } = {}) {
+  const r = await api(`/v1/user/illusts?user_id=${encodeURIComponent(userId)}&type=illust&filter=for_ios&offset=${(page - 1) * 30}`);
+  return { illusts: r.illusts ?? [], more: !!r.next_url, user: r.user ?? null };
+}
+
+// One work, for saving it to a board.
+async function illustDetail(id) {
+  const r = await api(`/v1/illust/detail?illust_id=${encodeURIComponent(id)}`);
+  return r.illust ?? null;
+}
+
+module.exports = { isConnected, connectedAs, loginUrl, connect, disconnect, searchIllusts, userIllusts, illustDetail, REFERER };

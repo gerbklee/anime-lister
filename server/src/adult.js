@@ -128,13 +128,27 @@ async function characterAge(id) {
   return found.age;
 }
 
+// Uses only the ages already learned from the sources (instant). Missing or
+// stale ones are looked up in the background, never while pictures wait; until
+// then the character counts as "age unknown" (safe art only).
+const refreshing = new Set();
+function refreshAgeLater(id) {
+  if (refreshing.has(id)) return;
+  refreshing.add(id);
+  characterAge(id)
+    .catch(() => {})
+    .finally(() => refreshing.delete(id));
+}
 async function allAdults(ids) {
   if (!ids?.length) return false;
+  let ok = true;
   for (const id of ids) {
-    const age = await characterAge(id);
-    if (age == null || age < 18) return false;
+    const row = q.age.get(id);
+    const fresh = row && Date.now() - row.fetched_at < (row.age == null ? UNKNOWN_FRESH_MS : AGE_FRESH_MS);
+    if (!fresh) refreshAgeLater(id);
+    if (row?.age == null || row.age < 18) ok = false;
   }
-  return true;
+  return ok;
 }
 
 // Danbooru tags of characters known to be adults (rebuilt every few minutes).

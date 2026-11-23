@@ -30,19 +30,16 @@ function AvatarPicker({ onClose, onPicked }) {
   );
 }
 
-// Studio: reference search for drawing, plus the (server-wide) Pixiv connection.
-function StudioSetting() {
-  const { me, setMe } = useApp();
+// Art sources: the (server-wide) Pixiv connection for the Art search.
+function ArtSourcesSetting() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
   const [loginUrl, setLoginUrl] = useState(null);
   const [code, setCode] = useState('');
-  const on = !!me.studio;
-
   useEffect(() => {
-    if (on) api.studioStatus().then(setStatus).catch(() => {});
-  }, [on]);
+    api.studioStatus().then(setStatus).catch(() => {});
+  }, []);
 
   const run = async (fn) => {
     setBusy(true);
@@ -55,11 +52,6 @@ function StudioSetting() {
       setBusy(false);
     }
   };
-  const toggle = () =>
-    run(async () => {
-      const r = await api.setStudio(!on);
-      setMe({ ...me, studio: r.studio });
-    });
   const startPixiv = () =>
     run(async () => {
       const r = await api.pixivLogin();
@@ -77,23 +69,18 @@ function StudioSetting() {
   };
   const disconnectPixiv = () =>
     run(async () => {
-      if (!window.confirm('Disconnect Pixiv? The Studio stops searching Pixiv until it is connected again.')) return;
+      if (!window.confirm('Disconnect Pixiv? The Art search stops searching Pixiv until it is connected again.')) return;
       await api.pixivDisconnect();
       setStatus(await api.studioStatus());
     });
 
   return (
     <div className="card settings-card">
-      <h3>🖌️ Studio</h3>
+      <h3>🎨 Art sources</h3>
       <p className="muted small">
-        Reference search for drawing: high-resolution art from Danbooru, Yande.re, Konachan, Zerochan, Wallhaven (and Pixiv or Gelbooru if set up), with
-        filters for size, pose, angle, lighting and more, and one-click sending to Eagle on your computer. Only changes your account.
+        The Art search looks through Danbooru, Yande.re, Konachan, Zerochan and Wallhaven. Pixiv (and Gelbooru) need a login first.
       </p>
-      <label className="switch-row">
-        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} />
-        <span>{on ? 'On (see the Studio tab)' : 'Off'}</span>
-      </label>
-      {on && status && (
+      {status && (
         <div className="studio-settings">
           <p className="small">
             <b>Pixiv:</b>{' '}
@@ -136,8 +123,8 @@ function StudioSetting() {
             </form>
           )}
           <p className="muted tiny">
-            The Pixiv connection is used for everyone on this server who has the Studio on; the login token stays on the server. Pixiv shows only work-safe
-            pictures in the Studio.
+            The Pixiv connection is used for everyone on this server; the login token stays on the server. Pixiv shows only work-safe
+            pictures in the Art search.
             {status.sources.some((s) => s.key === 'gelbooru' && !s.available) && ' Gelbooru needs GELBOORU_API_KEY and GELBOORU_USER_ID in the server config.'}
           </p>
         </div>
@@ -430,7 +417,7 @@ export default function SettingsPage({ onLogout }) {
         <ThemeToggle />
       </div>
       <SpicySetting />
-      <StudioSetting />
+      <ArtSourcesSetting />
       <div className="card settings-card">
         <h3>Profile photo</h3>
         <div className="settings-user">
