@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, setUnauthorizedHandler } from './api.js';
-import { scrollMemory } from './util.js';
+import { atelierUrl, scrollMemory } from './util.js';
 import { AppContext } from './AppContext.jsx';
 import AuthPage from './components/AuthPage.jsx';
 import Avatar from './components/Avatar.jsx';
@@ -20,6 +20,11 @@ import ArtPage from './pages/ArtPage.jsx';
 function readRoute() {
   const h = window.location.hash.replace(/^#/, '');
   let m;
+  // Atelier's reminders open Anime Hub's app (same push subscription): pass them on.
+  if (h === '/atelier' || h.startsWith('/atelier/')) {
+    window.location.replace(atelierUrl(`#${h.slice(8) || '/'}`));
+    return { tab: 'home' };
+  }
   if ((m = h.match(/^\/list\/(\d+)$/))) return { tab: 'lists', id: Number(m[1]) };
   // Anime and manga pages (not a tab of their own).
   if ((m = h.match(/^\/(anime|manga)\/(\d+)(\/suggest)?$/))) return { tab: 'anime', animeId: Number(m[2]), suggest: !!m[3] };
@@ -167,6 +172,9 @@ function Main({ me, setMe }) {
             Anime Hub
           </a>
           <div className="top-nav">
+            <a href={atelierUrl()} className="nav-link" title="Atelier: your drawing school">
+              ✏️ <span className="hide-mobile">Atelier</span>
+            </a>
             <a
               href="#/profile"
               className={`nav-link ${route.tab === 'profile' && !route.userId ? 'active' : ''}`}

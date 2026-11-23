@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../api.js';
 import Menu from './Menu.jsx';
+import { atelierUrl } from '../util.js';
 import { eagleAddOne, eagleFolderTree, eagleFolders, eagleIndexInfo, eagleInfo, folderResolver, itemInEagle, loadEagleIndex, markInEagle, subscribeEagleIndex } from '../eagle.js';
 
 // The Art tab's search: one tag search (Danbooru's tag names) across many
@@ -817,6 +818,7 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
             <button type="button" className="btn ghost small-btn" onClick={() => actions.similar(item, shown)} title="Reverse image search: the highest-resolution original and similar pictures">
               🔎 Original & similar
             </button>
+            <StudyButton item={item} />
             <button type="button" className="btn ghost small-btn" onClick={() => actions.wallpaper(item)}>
               📱 Wallpaper
             </button>
@@ -1186,6 +1188,40 @@ const SESSIONS = [
 ];
 const clock = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
+// "Study this": the picture waits in your Atelier sketchbook with a study file.
+function StudyButton({ item }) {
+  const [state, setState] = useState(null); // null | 'busy' | drawing | Error
+  const src = (u) => {
+    const m = String(u ?? '').match(/^\/api\/studio\/img\?u=(.+)$/);
+    return m ? decodeURIComponent(m[1]) : u;
+  };
+  if (state && state.id)
+    return (
+      <a className="btn ghost small-btn" href={atelierUrl(`#/drawing/${state.id}`)} target="_blank" rel="noreferrer">
+        ✏️ Open the study in Atelier ↗
+      </a>
+    );
+  return (
+    <button
+      type="button"
+      className="btn ghost small-btn"
+      disabled={state === 'busy'}
+      title={state instanceof Error ? state.message : 'Draw a study of this in Atelier, with a Clip Studio file'}
+      onClick={async () => {
+        setState('busy');
+        try {
+          const characters = (item.characters ?? []).slice(0, 2).map((c) => c.replace(/_\([^)]*\)$/, '').replace(/_/g, ' '));
+          setState(await api.atelierStudy({ referenceUrl: src(item.rawPreview ?? item.original ?? item.preview), referencePost: item.postUrl, title: characters.length ? `Study: ${characters.join(' & ')}` : 'Study', level: item.level ?? 0 }));
+        } catch (e) {
+          setState(e);
+        }
+      }}
+    >
+      {state === 'busy' ? '✏️ Saving…' : state instanceof Error ? '✏️ Couldn’t save – retry' : '✏️ Study this'}
+    </button>
+  );
+}
+
 // Timed drawing practice: one picture at a time with a countdown.
 export function GesturePractice({ items, onClose }) {
   const [setup, setSetup] = useState(true);
@@ -1254,6 +1290,10 @@ export function GesturePractice({ items, onClose }) {
 
   const cur = queue[at];
   const total = done.reduce((s, x) => s + x.seconds, 0);
+  // A finished session counts as drawing time in Atelier (gesture area).
+  useEffect(() => {
+    if (finished && total >= 60) api.atelierLog({ minutes: Math.round(total / 60), kind: 'practice', area: 'gesture' }).catch(() => {});
+  }, [finished, total]);
   return createPortal(
     <div className="practice" role="dialog" aria-modal="true" aria-label="Gesture practice">
       {setup ? (

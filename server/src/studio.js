@@ -908,7 +908,9 @@ async function buildContext(p, userId) {
   const of = (cat) => tags.filter((t) => info.get(t)?.category === cat);
   const chars = of(4);
   const artists = of(1);
-  const level = isSpicy(userId);
+  // maxLevel can only lower your level (Atelier asks for safe references outside the adult track).
+  const cap = p.maxLevel != null && p.maxLevel !== '' ? Math.max(0, Math.min(2, Number(p.maxLevel) || 0)) : 2;
+  const level = Math.min(isSpicy(userId), cap);
   const adults = adultTags();
   return {
     tags,
@@ -1414,4 +1416,4 @@ fileRouter.get('/studio-file', wrap(async (req, res) => {
   await pipeImage(u, res);
 }));
 
-module.exports = { studioRouter: router, studioFileRouter: fileRouter, merge, passesFilters, danbooruItem, moebooruItem, otherLevelOk, fetchPost, artistInfo, knownSeries, dbDirect, domainOf };
+module.exports = { studioRouter: router, studioFileRouter: fileRouter, merge, passesFilters, danbooruItem, moebooruItem, otherLevelOk, fetchPost, artistInfo, knownSeries, dbDirect, domainOf, pictureBytes };

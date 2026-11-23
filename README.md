@@ -162,6 +162,20 @@ Character entries added before this version are linked to their anime in the bac
 - **List portraits from any picture, with cropping**: row ⋯ → *Change picture* (fan art, saved picks or official) → *choose the area* (drag, pinch or slider, in the portrait shape), or row ⋯ → *Adjust picture area* to re-crop. The NAS cuts the area out (sharp) and keeps the original, so it can be re-cropped or reset (*Use original*).
 - **Us → 🖼️ Gallery**: everything you both saved, by person and character/ship. Saving shows up in the feed; Our Wrapped has a "Picture of the year". Games prefer your saved pictures.
 
+## ✏️ Atelier – the drawing school (port 3001)
+
+A second website in the same container, with the same accounts and data: `http://<NAS-IP>:3001`, or `https://animelister.<your-tailnet>.ts.net:8443` through Tailscale. Anime Hub links to it in the top bar (✏️ Atelier) and Atelier links back. The pages live in [atelier/](atelier/) and the server code in [server/src/atelier/](server/src/atelier/).
+
+- **The path**: 11 stages, from setting up to professional anime illustration (foundations, figure, anatomy, faces, clothing, light & value, colour, composition, rendering, portfolio). It has 61 lessons with theory, key points, common mistakes, a "In Clip Studio" tip box, video and reading links, and 107 exercises (drills, studies, from-memory, projects).
+- **Today's session** is built from your daily time: a warm-up, spaced reviews of earlier lessons (mixed across areas; rate how it went, and hard ones come back sooner), the current lesson and its next exercises, then free drawing. Every lesson begins by recalling the previous one.
+- **Focus timer**: each block plants a tree (a different kind per stage) that grows while you draw. Finishing keeps it; giving up withers it. There's an optional phone guard: leaving the page for over 15 seconds counts as giving up. Gesture practice in Anime Hub counts too.
+- **Your valley**: trees from focus blocks (in the region of the skill you practised), stepping stones from lessons, a building per finished stage, lanterns for every week on target, and easels for skill checks. The season and time of day follow yours.
+- **References** come from the Art search, with your own characters wherever an exercise says so, and always safe outside the adult track. Every study offers a Clip Studio **.psd** (reference locked, Sketch/Lines/Colour layers), side by side or as a faint underlay. In Art, **✏️ Study this** puts any picture in your sketchbook as a study to draw.
+- **Sketchbook**: private by default, shared per drawing (reactions). Each drawing has side-by-side and overlay views with the reference, a mirror check, a **self-rating** on the area's criteria, and an optional **critique by Claude** (what works, the 2–3 biggest fixes as pins on your drawing, scores, one next step). A critique costs about 5¢, with a monthly budget in Settings. It needs `ANTHROPIC_API_KEY` in the compose file.
+- **Progress**: week streak with 2 grace days a month (target: X days a week at Y+ minutes), the year as a heatmap, weeks against the target, growth rings, a skill radar (now vs 3 months ago), trends per area, how close your self-ratings are to critiques, when you draw, where your time goes, and your pace. A **skill check** every 4 weeks (the same 4 timed prompts) feeds **Then & now**.
+- **Habits**: a "when and where" plan, a push reminder at your time if you haven't drawn (uses Anime Hub's notifications), and a fresh-start review on Mondays and the 1st.
+- **Adult track (18+, optional)**: 8 units (life drawing, adult proportions, pin-up posing, sensual expression, skin and light, clothing and reveal, nude illustration, adult portfolio). It is only available with Spicy art on, needs an 18+ confirmation, and uses adult characters only, with references through the same adults-only rules as Art.
+
 ## Install as app & outside access (Tailscale)
 
 Installing to the home screen and push notifications need HTTPS. [Tailscale](https://tailscale.com) (free for personal use) gives the NAS a private HTTPS address that works from anywhere, without opening ports on your router.

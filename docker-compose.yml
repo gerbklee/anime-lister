@@ -5,6 +5,8 @@ services:
     ports:
       # Published on all network interfaces, so other devices on the LAN can connect.
       - "3000:3000"
+      # Atelier, the drawing-school site
+      - "3001:3001"
     volumes:
       # SQLite database + cached character images live here and survive rebuilds.
       - ./data:/data

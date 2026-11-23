@@ -30,6 +30,7 @@ const q = {
   ship: db.prepare('SELECT * FROM ships WHERE id = ?'),
   headcanon: db.prepare('SELECT * FROM headcanons WHERE id = ?'),
   fanart: db.prepare('SELECT id FROM fanart_saved WHERE id = ?'),
+  drawing: db.prepare('SELECT user_id, shared, adult FROM atelier_drawings WHERE id = ?'),
   moment: db.prepare('SELECT * FROM ship_moments WHERE id = ?'),
   get: db.prepare('SELECT * FROM activities WHERE id = ?'),
   canSeeList: db.prepare(`
@@ -122,6 +123,11 @@ function canUseThread(key, me) {
   if (k.kind === 'headcanon' && k.nums.length === 1) return !!q.headcanon.get(k.nums[0]);
   // Saved fan art is shared by everyone.
   if (k.kind === 'fanart' && k.nums.length === 1) return !!q.fanart.get(k.nums[0]);
+  // Atelier drawings: your own, or ones shared with you (adult ones only if you see that level).
+  if (k.kind === 'drawing' && k.nums.length === 1) {
+    const d = q.drawing.get(k.nums[0]);
+    return !!d && (d.user_id === me || (!!d.shared && d.adult <= require('./adult').isSpicy(me)));
+  }
   if (k.kind === 'moment' && k.nums.length === 1) return !!q.moment.get(k.nums[0]);
   // Comments/reactions on a list entry: anyone who can see the list.
   if (k.kind === 'entry' && k.nums.length === 1) {

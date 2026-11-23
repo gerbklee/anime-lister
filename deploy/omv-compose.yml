@@ -13,8 +13,12 @@ services:
     #   - GELBOORU_API_KEY=...
     #   - GELBOORU_USER_ID=...
     #   - PIXIV_REFRESH_TOKEN=...
+    # Optional, for drawing critiques in Atelier (console.anthropic.com -> API keys):
+    #   - ANTHROPIC_API_KEY=sk-ant-...
     ports:
       - "3000:3000"
+      # Atelier, the drawing-school site
+      - "3001:3001"
     volumes:
       - /srv/dev-disk-by-uuid-XXXX/appdata/anime-lister:/data
     restart: unless-stopped
@@ -61,14 +65,17 @@ services:
     restart: unless-stopped
 
 configs:
-  # HTTPS on port 443 of the Tailscale address -> the app container.
+  # HTTPS on the Tailscale address: port 443 -> Anime Hub, port 8443 -> Atelier.
   tailscale-serve:
     content: |
       {
-        "TCP": { "443": { "HTTPS": true } },
+        "TCP": { "443": { "HTTPS": true }, "8443": { "HTTPS": true } },
         "Web": {
           "$${TS_CERT_DOMAIN}:443": {
             "Handlers": { "/": { "Proxy": "http://anime-lister:3000" } }
+          },
+          "$${TS_CERT_DOMAIN}:8443": {
+            "Handlers": { "/": { "Proxy": "http://anime-lister:3001" } }
           }
         }
       }

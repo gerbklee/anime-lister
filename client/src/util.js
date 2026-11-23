@@ -104,3 +104,10 @@ export function blendNames(names) {
 // Where each page (by address) was scrolled to when you left it, recorded at
 // the moment of navigating away (pages that stay loaded can return there).
 export const scrollMemory = new Map();
+
+// Atelier (the drawing school) runs on the next port: 3000 -> 3001, Tailscale 443 -> 8443.
+export function atelierUrl(hash = '') {
+  const { protocol, hostname, port } = window.location;
+  const p = port === '3000' ? '3001' : port === '5173' ? '5174' : !port || port === '443' ? '8443' : port;
+  return `${protocol}//${hostname}:${p}/${hash}`;
+}

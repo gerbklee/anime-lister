@@ -522,6 +522,82 @@ const MIGRATIONS = {
   17: `
     ALTER TABLE users DROP COLUMN studio;
   `,
+  // v19: Atelier, the drawing school: your plan, lesson progress, spaced reviews
+  // of skills, your drawings (with self-ratings and critiques), and focus blocks
+  // (the pomodoro timer; each finished block is a tree in your valley).
+  19: `
+    CREATE TABLE atelier_profile (
+      user_id          INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      daily_minutes    INTEGER NOT NULL DEFAULT 90,
+      week_days        INTEGER NOT NULL DEFAULT 5,
+      day_minutes      INTEGER NOT NULL DEFAULT 60,
+      plan_when        TEXT,
+      plan_where       TEXT,
+      reminder_at      TEXT,
+      tz               TEXT,
+      adult_track      INTEGER NOT NULL DEFAULT 0,
+      critique_cap     INTEGER NOT NULL DEFAULT 1000,
+      focus_minutes    INTEGER NOT NULL DEFAULT 45,
+      break_minutes    INTEGER NOT NULL DEFAULT 10,
+      started_at       INTEGER NOT NULL,
+      last_reminded    TEXT
+    );
+    CREATE TABLE atelier_lessons (
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id    TEXT    NOT NULL,
+      read_at      INTEGER,
+      done_at      INTEGER,
+      PRIMARY KEY (user_id, lesson_id)
+    );
+    CREATE TABLE atelier_reviews (
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      skill        TEXT    NOT NULL,
+      interval     REAL    NOT NULL DEFAULT 1,
+      due_at       INTEGER NOT NULL,
+      last_at      INTEGER,
+      reps         INTEGER NOT NULL DEFAULT 0,
+      last_rating  INTEGER,
+      PRIMARY KEY (user_id, skill)
+    );
+    CREATE TABLE atelier_drawings (
+      id             INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id      TEXT,
+      exercise_id    TEXT,
+      kind           TEXT    NOT NULL,
+      skill          TEXT,
+      area           TEXT,
+      title          TEXT,
+      file           TEXT,
+      reference_file TEXT,
+      reference_url  TEXT,
+      reference_post TEXT,
+      check_round    INTEGER,
+      self_scores    TEXT,
+      critique       TEXT,
+      critique_cost  REAL,
+      shared         INTEGER NOT NULL DEFAULT 0,
+      adult          INTEGER NOT NULL DEFAULT 0,
+      status         TEXT    NOT NULL DEFAULT 'done',
+      created_at     INTEGER NOT NULL
+    );
+    CREATE INDEX idx_atelier_drawings_user ON atelier_drawings (user_id, created_at);
+    CREATE TABLE atelier_blocks (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      started_at   INTEGER NOT NULL,
+      ended_at     INTEGER,
+      planned      INTEGER NOT NULL,
+      minutes      REAL    NOT NULL DEFAULT 0,
+      status       TEXT    NOT NULL DEFAULT 'running',
+      kind         TEXT,
+      lesson_id    TEXT,
+      area         TEXT,
+      tree         TEXT,
+      stage        INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_atelier_blocks_user ON atelier_blocks (user_id, started_at);
+  `,
   // v18: small cached values (search results, artist pages) that survive restarts.
   18: `
     CREATE TABLE kv_cache (

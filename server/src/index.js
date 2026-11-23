@@ -22,6 +22,7 @@ const { shipsExtraRouter } = require('./ships-extra');
 const { artRouter, startArtJobs } = require('./art');
 const { adultRouter, startAgeWarm } = require('./adult');
 const { studioRouter, studioFileRouter } = require('./studio');
+const { atelierRouter, startReminders } = require('./atelier/routes');
 const { pushRouter } = require('./notify');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
@@ -30,6 +31,11 @@ const { allUsers } = require('./users');
 
 const PORT = Number(process.env.PORT) || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+// Atelier, the drawing-school site: same server, accounts and API, its own
+// pages, served on a second port.
+const ATELIER_PORT = Number(process.env.ATELIER_PORT) || 3001;
+const ATELIER_DIR = path.join(__dirname, '..', 'public-atelier');
+const isAtelier = (req) => req.socket.localPort === ATELIER_PORT;
 
 // New characters in categorised lists get their traits worked out in the background.
 setCharacterAddedHook((id) => enqueueTraits([id]));
@@ -70,6 +76,7 @@ app.use('/api', fanartRouter);
 app.use('/api', artRouter);
 app.use('/api', adultRouter);
 app.use('/api', studioRouter);
+app.use('/api', atelierRouter);
 app.use('/api', compareRouter);
 app.use('/api', themesRouter);
 app.use('/api', catalogueRouter);
@@ -88,6 +95,22 @@ app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 // ---- Static files -------------------------------------------------------------
 
 app.use('/images', express.static(IMAGE_DIR, { maxAge: '30d', fallthrough: false }));
+
+// Requests on the Atelier port get Atelier's pages (the API above is shared).
+if (fs.existsSync(ATELIER_DIR)) {
+  const atelierStatic = express.static(ATELIER_DIR, {
+    setHeaders: (res, file) => {
+      if (/(index\.html|sw\.js|manifest\.webmanifest)$/.test(file)) res.setHeader('Cache-Control', 'no-cache');
+      else if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  });
+  app.use((req, res, next) => (isAtelier(req) ? atelierStatic(req, res, next) : next()));
+  app.get('*', (req, res, next) => {
+    if (!isAtelier(req)) return next();
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(ATELIER_DIR, 'index.html'));
+  });
+}
 
 if (fs.existsSync(PUBLIC_DIR)) {
   // The app shell and service worker must not be cached, so updates arrive.
@@ -120,11 +143,14 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: message });
 });
 
+app.listen(ATELIER_PORT, '0.0.0.0', () => console.log(`Atelier running on http://0.0.0.0:${ATELIER_PORT}`));
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Anime Hub running on http://0.0.0.0:${PORT}`);
   startAiringJob();
   startArtJobs();
   startAgeWarm();
+  startReminders();
   require('./disk-cache').startPruning();
   retryMissingImages()
     .catch((err) => console.warn('Image retry failed:', err.message))
