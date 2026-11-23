@@ -30,6 +30,123 @@ function AvatarPicker({ onClose, onPicked }) {
   );
 }
 
+// Studio: reference search for drawing, plus the (server-wide) Pixiv connection.
+function StudioSetting() {
+  const { me, setMe } = useApp();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState(null);
+  const [loginUrl, setLoginUrl] = useState(null);
+  const [code, setCode] = useState('');
+  const on = !!me.studio;
+
+  useEffect(() => {
+    if (on) api.studioStatus().then(setStatus).catch(() => {});
+  }, [on]);
+
+  const run = async (fn) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const toggle = () =>
+    run(async () => {
+      const r = await api.setStudio(!on);
+      setMe({ ...me, studio: r.studio });
+    });
+  const startPixiv = () =>
+    run(async () => {
+      const r = await api.pixivLogin();
+      setLoginUrl(r.url);
+      window.open(r.url, '_blank', 'noopener');
+    });
+  const finishPixiv = (e) => {
+    e.preventDefault();
+    run(async () => {
+      await api.pixivConnect(code);
+      setLoginUrl(null);
+      setCode('');
+      setStatus(await api.studioStatus());
+    });
+  };
+  const disconnectPixiv = () =>
+    run(async () => {
+      if (!window.confirm('Disconnect Pixiv? The Studio stops searching Pixiv until it is connected again.')) return;
+      await api.pixivDisconnect();
+      setStatus(await api.studioStatus());
+    });
+
+  return (
+    <div className="card settings-card">
+      <h3>🖌️ Studio</h3>
+      <p className="muted small">
+        Reference search for drawing: high-resolution art from Danbooru, Yande.re, Konachan, Zerochan, Wallhaven (and Pixiv or Gelbooru if set up), with
+        filters for size, pose, angle, lighting and more, and one-click sending to Eagle on your computer. Only changes your account.
+      </p>
+      <label className="switch-row">
+        <input type="checkbox" checked={on} onChange={toggle} disabled={busy} />
+        <span>{on ? 'On (see the Studio tab)' : 'Off'}</span>
+      </label>
+      {on && status && (
+        <div className="studio-settings">
+          <p className="small">
+            <b>Pixiv:</b>{' '}
+            {status.pixiv.connected ? (
+              <>
+                connected{status.pixiv.user ? ` as ${status.pixiv.user}` : ''}{' '}
+                <button type="button" className="link-btn" onClick={disconnectPixiv} disabled={busy}>
+                  disconnect
+                </button>
+              </>
+            ) : (
+              'not connected'
+            )}
+          </p>
+          {!status.pixiv.connected && !loginUrl && (
+            <button type="button" className="btn small-btn" onClick={startPixiv} disabled={busy}>
+              Connect Pixiv
+            </button>
+          )}
+          {loginUrl && (
+            <form onSubmit={finishPixiv} className="verify-adult">
+              <ol className="small">
+                <li>
+                  A Pixiv login page opened (or{' '}
+                  <a href={loginUrl} target="_blank" rel="noreferrer">
+                    open it here
+                  </a>
+                  ). <b>Before logging in</b>, open the browser's developer tools (F12) on that tab, on the <b>Network</b> tab.
+                </li>
+                <li>Log in. The page then tries to open a <code>pixiv://account/login?code=…</code> address and stops.</li>
+                <li>
+                  In the Network list, find the request whose address contains <code>callback?state=</code> or <code>code=</code>, copy that address, and paste it here. Be quick:
+                  the code is only valid for about a minute.
+                </li>
+              </ol>
+              <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="pixiv://account/login?code=… or just the code" required />
+              <button type="submit" className="primary" disabled={busy || !code.trim()}>
+                {busy ? 'Connecting…' : 'Connect'}
+              </button>
+            </form>
+          )}
+          <p className="muted tiny">
+            The Pixiv connection is used for everyone on this server who has the Studio on; the login token stays on the server. Pixiv shows only work-safe
+            pictures in the Studio.
+            {status.sources.some((s) => s.key === 'gelbooru' && !s.available) && ' Gelbooru needs GELBOORU_API_KEY and GELBOORU_USER_ID in the server config.'}
+          </p>
+        </div>
+      )}
+      {error && <p className="error-text small">{error}</p>}
+    </div>
+  );
+}
+
 const SPICY_LEVELS = [
   { level: 0, label: 'Off' },
   { level: 1, label: '🌶️ Spicy' },
@@ -93,20 +210,22 @@ const adultLabel = (c) =>
   `${Math.round(c.age)}${c.basis === 'manual' ? ` · verified by ${c.verifiedBy ?? 'someone'}` : c.basis && c.basis !== 'anilist' ? ` · ${BASIS[c.basis]}` : ''}`;
 
 // Verify a character with no known age as an adult, by hand.
-function VerifyAdult({ character, onClose, onDone }) {
+// `remaining`: how many unknown characters come after this one ("Verify & next").
+function VerifyAdult({ character, remaining = 0, onClose, onDone, onSkip }) {
   const [age, setAge] = useState('');
   const [sure, setSure] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const n = Number(age);
   const valid = Number.isInteger(n) && n >= 18 && sure;
-  const submit = async (e) => {
+  const submit = async (e, next = remaining > 0) => {
     e.preventDefault();
+    if (!valid || busy) return;
     setBusy(true);
     setError(null);
     try {
       await api.verifyAdult(character.id, n);
-      onDone();
+      onDone(character, n, next);
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -114,6 +233,7 @@ function VerifyAdult({ character, onClose, onDone }) {
   };
   return (
     <Modal title={`Verify ${character.name} as an adult`} onClose={onClose}>
+      {character.image && <img className="verify-adult-img" src={character.image} alt="" />}
       <form onSubmit={submit} className="verify-adult">
         <p className="muted small">
           No age was found on AniList, in their description or on MyAnimeList. Only verify if you know from the source material that this character
@@ -122,16 +242,28 @@ function VerifyAdult({ character, onClose, onDone }) {
         </p>
         <label>
           Age in canon
-          <input type="number" min="18" step="1" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 24" required />
+          <input type="number" min="18" step="1" value={age} onChange={(e) => setAge(e.target.value)} placeholder="e.g. 24" required autoFocus />
         </label>
         <label className="switch-row">
           <input type="checkbox" checked={sure} onChange={(e) => setSure(e.target.checked)} />
           <span className="small">I've checked that {character.name} is an adult in canon, not a younger version.</span>
         </label>
         {error && <p className="error-text small">{error}</p>}
-        <button type="submit" className="primary" disabled={!valid || busy}>
-          {busy ? 'Checking…' : 'Verify as adult'}
-        </button>
+        <div className="verify-adult-actions">
+          {remaining > 0 && (
+            <button type="submit" className="primary" disabled={!valid || busy}>
+              {busy ? 'Saving…' : `Verify & next (${remaining} left)`}
+            </button>
+          )}
+          <button type="button" className={remaining > 0 ? '' : 'primary'} disabled={!valid || busy} onClick={(e) => submit(e, false)}>
+            {remaining > 0 ? 'Verify & close' : busy ? 'Saving…' : 'Verify as adult'}
+          </button>
+          {remaining > 0 && (
+            <button type="button" className="ghost" onClick={onSkip} disabled={busy}>
+              Skip / not sure
+            </button>
+          )}
+        </div>
       </form>
     </Modal>
   );
@@ -140,13 +272,21 @@ function VerifyAdult({ character, onClose, onDone }) {
 // What the adults-only rule knows about the characters in your lists.
 function AgeOverview() {
   const [data, setData] = useState(null);
+  const { me } = useApp();
   const [verifying, setVerifying] = useState(null);
+  const [skipped, setSkipped] = useState(new Set());
   const [error, setError] = useState(null);
   const load = () => api.spicyAges().then(setData).catch(() => setData(null));
   useEffect(() => {
     load();
   }, []);
   if (!data) return null;
+  // Checked unknown characters after `c` in the list, minus skipped ones.
+  const nextUnknown = (c, skip) => {
+    const list = data.unknown.filter((u) => u.checked);
+    const i = list.findIndex((u) => u.id === c.id);
+    return list.slice(i + 1).filter((u) => !skip.has(u.id));
+  };
   const unverify = async (c) => {
     setError(null);
     try {
@@ -211,11 +351,28 @@ function AgeOverview() {
       )}
       {verifying && (
         <VerifyAdult
+          key={verifying.id}
           character={verifying}
-          onClose={() => setVerifying(null)}
-          onDone={() => {
+          remaining={nextUnknown(verifying, skipped).length}
+          onClose={() => {
             setVerifying(null);
-            load();
+            setSkipped(new Set());
+          }}
+          onSkip={() => {
+            const s = new Set(skipped).add(verifying.id);
+            setSkipped(s);
+            setVerifying(nextUnknown(verifying, s)[0] ?? null);
+          }}
+          onDone={(c, age, next) => {
+            // Move the character to the adults locally instead of reloading everything.
+            const after = nextUnknown(c, skipped)[0] ?? null;
+            setData((d) => ({
+              ...d,
+              unknown: d.unknown.filter((u) => u.id !== c.id),
+              adults: [...d.adults, { ...c, age, basis: 'manual', verifiedBy: me.username }],
+            }));
+            setVerifying(next ? after : null);
+            if (!next) setSkipped(new Set());
           }}
         />
       )}
@@ -273,6 +430,7 @@ export default function SettingsPage({ onLogout }) {
         <ThemeToggle />
       </div>
       <SpicySetting />
+      <StudioSetting />
       <div className="card settings-card">
         <h3>Profile photo</h3>
         <div className="settings-user">

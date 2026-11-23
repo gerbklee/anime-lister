@@ -15,6 +15,7 @@ import HomePage from './pages/HomePage.jsx';
 import UsPage from './pages/UsPage.jsx';
 import ShipPage from './pages/ShipPage.jsx';
 import ArtPage from './pages/ArtPage.jsx';
+import StudioPage from './pages/StudioPage.jsx';
 
 function readRoute() {
   const h = window.location.hash.replace(/^#/, '');
@@ -45,6 +46,7 @@ function readRoute() {
   if ((m = h.match(/^\/art\/board\/(\d+)$/))) return { tab: 'art', view: 'board', boardId: Number(m[1]) };
   if ((m = h.match(/^\/art\/(search|boards|gallery|artists)$/))) return { tab: 'art', view: m[1] };
   if (h === '/art') return { tab: 'art', view: 'home' };
+  if (h === '/studio') return { tab: 'studio' };
   if (h === '/ships') return { tab: 'lists', ships: true };
   if (h === '/ships/swipe') return { tab: 'lists', ships: true, shipView: 'swipe' };
   if (h === '/ships/map') return { tab: 'lists', ships: true, shipView: 'map' };
@@ -148,6 +150,7 @@ function Main({ me, setMe }) {
   else if (route.tab === 'us') page = <UsPage route={route} />;
   else if (route.tab === 'ship') page = <ShipPage key={route.id} id={route.id} />;
   else if (route.tab === 'art') page = <ArtPage route={route} />;
+  else if (route.tab === 'studio' && me.studio) page = <StudioPage />;
   else page = <ProfilePage route={route} onLogout={logout} />;
 
   return (

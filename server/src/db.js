@@ -493,6 +493,23 @@ const MIGRATIONS = {
   14: `
     ALTER TABLE character_age ADD COLUMN verified_by INTEGER REFERENCES users(id);
   `,
+  // v15: Studio (reference search for artists): per-person switch, saved
+  // searches, and server-wide settings (e.g. the Pixiv connection).
+  15: `
+    ALTER TABLE users ADD COLUMN studio INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE studio_searches (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT    NOT NULL,
+      query       TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL
+    );
+    CREATE INDEX idx_studio_searches_user ON studio_searches (user_id);
+    CREATE TABLE app_settings (
+      key    TEXT PRIMARY KEY,
+      value  TEXT
+    );
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

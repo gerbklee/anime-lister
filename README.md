@@ -179,6 +179,19 @@ The plain `http://<NAS-IP>:3000` address keeps working at home, just without ins
 
 Compares all personal lists of two people. Each position is scored as `1 - (rank - 1) / list length` (#1 is always 1.0), and a character in several lists counts with its best score. The taste match is 40% overlap (shared characters relative to the smaller collection) plus 60% ranking similarity (1 minus the average score difference).
 
+## 🖌️ Studio (references for drawing)
+
+Switch it on per person under **Settings → Studio**; a Studio tab appears.
+
+- **One search, many sources:** Danbooru, Yande.re, Konachan, Zerochan, Wallhaven, plus Gelbooru and Pixiv if set up. Searches use Danbooru's tag names (with autocomplete). Pose, angle, lighting and other general tags are searched on the boorus (Danbooru, Yande.re, Konachan, Gelbooru); Zerochan, Wallhaven and Pixiv are only asked when the search is about characters or series (Pixiv gets their Japanese names from Danbooru's wiki). Copies of the same picture on several sites collapse into one, keeping the **highest-resolution** copy; the tile shows every site it came from.
+- **Filters:** minimum size (default ≥ 2000 px on the long edge), shape, minimum score, solo, sketches/lineart (include, hide or only), hide AI-generated (on by default), hide comics (on by default), and which sources to ask. **Presets** add tags for framing, angle, pose, lighting, background, clothing and motion, expression and medium/reference sheets.
+- **Browsing:** dense grid with a size slider and endless scrolling. The viewer shows a large preview, **Z** (or a click) loads the original at 1:1 (drag to pan), ← → browse, Space selects, **E** sends to Eagle. Tags, characters and artists in the viewer add themselves to the search on click. Searches can be saved.
+- **Eagle:** with Eagle open on the same computer, the Studio talks to it directly (`localhost:41595`). Send one picture or a selection (shift-click selects a range) into a chosen Eagle folder, with characters, series, artist, source sites and optionally all tags, the post and original links in the note, and the original file. Eagle downloads the originals from the NAS through links that expire after 30 minutes.
+- **Spicy levels apply here too, strictly.** Yande.re's and Konachan's "safe" rating includes fanservice, so every Yande.re, Konachan, Gelbooru and Zerochan picture is looked up on Danbooru by file hash. Where Danbooru has it, Danbooru's rating and character tags decide, with the same adults-only check. Where it doesn't, the site's own rating is read strictly, and anything above safe needs a search for one known-adult character, a solo picture, and no minor tags. Wallhaven and Pixiv are work-safe only.
+- **Pixiv** (optional): **Settings → Studio → Connect Pixiv**, log in on Pixiv's page, then paste the code it ends on (the steps are shown there). The login token stays on the NAS and is used for everyone with the Studio on. Alternatively set `PIXIV_REFRESH_TOKEN` in the compose file. Pixiv's "popular" order needs Premium; otherwise newest first.
+- **Gelbooru** (optional): needs a free account. Put `GELBOORU_API_KEY` and `GELBOORU_USER_ID` (from your Gelbooru account options) under `environment:` in the compose file.
+- Anime-Pictures.net isn't included: it only gives out original files to logged-in users.
+
 ## Data and backups
 
 All data lives in the `./data` folder next to `docker-compose.yml`:

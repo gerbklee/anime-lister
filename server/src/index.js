@@ -21,6 +21,7 @@ const { fanartRouter } = require('./fanart');
 const { shipsExtraRouter } = require('./ships-extra');
 const { artRouter, startArtJobs } = require('./art');
 const { adultRouter, startAgeWarm } = require('./adult');
+const { studioRouter, studioFileRouter } = require('./studio');
 const { pushRouter } = require('./notify');
 const { searchCharacters } = require('./anilist');
 const { retryMissingImages } = require('./images');
@@ -43,6 +44,8 @@ app.use(express.json({ limit: '100kb' }));
 // ---- Public API -------------------------------------------------------------
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Signed original downloads for Eagle (no login cookie there).
+app.use('/api', studioFileRouter);
 
 app.use('/api', loadUser);
 app.use('/api/auth', authRouter);
@@ -66,6 +69,7 @@ app.use('/api', shipsRouter);
 app.use('/api', fanartRouter);
 app.use('/api', artRouter);
 app.use('/api', adultRouter);
+app.use('/api', studioRouter);
 app.use('/api', compareRouter);
 app.use('/api', themesRouter);
 app.use('/api', catalogueRouter);

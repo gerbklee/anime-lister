@@ -7,6 +7,12 @@ services:
   anime-lister:
     image: ghcr.io/gerbklee/anime-lister:latest
     container_name: anime-lister
+    # Optional, for the Studio: a Gelbooru account (Account -> Options -> API access)
+    # and/or a Pixiv refresh token (easier: Settings -> Studio -> Connect Pixiv).
+    # environment:
+    #   - GELBOORU_API_KEY=...
+    #   - GELBOORU_USER_ID=...
+    #   - PIXIV_REFRESH_TOKEN=...
     ports:
       - "3000:3000"
     volumes:

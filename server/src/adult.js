@@ -210,12 +210,17 @@ router.put('/me/spicy/ages/:id', wrap(async (req, res) => {
   const age = Number(req.body?.age);
   if (!Number.isInteger(age) || age < 18 || age > 100000) throw new HttpError(400, 'Enter their age (18 or older)');
   if (req.body?.confirm !== true) throw new HttpError(400, 'Confirm that the character is an adult in canon');
-  // Check the sources right now: a known age can't be overridden.
-  let found;
-  try {
-    found = await lookupAge(id);
-  } catch {
-    throw new HttpError(503, "Couldn't check AniList right now, try again in a moment");
+  // A known age can't be overridden. If the sources were checked recently and
+  // gave nothing, that result is used (fast); otherwise they're checked now.
+  const cached = q.age.get(id);
+  const recentlyUnknown = cached && cached.age == null && !cached.basis && Date.now() - cached.fetched_at < UNKNOWN_FRESH_MS;
+  let found = { age: null, basis: null };
+  if (!recentlyUnknown) {
+    try {
+      found = await lookupAge(id);
+    } catch {
+      throw new HttpError(503, "Couldn't check AniList right now, try again in a moment");
+    }
   }
   if (found.age != null) {
     q.saveAge.run(id, found.age, Date.now(), found.basis);

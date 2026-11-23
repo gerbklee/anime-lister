@@ -344,4 +344,4 @@ function rankAcrossSources(lists) {
     .sort((a, b) => b.rating - a.rating);
 }
 
-module.exports = { zerochanResults, wallhavenResults, zerochanPost, wallhavenPost, rankAcrossSources, SOURCE_LABELS };
+module.exports = { zerochanResults, wallhavenResults, zerochanPost, wallhavenPost, rankAcrossSources, SOURCE_LABELS, zerochan, wallhaven, zerochanLevel, zcPath };
