@@ -10,7 +10,7 @@ function LessonRow({ l, current, areaName }) {
         <strong style={{ fontWeight: 600 }}>{l.title}</strong>
         <span className="tiny muted">
           {' '}
-          · {areaName[l.area] ?? ''} · {l.minutes} min · {l.exercises} {l.exercises === 1 ? 'exercise' : 'exercises'}
+          {areaName[l.area] ? ` · ${areaName[l.area]}` : ''} · {l.exercises} {l.exercises === 1 ? "exercise" : "exercises"}{l.sessions?.need ? ` · ${l.sessions.done}/${l.sessions.need} sessions` : ""}
         </span>
       </span>
       {current && <span className="chip accent">Up next</span>}
@@ -34,8 +34,16 @@ export default function PathPage() {
         <div className="kicker">From first line to professional</div>
         <h1>The path</h1>
         <p className="muted" style={{ maxWidth: 680 }}>
-          Eleven stages, each with its own tree for your valley and a building when you finish it. Go in order: each stage builds on the last. Finished lessons come back as short reviews, spaced out so they stick.
+          Eleven stages, about 1,200 hours of practice: two to four years at an hour or two a day. Each stage has its own tree for your valley and a building when you finish it. A stage opens when the one before is complete: every lesson practised on enough days, and the stage’s practice hours put in. Finished lessons come back as short reviews, spaced out so they stick.
         </p>
+        <div className="row" style={{ marginTop: 10 }}>
+          <a className="btn small" href="#/method">
+            How Atelier teaches
+          </a>
+          <a className="btn small" href="#/clip-studio">
+            Clip Studio handbook
+          </a>
+        </div>
       </section>
 
       {data.stages.map((s) => {
@@ -55,6 +63,16 @@ export default function PathPage() {
                 <p className="small" style={{ margin: '6px 0 0' }}>
                   {s.goal}
                 </p>
+                {s.progress && (
+                  <div style={{ marginTop: 10, maxWidth: 460 }}>
+                    <div className="meter">
+                      <span style={{ width: `${Math.min(100, (s.progress.minutes / 60 / s.hours) * 100)}%` }} />
+                    </div>
+                    <span className="tiny muted">
+                      {Math.round((s.progress.minutes / 60) * 10) / 10} of {s.hours} practice hours · {s.progress.lessonsDone} of {s.progress.lessons} lessons · about {s.months[0]}–{s.months[1]} months in
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="row small muted" style={{ gap: 6 }}>
                 <TreeIcon type={s.tree} size={40} />

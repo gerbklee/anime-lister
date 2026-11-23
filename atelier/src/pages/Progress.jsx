@@ -199,14 +199,14 @@ export default function Progress() {
       <section className="section card">
         <h3>Pace</h3>
         <p style={{ margin: 0 }}>
-          {s.pace.perWeek > 0 ? (
+          {s.pace.hoursPerWeek > 0 ? (
             <>
-              You’re finishing about <strong>{s.pace.perWeek}</strong> lessons a week.{' '}
+              You’re practising about <strong>{s.pace.hoursPerWeek} hours</strong> a week (last 4 weeks).{' '}
               {s.pace.weeksToNextStage != null && `At this pace, the next stage is about ${s.pace.weeksToNextStage} ${s.pace.weeksToNextStage === 1 ? 'week' : 'weeks'} away`}
-              {s.pace.weeksToEnd != null && `, and the end of the path about ${Math.round(s.pace.weeksToEnd / 4.3)} months.`}
+              {s.pace.weeksToEnd != null && `, and the end of the path about ${Math.round((s.pace.weeksToEnd / 52) * 10) / 10} years (${Math.round(s.pace.hoursTotal - s.pace.hoursDone)} hours left).`}
             </>
           ) : (
-            'Finish a lesson or two and a forecast appears here.'
+            'Practise for a week and a forecast appears here.'
           )}{' '}
           <span className="muted small">Slow and steady is fine: depth beats speed.</span>
         </p>

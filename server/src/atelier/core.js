@@ -29,6 +29,12 @@ const q = {
     ON CONFLICT(user_id, skill) DO UPDATE SET interval = @interval, due_at = @due, last_at = @last, reps = @reps, last_rating = @rating`),
   exerciseDone: db.prepare(`SELECT DISTINCT exercise_id FROM atelier_drawings WHERE user_id = ? AND lesson_id = ? AND exercise_id IS NOT NULL AND status = 'done'`),
   lastCheck: db.prepare(`SELECT MAX(check_round) AS round, MAX(created_at) AS at FROM atelier_drawings WHERE user_id = ? AND kind = 'check'`),
+  lastCritique: db.prepare('SELECT id, critique FROM atelier_drawings WHERE user_id = ? AND critique IS NOT NULL AND created_at >= ? ORDER BY created_at DESC LIMIT 1'),
+  lastSelf: db.prepare('SELECT id, area, self_scores FROM atelier_drawings WHERE user_id = ? AND self_scores IS NOT NULL AND created_at >= ? ORDER BY created_at DESC LIMIT 1'),
+  anyCheck: db.prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM atelier_drawings WHERE user_id = ? AND kind = 'check' AND file IS NOT NULL"),
+  stageMinutes: db.prepare("SELECT stage, COALESCE(SUM(minutes), 0) AS m FROM atelier_blocks WHERE user_id = ? AND status = 'done' AND stage IS NOT NULL GROUP BY stage"),
+  exerciseDays: db.prepare(`SELECT lesson_id, exercise_id, COUNT(DISTINCT date(created_at / 1000, 'unixepoch')) AS n, MAX(created_at) AS last
+    FROM atelier_drawings WHERE user_id = ? AND status = 'done' AND lesson_id IS NOT NULL AND exercise_id IS NOT NULL GROUP BY lesson_id, exercise_id`),
   minutesSince: db.prepare('SELECT COALESCE(SUM(minutes), 0) AS m FROM atelier_blocks WHERE user_id = ? AND started_at >= ?'),
 };
 
@@ -127,32 +133,65 @@ function visibleLessons(userId, prof = profile(userId)) {
   return { main: C.MAIN, adult, state, stage };
 }
 
-// The first main-path lesson not finished yet.
-function currentLesson(userId, state = lessonState(userId)) {
-  return C.MAIN.find((l) => !state.get(l.id)?.done_at) ?? null;
+// ---- Mastery: sessions per exercise and hours per stage ------------------------------------
+//
+// Skill needs volume spread over time. An exercise counts as practised once
+// you've done it on its required number of different days; a lesson can be
+// finished when all its exercises are; a stage is complete when all its
+// lessons are finished AND you've put its hours of focused practice in.
+// Only then does the next stage open.
+
+function practice(userId) {
+  const stageMinutes = new Map(q.stageMinutes.all(userId).map((r) => [r.stage, r.m]));
+  const exDays = new Map(q.exerciseDays.all(userId).map((r) => [`${r.lesson_id}/${r.exercise_id}`, { days: r.n, last: r.last }]));
+  const check = q.anyCheck.get(userId);
+  return { stageMinutes, exDays, check: { days: check.n > 0 ? 1 : 0, last: check.last ?? 0 } };
 }
-function currentStage(userId, state = lessonState(userId)) {
-  return currentLesson(userId, state)?.stage ?? 10;
+// Skill-check exercises count any skill check (they are drawn on the Check page).
+const exProgress = (lesson, e, prog) => (e.kind === "check" ? prog.check : prog.exDays.get(`${lesson.id}/${e.id}`) ?? { days: 0, last: 0 });
+function lessonReady(lesson, prog) {
+  return lesson.exercises.every((e) => exProgress(lesson, e, prog).days >= (e.sessions ?? 1));
 }
-function stagesDone(state) {
-  return C.STAGES.filter((s) => {
-    const ls = C.MAIN.filter((l) => l.stage === s.id);
-    return ls.length && ls.every((l) => state.get(l.id)?.done_at);
-  }).map((s) => s.id);
+function lessonProgress(lesson, prog) {
+  const exercises = lesson.exercises.map((e) => ({ id: e.id, done: Math.min(e.sessions ?? 1, exProgress(lesson, e, prog).days), need: e.sessions ?? 1, last: exProgress(lesson, e, prog).last || null }));
+  return { exercises, sessionsDone: exercises.reduce((s, x) => s + x.done, 0), sessionsNeeded: exercises.reduce((s, x) => s + x.need, 0), ready: lessonReady(lesson, prog) };
+}
+function stageInfo(stage, state, prog) {
+  const lessons = C.MAIN.filter((l) => l.stage === stage.id);
+  const lessonsDone = lessons.filter((l) => state.get(l.id)?.done_at).length;
+  const minutes = Math.round(prog.stageMinutes.get(stage.id) ?? 0);
+  return { id: stage.id, lessons: lessons.length, lessonsDone, minutes, hours: stage.hours, complete: lessonsDone === lessons.length && minutes >= stage.hours * 60 };
+}
+
+// The stage you're in: the first one not complete.
+function currentStage(userId, state = lessonState(userId), prog = practice(userId)) {
+  return C.STAGES.find((s) => !stageInfo(s, state, prog).complete)?.id ?? 10;
+}
+// The first unfinished lesson of the current stage; null when only practice hours are left.
+function currentLesson(userId, state = lessonState(userId), prog = practice(userId)) {
+  const stage = currentStage(userId, state, prog);
+  return C.MAIN.find((l) => l.stage === stage && !state.get(l.id)?.done_at) ?? null;
+}
+function stagesDone(userId, state = lessonState(userId), prog = practice(userId)) {
+  return C.STAGES.filter((s) => stageInfo(s, state, prog).complete).map((s) => s.id);
 }
 
 function markRead(userId, lessonId) {
   q.readLesson.run(userId, lessonId, Date.now());
 }
 // Finishing a lesson schedules its skills for their first review tomorrow.
-function markDone(userId, lessonId) {
+// It needs every exercise done on its number of days, unless forced.
+function markDone(userId, lessonId, { force = false } = {}) {
   const lesson = C.LESSON.get(lessonId);
-  if (!lesson) return;
+  if (!lesson) return { ok: false };
+  const prog = lessonProgress(lesson, practice(userId));
+  if (!prog.ready && !force) return { ok: false, progress: prog };
   const now = Date.now();
   q.doneLesson.run({ u: userId, l: lessonId, t: now });
   for (const s of lesson.skills) {
     if (!q.review.get(userId, s)) q.saveReview.run({ u: userId, s, interval: 1, due: now + DAY, last: now, reps: 0, rating: null });
   }
+  return { ok: true };
 }
 function undoDone(userId, lessonId) {
   q.undoLesson.run(userId, lessonId);
@@ -200,8 +239,9 @@ function checkStatus(userId) {
 function todaySession(userId) {
   const prof = profile(userId);
   const state = lessonState(userId);
-  const lesson = currentLesson(userId, state);
-  const stage = lesson?.stage ?? 10;
+  const prog = practice(userId);
+  const stage = currentStage(userId, state, prog);
+  const lesson = currentLesson(userId, state, prog);
   const D = prof.dailyMinutes;
   const tz = prof.tz;
   const today = dayKey(Date.now(), tz);
@@ -230,23 +270,48 @@ function todaySession(userId) {
     const ex = reviewExercise(home);
     if (!ex) continue;
     usedAreas.add(home.area);
-    parts.push({ id: `review:${r.skill}`, kind: 'review', skill: r.skill, lessonId: home.id, area: home.area, title: `Review: ${home.title}`, prompt: ex.prompt, minutes: 10, exerciseId: ex.id, refs: ex.refs ?? null, practice: ex.practice ?? null, reps: r.reps });
+    parts.push({ id: `review:${r.skill}`, kind: 'review', skill: r.skill, lessonId: home.id, area: home.area, title: `Review: ${home.title}`, prompt: ex.prompt, minutes: 10, exerciseId: ex.id, refs: ex.refs ?? null, practice: ex.practice ?? null, reps: r.reps, steps: ex.steps, success: ex.success, example: ex.example, exampleUrl: ex.exampleUrl });
   }
 
-  // Today's lesson and its next unfinished exercises.
+  const dayStart = startOfDay(Date.now(), tz);
+  const exPart = (l, ex, minutes, extra = {}) => {
+    const p = exProgress(l, ex, prog);
+    return { id: `exercise:${l.id}:${ex.id}`, kind: ex.kind, lessonId: l.id, area: l.area, exerciseId: ex.id, title: ex.title, prompt: ex.prompt, minutes, refs: ex.refs ?? null, psd: !!ex.psd, practice: ex.practice ?? null, session: Math.min(ex.sessions, p.days + 1), sessions: ex.sessions, steps: ex.steps, success: ex.success, example: ex.example, exampleUrl: ex.exampleUrl, ...extra };
+  };
+  let budget = Math.max(15, D - parts.reduce((s, p) => s + p.minutes, 0) - (D >= 75 ? 20 : 0));
+
+  // Today's lesson: its exercises that still need sessions (one session per exercise per day).
   if (lesson) {
-    const done = new Set(q.exerciseDone.all(userId, lesson.id).map((r) => r.exercise_id));
     const read = !!state.get(lesson.id)?.read_at;
     if (!read) parts.push({ id: `lesson:${lesson.id}`, kind: 'lesson', lessonId: lesson.id, area: lesson.area, title: `Lesson: ${lesson.title}`, prompt: lesson.why, minutes: Math.min(20, Math.max(10, Math.round(lesson.minutes / 3))) });
-    const open = lesson.exercises.filter((e) => !done.has(e.id));
-    let budget = Math.max(15, D - parts.reduce((s, p) => s + p.minutes, 0) - (D >= 75 ? 20 : 0));
+    budget -= read ? 0 : parts[parts.length - 1].minutes;
+    const open = lesson.exercises.filter((e) => exProgress(lesson, e, prog).days < e.sessions && exProgress(lesson, e, prog).last < dayStart);
     for (const ex of open) {
       if (budget <= 0) break;
       const minutes = Math.min(ex.minutes, budget);
-      parts.push({ id: `exercise:${lesson.id}:${ex.id}`, kind: ex.kind, lessonId: lesson.id, area: lesson.area, exerciseId: ex.id, title: ex.title, prompt: ex.prompt, minutes, refs: ex.refs ?? null, psd: !!ex.psd, practice: ex.practice ?? null });
+      parts.push(exPart(lesson, ex, minutes));
       budget -= minutes;
     }
-    if (!open.length && read) parts.push({ id: `finish:${lesson.id}`, kind: 'finish', lessonId: lesson.id, title: `Finish “${lesson.title}”`, prompt: 'All exercises done: mark the lesson as finished to schedule its reviews.', minutes: 2 });
+    if (lessonReady(lesson, prog) && read) parts.push({ id: `finish:${lesson.id}`, kind: 'finish', lessonId: lesson.id, title: `Finish “${lesson.title}”`, prompt: 'Every exercise has had its sessions: mark the lesson as finished to schedule its reviews.', minutes: 2 });
+  }
+
+  // Stage practice: when today's lesson work is done (or only practice hours
+  // are left in the stage), mix exercises from the stage's finished lessons,
+  // the ones practised longest ago first, one per area.
+  if (budget >= 10) {
+    const pool = C.MAIN.filter((l) => l.stage === stage && state.get(l.id)?.done_at)
+      .flatMap((l) => l.exercises.filter((e) => e.kind !== 'check').map((e) => ({ l, e, last: exProgress(l, e, prog).last })))
+      .filter((x) => x.last < dayStart)
+      .sort((a, b) => a.last - b.last);
+    const areas = new Set(parts.map((p) => p.area).filter(Boolean));
+    for (const { l, e } of pool) {
+      if (budget < 10) break;
+      if (l.area && areas.has(l.area)) continue;
+      areas.add(l.area);
+      const minutes = Math.min(e.minutes, budget);
+      parts.push(exPart(l, e, minutes, { id: `practice:${l.id}:${e.id}`, practiceOf: l.title }));
+      budget -= minutes;
+    }
   }
 
   // Free project time on longer days.
@@ -256,7 +321,35 @@ function todaySession(userId) {
   }
 
   const minutesToday = q.minutesSince.get(userId, startOfDay(Date.now(), tz)).m;
-  return { day: today, dailyMinutes: D, minutesToday: Math.round(minutesToday), stage, lessonId: lesson?.id ?? null, parts, check };
+  return { day: today, dailyMinutes: D, minutesToday: Math.round(minutesToday), stage, stageInfo: stageInfo(C.STAGES[stage], state, prog), lessonId: lesson?.id ?? null, parts, check, focus: focusPoint(userId, lesson) };
+}
+
+// Deliberate practice works on one specific thing at a time. Today's "one
+// thing": the next step from your latest critique, else your weakest
+// self-rated criterion, else the current lesson's first key point.
+function focusPoint(userId, lesson) {
+  const since = Date.now() - 14 * DAY;
+  const c = q.lastCritique.get(userId, since);
+  if (c) {
+    try {
+      const crit = JSON.parse(c.critique);
+      if (!crit.refused && crit.nextStep) return { text: crit.nextStep, from: 'critique', drawingId: c.id, lessonId: crit.revisitLesson ?? null };
+    } catch {
+      // ignore
+    }
+  }
+  const s = q.lastSelf.get(userId, since);
+  if (s?.area && C.AREA[s.area]) {
+    try {
+      const scores = JSON.parse(s.self_scores);
+      const weakest = C.AREA[s.area].criteria.filter((k) => scores[k.id] != null).sort((a, b) => scores[a.id] - scores[b.id])[0];
+      if (weakest && scores[weakest.id] <= 3) return { text: `${weakest.name}: ${weakest.hint}.`, from: 'self', drawingId: s.id };
+    } catch {
+      // ignore
+    }
+  }
+  if (lesson?.points?.length) return { text: lesson.points[0], from: 'lesson', lessonId: lesson.id };
+  return null;
 }
 
 // Start of the user's local day as a timestamp (approximate across DST).
@@ -280,6 +373,10 @@ module.exports = {
   currentLesson,
   currentStage,
   stagesDone,
+  practice,
+  lessonProgress,
+  lessonReady,
+  stageInfo,
   markRead,
   markDone,
   undoDone,

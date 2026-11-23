@@ -149,7 +149,9 @@ router.put('/atelier/me', (req, res) => {
 router.get('/atelier/path', (req, res) => {
   const prof = core.profile(req.user.id);
   const { adult, state, stage } = core.visibleLessons(req.user.id, prof);
+  const prog = core.practice(req.user.id);
   const summary = (l) => ({
+    sessions: (({ sessionsDone, sessionsNeeded }) => ({ done: sessionsDone, need: sessionsNeeded }))(core.lessonProgress(l, prog)),
     id: l.id,
     title: l.title,
     area: l.area,
@@ -162,7 +164,7 @@ router.get('/atelier/path', (req, res) => {
   res.json({
     currentLesson: current?.id ?? null,
     currentStage: stage,
-    stages: C.STAGES.map((s) => ({ ...s, lessons: C.MAIN.filter((l) => l.stage === s.id).map(summary) })),
+    stages: C.STAGES.map((s) => ({ ...s, progress: core.stageInfo(s, state, prog), lessons: C.MAIN.filter((l) => l.stage === s.id).map(summary) })),
     adult: prof.adultTrack
       ? C.ADULT_UNITS.map((u) => ({ ...u, open: u.opensWith <= stage, lessons: C.ADULT.filter((l) => l.unit === u.id).map(summary) }))
       : null,
@@ -175,7 +177,9 @@ router.get('/atelier/lessons/:id', (req, res) => {
   const lesson = C.LESSON.get(req.params.id);
   const prof = core.profile(req.user.id);
   if (!lesson || (lesson.unit && !prof.adultTrack)) throw new HttpError(404, 'Lesson not found');
-  const state = core.lessonState(req.user.id).get(lesson.id);
+  const allState = core.lessonState(req.user.id);
+  const state = allState.get(lesson.id);
+  const prog = core.practice(req.user.id);
   const users = usersById();
   const drawings = q.myDrawings.all(req.user.id).filter((d) => d.lesson_id === lesson.id).map((d) => drawingView(d, req.user.id, users));
   const order = lesson.unit ? C.ADULT : C.MAIN;
@@ -188,6 +192,10 @@ router.get('/atelier/lessons/:id', (req, res) => {
     read: !!state?.read_at,
     done: !!state?.done_at,
     drawings,
+    progress: core.lessonProgress(lesson, prog),
+    stageProgress: lesson.stage != null ? core.stageInfo(C.STAGES[lesson.stage], allState, prog) : null,
+    locked: lesson.stage != null && lesson.stage > core.currentStage(req.user.id, allState, prog),
+    guides: lesson.cspGuides.map((g) => C.CSP_GUIDE.get(g)).filter(Boolean),
     prev: order[i - 1]?.id ?? null,
     next: order[i + 1]?.id ?? null,
   });
@@ -197,7 +205,10 @@ router.post('/atelier/lessons/:id/:action', (req, res) => {
   const lesson = C.LESSON.get(req.params.id);
   if (!lesson) throw new HttpError(404, 'Lesson not found');
   if (req.params.action === 'read') core.markRead(req.user.id, lesson.id);
-  else if (req.params.action === 'done') core.markDone(req.user.id, lesson.id);
+  else if (req.params.action === "done") {
+    const r = core.markDone(req.user.id, lesson.id, { force: req.body?.force === true });
+    if (!r.ok) return res.status(409).json({ error: "This lesson still needs practice sessions.", progress: r.progress });
+  }
   else if (req.params.action === 'undo') core.undoDone(req.user.id, lesson.id);
   else throw new HttpError(400, 'Unknown action');
   res.json({ ok: true });
@@ -276,6 +287,13 @@ router.get('/atelier/checks', (req, res) => {
     rounds.get(d.check_round).drawings[d.exercise_id] = { id: d.id, file: fileUrl(d.file) };
   }
   res.json({ status: core.checkStatus(req.user.id), rounds: [...rounds.values()] });
+});
+
+// The Clip Studio handbook, with the lessons that use each guide.
+router.get('/atelier/csp', (req, res) => {
+  const prof = core.profile(req.user.id);
+  const visible = C.LESSONS.filter((l) => !l.unit || prof.adultTrack);
+  res.json({ groups: C.CSP_GROUPS, guides: C.CSP_GUIDES.map((g) => ({ ...g, lessons: visible.filter((l) => l.cspGuides.includes(g.id)).map((l) => ({ id: l.id, title: l.title })) })) });
 });
 
 router.get('/atelier/brief', (req, res) => res.json({ brief: C.BRIEFS[Math.floor(Math.random() * C.BRIEFS.length)] }));

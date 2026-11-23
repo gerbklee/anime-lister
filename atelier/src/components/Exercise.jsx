@@ -93,7 +93,8 @@ export function Practice({ refs, seconds, count, area, onClose }) {
 }
 
 // One exercise: prompt, focus timer, references (+ .psd and practice), upload.
-export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 0, done, extraInfo, onDone, compact }) {
+export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 0, done, progress, extraInfo, onDone, compact, compactDetails }) {
+  const [howOpen, setHowOpen] = useState(!compact && !compactDetails);
   const timer = useTimer();
   const [refs, setRefs] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -161,12 +162,65 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
           <div className="row" style={{ gap: 6, marginBottom: 4 }}>
             <span className={`chip ${k === 'memory' ? 'accent' : k === 'study' ? 'sage' : ''}`}>{kindLabel(k)}</span>
             <span className="chip">{exercise.minutes} min</span>
-            {done && <span className="chip sage">✓ done</span>}
+            {progress ? (
+              <span className={`chip ${progress.done >= progress.need ? "sage" : ""}`} title="Sessions on different days">
+                {progress.done >= progress.need ? "✓ " : ""}
+                {progress.done}/{progress.need} sessions
+              </span>
+            ) : (
+              done && <span className="chip sage">✓ done</span>
+            )}
           </div>
           <h3 style={{ marginTop: 6 }}>{exercise.title}</h3>
           <p style={{ marginBottom: 6 }}>{exercise.prompt}</p>
           {exercise.refs?.note && <p className="small muted">{exercise.refs.note}</p>}
           {k === 'memory' && <p className="small muted">No looking. Drawing from memory is what makes it stick; compare with the reference only afterwards.</p>}
+          {(k === 'study' || k === 'review') && (
+            <ol className="steps" aria-label="How to do a study">
+              <li>Observe 2 min: big shapes, angles</li>
+              <li>Draw freehand, no tracing</li>
+              <li>Check: flip, zoom out, overlay</li>
+              <li>Fix the biggest error</li>
+              <li>Upload & rate yourself</li>
+            </ol>
+          )}
+          {exercise.steps?.length > 0 && (
+            <div className="how">
+              <button className="link-btn small" onClick={() => setHowOpen(!howOpen)} aria-expanded={howOpen}>
+                {howOpen ? "Hide the details" : "How to do it, with an example"}
+              </button>
+              {howOpen && (
+                <div className="how-body">
+                  <strong className="small">Step by step</strong>
+                  <ol>
+                    {exercise.steps.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ol>
+                  <strong className="small">You’ve got it when</strong>
+                  <ul className="points">
+                    {exercise.success.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ul>
+                  <div className="example">
+                    <div className="kicker">Example</div>
+                    <p style={{ margin: "2px 0 0" }}>{exercise.example}</p>
+                    {exercise.exampleUrl && (
+                      <a className="small" href={exercise.exampleUrl} target="_blank" rel="noreferrer">
+                        See example pictures ↗
+                      </a>
+                    )}
+                  </div>
+                  {exercise.sessions > 1 && (
+                    <p className="tiny muted" style={{ margin: "8px 0 0" }}>
+                      Do this on {exercise.sessions} different days. Spreading the repetitions out is what makes the skill stick; Today brings it back.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="row" style={{ marginTop: 8 }}>
@@ -183,7 +237,7 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
         <button className="btn small" onClick={() => file.current?.click()} disabled={busy}>
           {busy ? 'Uploading…' : 'Upload drawing'}
         </button>
-        {!compact && lessonId && !done && (
+        {!compact && lessonId && (progress ? progress.done < progress.need : !done) && (
           <button className="btn small ghost" onClick={paper} disabled={busy}>
             Done on paper
           </button>
@@ -223,7 +277,7 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
                       .psd: side by side
                     </a>
                     <a className="btn small" href={psdUrl({ ref: refSource(chosen), layout: 'under', title: exercise.title })}>
-                      .psd: faint underlay
+                      .psd: hidden underlay (to check)
                     </a>
                   </div>
                 )}
@@ -233,7 +287,7 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
                   </button>
                 )}
                 <p className="tiny muted" style={{ marginTop: 8 }}>
-                  In Clip Studio: open the .psd, draw on “Sketch”, then “Lines”; the reference layer is locked.
+                  In Clip Studio: open the .psd, draw freehand on “Sketch”, then “Lines”. In the underlay file the reference is hidden: show it only to check.
                 </p>
               </div>
             </div>

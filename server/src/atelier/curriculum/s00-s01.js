@@ -13,10 +13,13 @@ module.exports = [
     theory: [
       'Drawing is a motor and a seeing skill. Both grow through deliberate practice: short, focused work on one thing just beyond what you can do, followed by feedback. Hours of drawing the same comfortable thing don’t teach much; twenty minutes of focused, slightly uncomfortable practice do.',
       'Atelier builds every session from methods that are proven to make learning stick: practice spread over days (spacing), mixing topics instead of blocking them (interleaving), drawing from memory after studying (retrieval), and feedback that tells you the next step. Your valley grows from the focus blocks you complete, so effort becomes something you can see.',
-      'Expect the path to take two to four years at about an hour or two a day to reach a professional level. That is normal. The skill checks every four weeks will show you the progress you can’t see day to day.',
+      'Research on art students shows that learning to draw what you see also trains how you see: attention, shape-finding and visual memory improve with it. Most drawing errors come from where your attention goes and what you forget between looking and drawing, not from “bad talent”. That is why every exercise has the same loop: observe, draw freehand, check (flip, zoom out, overlay), draw it again from memory, compare.',
+      'Copy freehand, never trace: tracing guides your hand but teaches your eye nothing. Anime style is built on real structure, so the path teaches forms, the figure and anatomy first, then simplifies them the anime way, with master copies of official anime art along the way.',
+      'Expect the path to take two to four years at about an hour or two a day to reach a professional level. That is normal. The skill checks every four weeks will show you the progress you can’t see day to day. The page “How Atelier teaches” lists the research behind all of this.',
     ],
     points: [
-      'One focus per session: decide what you’re practising before you start.',
+      'One focus per session: Today shows the one thing to work on.',
+      'Every study: observe → draw freehand → check → from memory → compare.',
       'Expect to feel clumsy: that’s the zone where learning happens.',
       'Draw from memory after every study: recall is what makes it stick.',
       'Reviews come back at growing intervals; do them even when they feel easy.',
@@ -113,7 +116,7 @@ module.exports = [
     ],
     points: ['Mark start and end points', 'Ghost the motion 2–3 times', 'Commit: one stroke, no going back over it', 'Speed up slightly; slow lines wobble', 'Use the arm for anything longer than a few centimetres'],
     mistakes: ['Hairy lines made of many short strokes', 'Going back over a line to “fix” it', 'Drawing with the wrist only'],
-    csp: csp('Stabilization while learning', ['Select your pen → Tool property → Stabilization.', 'Set it to around 5–10: enough to smooth tremor, not so much that it does the work.', 'Lower it again over the weeks as your control improves.'], 'stabilization'),
+    csp: csp('Stabilization while learning', ['Select your pen → Tool property → Stabilization.', 'Keep it low (0–6) while learning: enough to smooth tremor, never enough to do the work for you.', 'Lower it again over the weeks as your control improves.'], 'stabilization'),
     watch: [site('Drawabox', 'Lesson 1: lines (the ghosting method)', 'https://drawabox.com/lesson/1'), yt('Proko', 'line confidence drawing')],
     exercises: [
       drill('superimposed', 'Superimposed lines', 'Draw one straight line, then 8 more exactly on top of it, each in one stroke. Repeat for 10 lines in different directions.', 10),

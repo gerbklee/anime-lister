@@ -248,7 +248,7 @@ export default function Drawing({ id }) {
               .psd: side by side
             </a>
             <a className="btn small" href={psdUrl({ drawing: d.id, layout: 'under' })}>
-              .psd: faint underlay
+              .psd: hidden underlay (to check)
             </a>
             <button className="btn small" onClick={() => file.current?.click()} disabled={busy === 'upload'}>
               {busy === 'upload' ? 'Uploading…' : 'Upload my drawing'}

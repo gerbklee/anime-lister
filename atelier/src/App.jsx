@@ -10,6 +10,8 @@ import Drawing from './pages/Drawing.jsx';
 import Progress from './pages/Progress.jsx';
 import Settings from './pages/Settings.jsx';
 import Check from './pages/Check.jsx';
+import Handbook from './pages/Handbook.jsx';
+import Method from './pages/Method.jsx';
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -175,11 +177,17 @@ export default function App() {
     case 'check':
       body = <Check />;
       break;
+    case 'clip-studio':
+      body = <Handbook />;
+      break;
+    case 'method':
+      body = <Method />;
+      break;
     default:
       body = <Home />;
   }
 
-  const active = ['lesson'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
+  const active = ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
 
   return (
     <AppContext.Provider value={ctx}>
@@ -204,7 +212,12 @@ export default function App() {
             </a>
           </div>
         </header>
-        <main className="shell">{body}</main>
+        <main className="shell">
+          {body}
+          <footer className="footer small muted">
+            <a href="#/clip-studio">Clip Studio handbook</a> · <a href="#/method">How Atelier teaches</a> · <a href={hubUrl()}>Anime Hub</a>
+          </footer>
+        </main>
         {page !== '' && <TimerMini />}
         {toast && <div className="toast">{toast}</div>}
       </TimerProvider>

@@ -14,6 +14,7 @@ const core = require('./core');
 const q = {
   blocks: db.prepare('SELECT id, started_at, ended_at, planned, minutes, status, kind, lesson_id, area, tree, stage FROM atelier_blocks WHERE user_id = ? AND status != ? ORDER BY started_at'),
   drawings: db.prepare('SELECT id, lesson_id, exercise_id, kind, area, skill, self_scores, critique, check_round, created_at, file FROM atelier_drawings WHERE user_id = ? AND status = ? ORDER BY created_at'),
+  minutesSince: db.prepare("SELECT COALESCE(SUM(minutes), 0) AS m FROM atelier_blocks WHERE user_id = ? AND status = 'done' AND started_at >= ?"),
   lessonsDone: db.prepare('SELECT lesson_id, done_at FROM atelier_lessons WHERE user_id = ? AND done_at IS NOT NULL ORDER BY done_at'),
 };
 
@@ -154,26 +155,34 @@ function skills(userId) {
   return { recent, history, calibration: gaps.length ? Math.round(avg(gaps) * 10) / 10 : null, drawings: drawings.length };
 }
 
-// Pace: lessons per week over the last 4 weeks -> time to the next stage and the end.
+// Pace: hours of focused practice per week (last 4 weeks) against the hours
+// the remaining stages need -> time to the next stage and to the end.
 function pace(userId) {
   const state = core.lessonState(userId);
-  const done = q.lessonsDone.all(userId);
-  const recent = done.filter((l) => Date.now() - l.done_at < 28 * core.DAY).length;
-  const perWeek = recent / 4;
-  const cur = core.currentLesson(userId, state);
-  const stage = cur?.stage ?? 10;
+  const prog = core.practice(userId);
+  const stage = core.currentStage(userId, state, prog);
+  const info = core.stageInfo(C.STAGES[stage], state, prog);
+  const recentMinutes = q.minutesSince.get(userId, Date.now() - 28 * core.DAY).m;
+  const hoursPerWeek = recentMinutes / 60 / 4;
+  // Hours still needed: the rest of this stage plus every later stage.
+  const hoursLeftStage = Math.max(0, info.hours - info.minutes / 60);
+  const hoursLeftTotal = hoursLeftStage + C.STAGES.filter((s) => s.id > stage).reduce((sum, s) => sum + s.hours, 0);
+  const hoursTotal = C.STAGES.reduce((sum, s) => sum + s.hours, 0);
   const leftInStage = C.MAIN.filter((l) => l.stage === stage && !state.get(l.id)?.done_at).length;
-  const leftTotal = C.MAIN.filter((l) => !state.get(l.id)?.done_at).length;
-  const doneMain = C.MAIN.length - leftTotal;
+  const lessonsLeft = C.MAIN.filter((l) => !state.get(l.id)?.done_at).length;
   return {
     stage,
-    lessonsDone: doneMain,
+    stageMinutes: info.minutes,
+    stageHours: info.hours,
+    lessonsDone: C.MAIN.length - lessonsLeft,
     lessonsTotal: C.MAIN.length,
     leftInStage,
-    perWeek: Math.round(perWeek * 10) / 10,
-    weeksToNextStage: perWeek > 0 ? Math.ceil(leftInStage / perWeek) : null,
-    weeksToEnd: perWeek > 0 ? Math.ceil(leftTotal / perWeek) : null,
-    stagesDone: core.stagesDone(state),
+    hoursDone: Math.round((hoursTotal - hoursLeftTotal) * 10) / 10,
+    hoursTotal,
+    hoursPerWeek: Math.round(hoursPerWeek * 10) / 10,
+    weeksToNextStage: hoursPerWeek > 0 ? Math.ceil(hoursLeftStage / hoursPerWeek) : null,
+    weeksToEnd: hoursPerWeek > 0 ? Math.ceil(hoursLeftTotal / hoursPerWeek) : null,
+    stagesDone: core.stagesDone(userId, state, prog),
   };
 }
 
@@ -189,7 +198,7 @@ function world(userId) {
   return {
     trees: blocks.map((b) => ({ id: b.id, at: b.started_at, area: b.area ?? 'free', tree: b.status === 'gave_up' ? 'withered' : b.tree ?? 'sapling', minutes: Math.round(b.minutes || 0), stage: b.stage })),
     stones: [...state.values()].filter((r) => r.done_at).length,
-    buildings: core.stagesDone(state).map((id) => C.STAGES[id].building),
+    buildings: core.stagesDone(userId, state).map((id) => C.STAGES[id].building),
     lanterns: cons.metWeeks,
     gallery: [...checks.keys()].sort((a, b) => a - b),
     stage: core.currentStage(userId, state),

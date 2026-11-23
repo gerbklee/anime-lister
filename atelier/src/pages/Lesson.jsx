@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../App.jsx';
 import Exercise from '../components/Exercise.jsx';
+import Guide from '../components/Guide.jsx';
 
 // Retrieval before new material: try to remember the last lesson first.
 function Recall({ prevId }) {
@@ -51,8 +52,14 @@ export default function Lesson({ id }) {
   const { lesson, stage, unit, area, drawings } = data;
   const adultLevel = !lesson.unit ? 0 : ['A1', 'A7'].includes(lesson.unit) ? 2 : 1;
   const doneEx = new Set(drawings.filter((d) => d.status === 'done').map((d) => d.exerciseId));
-  const allDone = lesson.exercises.every((e) => doneEx.has(e.id));
 
+  const forceDone = async () => {
+    if (!window.confirm('Finish without the practice sessions? The stage still needs its practice hours, and skipped skills tend to come back as gaps later.')) return;
+    await api.lessonAction(id, 'done', { force: true });
+    toast('Lesson finished');
+    bump();
+    load();
+  };
   const toggleDone = async () => {
     await api.lessonAction(id, data.done ? 'undo' : 'done');
     if (!data.done) toast('Lesson finished – its skills come back for review tomorrow 🪨');
@@ -78,15 +85,34 @@ export default function Lesson({ id }) {
         {data.done && <span className="chip sage">✓ finished</span>}
       </p>
 
+      {data.locked && (
+        <div className="wash" style={{ marginBottom: 18 }}>
+          <strong>A look ahead.</strong> This lesson belongs to a later stage. Read it if you’re curious, but practise your current stage first: it opens when that stage is complete.
+        </div>
+      )}
+
       {data.prev && <Recall prevId={data.prev} />}
 
       <p style={{ fontSize: '1.12rem', fontFamily: 'var(--serif)' }}>{lesson.why}</p>
 
       <div className="theory">
-        {lesson.theory.map((t, i) => (
+        {[...lesson.theory, ...(lesson.more ?? [])].map((t, i) => (
           <p key={i}>{t}</p>
         ))}
       </div>
+
+      {lesson.method?.length > 0 && (
+        <div className="card section">
+          <h3>Step by step</h3>
+          <ol style={{ paddingLeft: 20, margin: 0 }}>
+            {lesson.method.map((m) => (
+              <li key={m} style={{ marginBottom: 6 }}>
+                {m}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       <div className="grid-2 section" style={{ marginTop: 22 }}>
         <div className="card">
@@ -126,6 +152,22 @@ export default function Lesson({ id }) {
         </div>
       )}
 
+      {data.guides?.length > 0 && (
+        <section className="section">
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Clip Studio for this lesson</h3>
+            <a className="small" href="#/clip-studio">
+              The whole handbook
+            </a>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {data.guides.map((g) => (
+              <Guide key={g.id} g={g} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {lesson.watch?.length > 0 && (
         <section className="section">
           <h3>Watch & read</h3>
@@ -148,7 +190,7 @@ export default function Lesson({ id }) {
         <h2>Exercises</h2>
         <p className="small muted">Start a focus block for each one. Upload what you draw (photo or export), even when it’s rough: your sketchbook is how you’ll see your progress.</p>
         {lesson.exercises.map((ex) => (
-          <Exercise key={ex.id} lessonId={lesson.id} exercise={ex} area={lesson.area} adultLevel={adultLevel} done={doneEx.has(ex.id)} onDone={() => load()} />
+          <Exercise key={ex.id} lessonId={lesson.id} exercise={ex} area={lesson.area} adultLevel={adultLevel} done={doneEx.has(ex.id)} progress={data.progress?.exercises.find((x) => x.id === ex.id)} onDone={() => load()} />
         ))}
       </section>
 
@@ -168,28 +210,57 @@ export default function Lesson({ id }) {
         </section>
       )}
 
-      <section className="section card row" style={{ justifyContent: 'space-between' }}>
-        <div>
-          <strong>{data.done ? 'Finished.' : allDone ? 'All exercises done.' : 'Done with this lesson?'}</strong>
-          <p className="small muted" style={{ margin: 0 }}>
-            Finishing adds a stepping stone and schedules spaced reviews of its skills.
-          </p>
-        </div>
-        <div className="row">
-          {data.prev && (
-            <a className="btn small ghost" href={`#/lesson/${data.prev}`}>
-              ← Previous
-            </a>
-          )}
-          <button className={`btn small ${data.done ? '' : 'primary'}`} onClick={toggleDone}>
-            {data.done ? 'Mark as not finished' : 'Finish lesson'}
-          </button>
-          {data.next && (
-            <a className="btn small" href={`#/lesson/${data.next}`}>
-              Next →
-            </a>
-          )}
-        </div>
+      <section className="section card">
+        {(() => {
+          const p = data.progress;
+          const sp = data.stageProgress;
+          return (
+            <>
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <strong>{data.done ? 'Finished.' : p?.ready ? 'Ready to finish.' : 'Practice to finish this lesson'}</strong>
+                  <p className="small muted" style={{ margin: '2px 0 10px' }}>
+                    {data.done
+                      ? 'Its skills come back as spaced reviews.'
+                      : `Each exercise needs its sessions on different days: ${p?.sessionsDone ?? 0} of ${p?.sessionsNeeded ?? 0} done. Finishing adds a stepping stone and schedules reviews.`}
+                  </p>
+                  {p && !data.done && (
+                    <div className="meter" style={{ maxWidth: 420 }} aria-label="Sessions done">
+                      <span style={{ width: `${(p.sessionsDone / Math.max(1, p.sessionsNeeded)) * 100}%` }} />
+                    </div>
+                  )}
+                  {sp && (
+                    <p className="tiny muted" style={{ margin: '10px 0 0' }}>
+                      Stage {sp.id}: {sp.lessonsDone} of {sp.lessons} lessons, {Math.round((sp.minutes / 60) * 10) / 10} of {sp.hours} practice hours. The next stage opens when both are complete.
+                    </p>
+                  )}
+                </div>
+                <div className="row">
+                  {data.prev && (
+                    <a className="btn small ghost" href={`#/lesson/${data.prev}`}>
+                      ← Previous
+                    </a>
+                  )}
+                  {(data.done || p?.ready) && (
+                    <button className={`btn small ${data.done ? '' : 'primary'}`} onClick={toggleDone}>
+                      {data.done ? 'Mark as not finished' : 'Finish lesson'}
+                    </button>
+                  )}
+                  {data.next && (
+                    <a className="btn small" href={`#/lesson/${data.next}`}>
+                      Next →
+                    </a>
+                  )}
+                </div>
+              </div>
+              {!data.done && !p?.ready && (
+                <button className="link-btn tiny" style={{ marginTop: 10 }} onClick={forceDone}>
+                  I already know this: finish without the sessions
+                </button>
+              )}
+            </>
+          );
+        })()}
       </section>
     </article>
   );

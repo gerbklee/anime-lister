@@ -111,6 +111,49 @@ export default function Today() {
         )}
       </section>
 
+      {data.focus && (
+        <section className="focus-card section" style={{ marginTop: 18 }}>
+          <span style={{ fontSize: 26 }} aria-hidden="true">
+            🎯
+          </span>
+          <div>
+            <div className="kicker">Today’s one thing</div>
+            <p style={{ margin: '2px 0 4px', fontFamily: 'var(--serif)', fontSize: '1.1rem' }}>{data.focus.text}</p>
+            <p className="tiny muted" style={{ margin: 0 }}>
+              {data.focus.from === 'critique' ? 'From your last critique. ' : data.focus.from === 'self' ? 'Your lowest self-rating lately. ' : 'A key point of your current lesson. '}
+              Keep it in mind in every exercise today: practice works best aimed at one thing.
+              {data.focus.drawingId && (
+                <>
+                  {' '}
+                  <a href={`#/drawing/${data.focus.drawingId}`}>See the drawing</a>
+                </>
+              )}
+            </p>
+          </div>
+        </section>
+      )}
+
+      {data.stageInfo && (
+        <section className="card section" style={{ padding: "14px 20px" }}>
+          <div className="row" style={{ justifyContent: "space-between" }}>
+            <strong className="small">
+              Stage {data.stageInfo.id}: {data.stageInfo.lessonsDone} of {data.stageInfo.lessons} lessons · {Math.round((data.stageInfo.minutes / 60) * 10) / 10} of {data.stageInfo.hours} practice hours
+            </strong>
+            <a className="small" href="#/path">
+              The path
+            </a>
+          </div>
+          <div className="meter" style={{ marginTop: 8 }}>
+            <span style={{ width: `${Math.min(100, (data.stageInfo.minutes / 60 / data.stageInfo.hours) * 100)}%` }} />
+          </div>
+          {!data.lessonId && (
+            <p className="tiny muted" style={{ margin: "8px 0 0" }}>
+              All lessons of this stage are finished. Now the hours build the skill: today mixes exercises from the whole stage. The next stage opens at {data.stageInfo.hours} hours.
+            </p>
+          )}
+        </section>
+      )}
+
       <section className="section" style={{ display: 'grid', gap: 10 }}>
         {parts.map((p, i) => {
           const isDone = done.has(p.id);
@@ -133,6 +176,14 @@ export default function Today() {
                   </span>
                   <br />
                   <strong>{p.title}</strong>
+                  {(p.practiceOf || p.sessions > 1) && (
+                    <span className="tiny muted">
+                      {" "}
+                      · {p.practiceOf ? `practice from “${p.practiceOf}”` : ""}
+                      {p.practiceOf && p.sessions > 1 ? " · " : ""}
+                      {p.sessions > 1 ? `session ${p.session} of ${p.sessions}` : ""}
+                    </span>
+                  )}
                 </span>
                 <span className="chip">{p.minutes} min</span>
               </button>
@@ -172,7 +223,8 @@ export default function Today() {
                         area={p.area}
                         kind={p.kind}
                         adultLevel={0}
-                        exercise={{ id: p.exerciseId ?? p.id, title: p.title, prompt: p.prompt, minutes: p.minutes, refs: p.refs, practice: p.practice, psd: p.psd }}
+                        exercise={{ id: p.exerciseId ?? p.id, title: p.title, prompt: p.prompt, minutes: p.minutes, refs: p.refs, practice: p.practice, psd: p.psd, steps: p.steps, success: p.success, example: p.example, exampleUrl: p.exampleUrl, sessions: p.sessions }}
+                        compactDetails
                         onDone={() => {
                           mark(p.id);
                           if (p.kind !== 'review') load();
@@ -186,7 +238,14 @@ export default function Today() {
                           </a>
                         )}
                         <div className="spacer" />
-                        <button className="link-btn small" onClick={() => mark(p.id, !isDone)}>
+                        <button
+                          className="link-btn small"
+                          onClick={async () => {
+                            // Marking a lesson exercise as done counts as a session (on paper).
+                            if (!isDone && p.lessonId && p.exerciseId && p.kind !== 'review') await api.exerciseDone(p.lessonId, p.exerciseId).catch(() => {});
+                            mark(p.id, !isDone);
+                          }}
+                        >
                           {isDone ? 'Not done yet' : 'Mark as done'}
                         </button>
                       </div>

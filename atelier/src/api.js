@@ -31,7 +31,7 @@ export const api = {
   saveProfile: (patch) => request('PUT', '/api/atelier/me', patch),
   path: () => request('GET', '/api/atelier/path'),
   lesson: (id) => request('GET', `/api/atelier/lessons/${encodeURIComponent(id)}`),
-  lessonAction: (id, action) => request('POST', `/api/atelier/lessons/${encodeURIComponent(id)}/${action}`),
+  lessonAction: (id, action, body) => request('POST', `/api/atelier/lessons/${encodeURIComponent(id)}/${action}`, body),
   today: () => request('GET', '/api/atelier/today'),
   rateReview: (skill, rating) => request('POST', `/api/atelier/reviews/${encodeURIComponent(skill)}`, { rating }),
   exerciseDone: (lessonId, exerciseId) => request('POST', '/api/atelier/exercises/done', { lessonId, exerciseId }),
@@ -46,6 +46,7 @@ export const api = {
   checks: () => request('GET', '/api/atelier/checks'),
   brief: () => request('GET', '/api/atelier/brief'),
   characters: () => request('GET', '/api/atelier/characters'),
+  csp: () => request('GET', '/api/atelier/csp'),
 
   drawings: () => request('GET', '/api/atelier/drawings'),
   sharedDrawings: () => request('GET', '/api/atelier/drawings/shared'),

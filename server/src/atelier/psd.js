@@ -4,7 +4,8 @@
 // Layers (bottom to top): Paper, Reference (locked), Sketch, Lines, Colour, and
 // a hidden proportion Grid. Layouts: "side" puts the reference on the left
 // half and leaves the right half for you; "under" puts it under the whole
-// canvas at low opacity (for checking with an overlay, not for tracing).
+// canvas at low opacity and hidden: draw freehand, then show it to check (copying
+// freehand teaches more than tracing).
 const sharp = require('sharp');
 const { writePsdBuffer } = require('ag-psd');
 
@@ -78,7 +79,7 @@ async function studyPsd(buffer, { layout = 'side', title = 'Study' } = {}) {
     imageData: composite,
     children: [
       { name: 'Paper', imageData: fill(empty(width, height), 255, 255, 255), transparencyProtected: true },
-      { name: `Reference – ${title}`.slice(0, 60), left: 0, top: 0, imageData: refData, opacity: side ? 1 : 0.3, protected: { transparency: true, composite: true, position: true } },
+      { name: `Reference – ${title}`.slice(0, 60), left: 0, top: 0, imageData: refData, opacity: side ? 1 : 0.35, hidden: !side, protected: { transparency: true, composite: true, position: true } },
       { name: 'Sketch (rough, keep it loose)', opacity: 0.6 },
       { name: 'Lines' },
       { name: 'Colour' },

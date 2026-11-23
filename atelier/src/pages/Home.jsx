@@ -179,7 +179,7 @@ export default function Home() {
               </div>
               <h3 style={{ marginBottom: 2 }}>{stage.title}</h3>
               <p className="small muted" style={{ margin: 0 }}>
-                {stats.pace.leftInStage} lessons to the {stage.building.name.toLowerCase()}
+                {stats.pace.leftInStage > 0 ? `${stats.pace.leftInStage} lessons and ` : ""}{Math.max(0, Math.round(stats.pace.stageHours - stats.pace.stageMinutes / 60))} practice hours to the {stage.building.name.toLowerCase()}
                 {stats.pace.weeksToNextStage ? ` · about ${stats.pace.weeksToNextStage} ${stats.pace.weeksToNextStage === 1 ? 'week' : 'weeks'} at your pace` : ''}
               </p>
             </div>
@@ -188,10 +188,10 @@ export default function Home() {
             </a>
           </div>
           <div style={{ height: 8, borderRadius: 99, background: 'var(--paper-2)', overflow: 'hidden', marginTop: 12 }}>
-            <div style={{ width: `${(stats.pace.lessonsDone / stats.pace.lessonsTotal) * 100}%`, height: '100%', background: 'var(--accent)' }} />
+            <div style={{ width: `${(stats.pace.hoursDone / stats.pace.hoursTotal) * 100}%`, height: '100%', background: 'var(--accent)' }} />
           </div>
           <p className="tiny muted" style={{ margin: '6px 0 0' }}>
-            {stats.pace.lessonsDone} of {stats.pace.lessonsTotal} lessons on the whole path
+            {stats.pace.hoursDone} of {stats.pace.hoursTotal} hours on the whole path · {stats.pace.lessonsDone} of {stats.pace.lessonsTotal} lessons
           </p>
         </section>
       )}
