@@ -209,6 +209,7 @@ export const api = {
   studioResolve: (source, id, scope) => request('GET', `/api/studio/resolve?${new URLSearchParams({ source, id, scope: scope ?? '' })}`),
   studioEagle: (items, opts) => request('POST', '/api/studio/eagle', { items, ...opts }),
   studioSimilar: (url) => request('POST', '/api/studio/similar', { url }),
+  studioArtistFor: (item) => request('POST', '/api/studio/artist-for', { tags: item.tags, sourceUrl: item.sourceUrl, pixivId: item.keys?.find((k) => k.startsWith('px:'))?.slice(3) }),
   studioSimilarStatus: (id) => request('GET', `/api/studio/similar/${id}`),
   studioSearches: () => request('GET', '/api/studio/searches'),
   saveStudioSearch: (name, query) => request('POST', '/api/studio/searches', { name, query }),

@@ -346,6 +346,8 @@ function applyDanbooru(item, p, ctx) {
   item.characters = characters;
   item.artists = String(p.tag_string_artist ?? '').split(' ').filter(Boolean);
   item.series = String(p.tag_string_copyright ?? '').split(' ').filter(Boolean);
+  // The Danbooru artist makes the artist page and Follow work for this copy too.
+  if (item.artists[0] && (!item.artistKey || item.artistKey.startsWith('pixiv:'))) item.artistKey = item.artists[0];
   if (AI_TAGS.some((t) => all.has(t))) item.ai = true;
   if (!item.level) return true;
   return fanart.spicyFilter(ctx.level)({ spicy: item.level, characters, all });
@@ -1227,6 +1229,35 @@ router.get('/studio/similar/:id', (req, res) => {
   if (!job || job.user !== req.user.id) throw new HttpError(404, 'Search not found (it may have expired).');
   res.json({ status: job.status, stage: job.stage, items: job.items ?? null, error: job.error ?? null, seconds: Math.round((Date.now() - job.started) / 1000) });
 });
+
+// Who drew a picture whose site doesn't say: its own tags (Danbooru knows which
+// are artist names), else the artist's original post (Danbooru matches X,
+// Pixiv and other post links to artists), else the Pixiv work's account.
+// Returns { key, name } (key: Danbooru artist tag or "pixiv:<id>") or nulls.
+router.post('/studio/artist-for', wrap(async (req, res) => {
+  const tags = (Array.isArray(req.body?.tags) ? req.body.tags : []).slice(0, 80).map((t) => String(t).toLowerCase().replace(/ /g, '_')).filter((t) => TAG_RE.test(t));
+  const sourceUrl = typeof req.body?.sourceUrl === 'string' && /^https?:\/\//.test(req.body.sourceUrl) ? req.body.sourceUrl.slice(0, 500) : null;
+  const pixivWork = /^\d{1,12}$/.test(String(req.body?.pixivId ?? '')) ? String(req.body.pixivId) : null;
+  const cacheKey = `artistfor|${tags.join(' ')}|${sourceUrl ?? ''}|${pixivWork ?? ''}`;
+  const found = await diskCache.kv(cacheKey, 7 * 24 * 3600 * 1000, async () => {
+    if (tags.length) {
+      const info = await tagInfo(await resolveAliases(tags));
+      const artist = [...info].find(([, i]) => i.category === 1 && i.known)?.[0];
+      if (artist) return { key: artist, name: artist.replace(/_/g, ' ') };
+    }
+    const links = [sourceUrl, pixivWork && `https://www.pixiv.net/artworks/${pixivWork}`].filter(Boolean);
+    for (const url of links) {
+      const rows = await dbDirect(`/artists.json?search%5Burl_matches%5D=${encodeURIComponent(url)}&only=name&limit=1`).catch(() => null);
+      if (Array.isArray(rows) && rows[0]?.name) return { key: rows[0].name, name: rows[0].name.replace(/_/g, ' ') };
+    }
+    if (pixivWork && pixiv.isConnected()) {
+      const p = await pixiv.illustDetail(pixivWork).catch(() => null);
+      if (p?.user?.id) return { key: `pixiv:${p.user.id}`, name: p.user.name ?? `Pixiv ${p.user.id}` };
+    }
+    return { key: null, name: null };
+  });
+  res.json(found);
+}));
 
 router.get('/studio/series', wrap(async (req, res) => {
   const tags = String(req.query.tags ?? '').split(',').filter((t) => TAG_RE.test(t)).slice(0, 12);

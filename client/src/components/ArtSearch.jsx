@@ -56,6 +56,8 @@ function store(patch) {
 export function setSearchChips(chips) {
   store({ query: { ...load().query, chips } });
 }
+// "gojo satoru + from below" (for "Back to your search").
+export const searchSummary = () => load().query.chips.map((c) => c.label).join(' + ');
 
 export const label = (tag) => tag.replace(/_/g, ' ');
 const res = (i) => (i.width && i.height ? `${i.width}×${i.height}` : '');
@@ -526,6 +528,28 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
       .catch(() => {});
   }, [item]);
 
+  // Sites that don't say who drew it: ask (tags, the artist's post, the Pixiv work).
+  useEffect(() => {
+    if (!item || item.artistKey || item.artistChecked || (item.legacy && item.source === 'danbooru')) return;
+    item.artistChecked = true;
+    item.artistLookup = true;
+    bump((n) => n + 1);
+    api
+      .studioArtistFor(item)
+      .then((a) => {
+        if (a.key) {
+          item.artistKey = a.key;
+          item.artist = item.artist ?? a.name;
+          if (!item.artists.length && !a.key.startsWith('pixiv:')) item.artists = [a.key];
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        item.artistLookup = false;
+        bump((n) => n + 1);
+      });
+  }, [item]);
+
   const pages = item?.pagesList ?? null;
   const shown = pages ? pages[page] : null;
   const previewUrl = shown?.preview ?? item?.preview;
@@ -583,13 +607,19 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
       else if (e.key === 'b' || e.key === 'B') actions.board(item);
     };
     window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [go, goPage, onClose, openOriginal, onToggle, onSend, item, actions]);
+
+  // While open, the page behind doesn't scroll; on closing, it's back where it was.
+  useEffect(() => {
+    const y = window.scrollY;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      window.scrollTo(0, y);
     };
-  }, [go, goPage, onClose, openOriginal, onToggle, onSend, item, actions]);
+  }, []);
 
   if (!item) return null;
   const isSel = selected.has(item.key);
@@ -730,23 +760,25 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
             {item.level > 0 && <> · {item.level > 1 ? '🔞' : '🌶️'}</>}
           </p>
           {renderInfo?.(item)}
-          {item.artist && (
+          {item.artist || item.artistKey ? (
             <p className="small">
               🖌️{' '}
               {item.artistKey ? (
                 <a href={artistHref(item.artistKey)} onClick={onClose} title="Artist page: their work on every site">
-                  {label(item.artist)}
+                  {label(item.artist ?? item.artistKey)}
                 </a>
               ) : (
                 label(item.artist)
               )}
               {item.artistKey && (
-                <button type="button" className="link-btn" onClick={() => actions.follow(item.artistKey, label(item.artist))}>
+                <button type="button" className="link-btn" onClick={() => actions.follow(item.artistKey, label(item.artist ?? item.artistKey))}>
                   ➕ Follow
                 </button>
               )}
             </p>
-          )}
+          ) : item.artistLookup ? (
+            <p className="small muted">🖌️ Finding the artist…</p>
+          ) : null}
           <p className="small studio-links">
             {item.sources.map((s) => (
               <a key={`${s.source}:${s.id}`} href={s.postUrl} target="_blank" rel="noreferrer">
@@ -767,10 +799,10 @@ function StudioViewer({ items, index, onIndex, onClose, selected, onToggle, onSe
                   {a.icon} {a.label}
                 </button>
               ))}
-            {item.artistKey && item.artist && (
-              <button type="button" className="btn ghost small-btn" onClick={() => actions.search([{ tag: item.artistKey, label: label(item.artist), kind: 'artist' }])}>
-                🖌️ More by {label(item.artist)}
-              </button>
+            {item.artistKey && (
+              <a className="btn ghost small-btn" href={artistHref(item.artistKey)} onClick={onClose} title="Their work on every site">
+                🖌️ More by {label(item.artist ?? item.artistKey)}
+              </a>
             )}
             {charChips.length > 0 && (
               <button type="button" className="btn ghost small-btn" onClick={() => actions.search(charChips.slice(0, 3))}>
@@ -1618,7 +1650,7 @@ export function SearchView({ tools, onSearch }) {
 
 // One artist across sites: links, follow button, and their work (Danbooru,
 // Yande.re, Konachan, Gelbooru by their Danbooru name; Pixiv by their account).
-export function ArtistView({ artistKey, tools, onSearch, following, onFollowChange }) {
+export function ArtistView({ artistKey, tools, onSearch, following, onFollowChange, back }) {
   const [info, setInfo] = useState(null);
   const [sort, setSort] = useState('new');
   const eagle = useEagle();
@@ -1643,6 +1675,20 @@ export function ArtistView({ artistKey, tools, onSearch, following, onFollowChan
 
   return (
     <div className="studio artist-page">
+      {back && (
+        <a
+          className="back-link"
+          href={back.href ?? "#/art/artists"}
+          onClick={(e) => {
+            if (back.history) {
+              e.preventDefault();
+              window.history.back();
+            }
+          }}
+        >
+          {back.label}
+        </a>
+      )}
       <div className="artist-head">
         <div>
           <h2>🖌️ {name}</h2>

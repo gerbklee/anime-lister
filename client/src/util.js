@@ -100,3 +100,7 @@ export function blendNames(names) {
   if (first.length < 2) return first[0] ?? '';
   return first.map(syllables).join('');
 }
+
+// Where each page (by address) was scrolled to when you left it, recorded at
+// the moment of navigating away (pages that stay loaded can return there).
+export const scrollMemory = new Map();

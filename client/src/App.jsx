@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, setUnauthorizedHandler } from './api.js';
+import { scrollMemory } from './util.js';
 import { AppContext } from './AppContext.jsx';
 import AuthPage from './components/AuthPage.jsx';
 import Avatar from './components/Avatar.jsx';
@@ -119,7 +120,12 @@ function Main({ me, setMe }) {
   }, [refreshLists]);
 
   useEffect(() => {
-    const onHashChange = () => {
+    const onHashChange = (e) => {
+      try {
+        scrollMemory.set(new URL(e.oldURL).hash || '#/', window.scrollY);
+      } catch {
+        // old address unknown
+      }
       setRoute(readRoute());
       window.scrollTo(0, 0);
     };

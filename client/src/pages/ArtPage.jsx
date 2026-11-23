@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../AppContext.jsx';
-import { plural } from '../util.js';
+import { plural, scrollMemory } from '../util.js';
 import Avatar from '../components/Avatar.jsx';
 import Menu from '../components/Menu.jsx';
 
 import { useArtActions } from '../components/ArtTools.jsx';
-import { ArtResults, ArtistView, FollowingFeed, SearchView, adaptItem, artistHref, label, sendBoardToEagle, setSearchChips, staticStream, useEagle } from '../components/ArtSearch.jsx';
+import { ArtResults, ArtistView, FollowingFeed, SearchView, adaptItem, artistHref, label, searchSummary, sendBoardToEagle, setSearchChips, staticStream, useEagle } from '../components/ArtSearch.jsx';
 import GalleryPage from './GalleryPage.jsx';
 
 // Pictures from For you, Trending and boards in the same grid and viewer as the search.
@@ -390,6 +390,25 @@ export default function ArtPage({ route }) {
   const [follows, setFollows] = useState(null);
   const view = route.view ?? 'home';
 
+  // The search stays loaded (hidden) once opened, so coming back from an
+  // artist page shows the same results at the same scroll position.
+  const [searchAlive, setSearchAlive] = useState(view === 'search');
+  const [artistFrom, setArtistFrom] = useState(null); // the view an artist page was opened from
+  const prevView = useRef(view);
+  useEffect(() => {
+    const prev = prevView.current;
+    prevView.current = view;
+    if (prev === view) return;
+    if (view === 'search') {
+      setSearchAlive(true);
+      const y = scrollMemory.get('#/art/search') ?? 0;
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+    } else if (view === 'artist') {
+      if (prev !== 'artist') setArtistFrom(prev);
+      window.scrollTo(0, 0);
+    }
+  }, [view]);
+
   const reloadFollows = useCallback(() => {
     api.follows().then((d) => setFollows(d.follows)).catch(() => setFollows([]));
   }, []);
@@ -434,12 +453,26 @@ export default function ArtPage({ route }) {
         ))}
       </div>
       {view === 'home' && <HomeView tools={tools} follows={follows} goSearch={goSearch} />}
-      {view === 'search' && <SearchView key={searchKey} tools={tools} />}
+      {(view === 'search' || searchAlive) && (
+        <div hidden={view !== 'search'}>
+          <SearchView key={searchKey} tools={tools} />
+        </div>
+      )}
       {view === 'boards' && <BoardsView />}
       {view === 'board' && <BoardView key={route.boardId} id={route.boardId} tools={tools} goSearch={goSearch} />}
       {view === 'gallery' && <GalleryPage tools={tools} goSearch={goSearch} />}
       {view === 'artists' && <ArtistsView tools={tools} goSearch={goSearch} follows={follows} reloadFollows={reloadFollows} />}
-      {view === 'artist' && <ArtistView key={route.artist} artistKey={route.artist} tools={tools} onSearch={goSearch} following={follows} onFollowChange={reloadFollows} />}
+      {view === 'artist' && (
+        <ArtistView
+          key={route.artist}
+          artistKey={route.artist}
+          tools={tools}
+          onSearch={goSearch}
+          following={follows}
+          onFollowChange={reloadFollows}
+          back={artistFrom === 'search' && searchAlive ? { label: `← Back to your search${searchSummary() ? `: ${searchSummary()}` : ''}`, href: '#/art/search' } : artistFrom ? { label: '← Back', history: true } : { label: '← Artists', href: '#/art/artists' }}
+        />
+      )}
       {tools.dialogs}
     </section>
   );
