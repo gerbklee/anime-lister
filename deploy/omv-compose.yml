@@ -15,6 +15,9 @@ services:
     #   - PIXIV_REFRESH_TOKEN=...
     # Optional, for drawing critiques in Atelier (console.anthropic.com -> API keys):
     #   - ANTHROPIC_API_KEY=sk-ant-...
+    # Optional, for example videos in Atelier lessons (a free YouTube Data API v3 key,
+    # console.cloud.google.com -> APIs -> YouTube Data API v3 -> Credentials):
+    #   - YOUTUBE_API_KEY=...
     ports:
       - "3000:3000"
       # Atelier, the drawing-school site

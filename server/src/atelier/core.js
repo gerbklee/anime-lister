@@ -22,6 +22,7 @@ const q = {
   doneLesson: db.prepare(`INSERT INTO atelier_lessons (user_id, lesson_id, read_at, done_at) VALUES (@u, @l, @t, @t)
     ON CONFLICT(user_id, lesson_id) DO UPDATE SET done_at = @t, read_at = COALESCE(read_at, @t)`),
   undoLesson: db.prepare('UPDATE atelier_lessons SET done_at = NULL WHERE user_id = ? AND lesson_id = ?'),
+  clearRead: db.prepare('UPDATE atelier_lessons SET read_at = NULL WHERE user_id = ? AND lesson_id = ? AND done_at IS NULL'),
   reviews: db.prepare('SELECT * FROM atelier_reviews WHERE user_id = ?'),
   review: db.prepare('SELECT * FROM atelier_reviews WHERE user_id = ? AND skill = ?'),
   saveReview: db.prepare(`INSERT INTO atelier_reviews (user_id, skill, interval, due_at, last_at, reps, last_rating)
@@ -172,6 +173,19 @@ function currentLesson(userId, state = lessonState(userId), prog = practice(user
   const stage = currentStage(userId, state, prog);
   return C.MAIN.find((l) => l.stage === stage && !state.get(l.id)?.done_at) ?? null;
 }
+// Where a lesson stands for you: 'done', 'current' (the one to work on) or
+// 'future' (readable, but not startable yet). Lessons go strictly in order;
+// adult units go in order too, among the units already open.
+function lessonAccess(userId, lesson, state = lessonState(userId), prog = practice(userId)) {
+  if (state.get(lesson.id)?.done_at) return 'done';
+  if (lesson.unit) {
+    const stage = currentStage(userId, state, prog);
+    const open = C.ADULT.filter((l) => (C.ADULT_UNITS.find((u) => u.id === l.unit)?.opensWith ?? 99) <= stage);
+    const cur = open.find((l) => !state.get(l.id)?.done_at);
+    return cur?.id === lesson.id ? 'current' : 'future';
+  }
+  return currentLesson(userId, state, prog)?.id === lesson.id ? 'current' : 'future';
+}
 function stagesDone(userId, state = lessonState(userId), prog = practice(userId)) {
   return C.STAGES.filter((s) => stageInfo(s, state, prog).complete).map((s) => s.id);
 }
@@ -192,6 +206,9 @@ function markDone(userId, lessonId, { force = false } = {}) {
     if (!q.review.get(userId, s)) q.saveReview.run({ u: userId, s, interval: 1, due: now + DAY, last: now, reps: 0, rating: null });
   }
   return { ok: true };
+}
+function clearRead(userId, lessonId) {
+  q.clearRead.run(userId, lessonId);
 }
 function undoDone(userId, lessonId) {
   q.undoLesson.run(userId, lessonId);
@@ -256,7 +273,7 @@ function todaySession(userId) {
   // Warm-up, rotating through what you've reached.
   const warmups = C.WARMUPS.filter((w) => w.fromStage <= stage);
   const warm = warmups[dayIndex % warmups.length];
-  parts.push({ id: `warmup:${warm.id}`, kind: 'warmup', title: `Warm-up: ${warm.title}`, prompt: warm.prompt, minutes: D >= 45 ? 10 : 5, refs: warm.refs ?? null, practice: warm.practice ?? null });
+  parts.push({ id: `warmup:${warm.id}`, kind: 'warmup', lessonLink: warm.lesson, title: `Warm-up: ${warm.title}`, prompt: warm.prompt, minutes: D >= 45 ? 10 : 5, refs: warm.refs ?? null, practice: warm.practice ?? null });
 
   // Due reviews, interleaved: at most one per area, oldest first.
   const maxReviews = D >= 120 ? 3 : D >= 60 ? 2 : D >= 30 ? 1 : 0;
@@ -317,7 +334,13 @@ function todaySession(userId) {
   // Free project time on longer days.
   if (D >= 75) {
     const used = parts.reduce((s, p) => s + p.minutes, 0);
-    if (D - used >= 10) parts.push({ id: 'free', kind: 'free', title: 'Free drawing', prompt: 'Draw anything you like using today’s lesson: your characters, fan art, an idea. Fun counts.', minutes: Math.min(30, D - used) });
+    if (D - used >= 10) parts.push({ id: 'free', kind: 'free', lessonLink: lesson?.id ?? null, title: 'Free drawing', prompt: 'Draw anything you like using today’s lesson: your characters, fan art, an idea. Fun counts.', minutes: Math.min(30, D - used) });
+  }
+
+  // Every part links to the lesson it comes from.
+  for (const p of parts) {
+    const id = p.lessonLink ?? p.lessonId;
+    if (id && C.LESSON.has(id)) Object.assign(p, { lessonLink: id, lessonTitle: C.LESSON.get(id).title });
   }
 
   const minutesToday = q.minutesSince.get(userId, startOfDay(Date.now(), tz)).m;
@@ -373,6 +396,7 @@ module.exports = {
   currentLesson,
   currentStage,
   stagesDone,
+  lessonAccess,
   practice,
   lessonProgress,
   lessonReady,
@@ -380,6 +404,7 @@ module.exports = {
   markRead,
   markDone,
   undoDone,
+  clearRead,
   rateReview,
   flagWeak,
   skillHome,

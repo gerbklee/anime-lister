@@ -189,6 +189,11 @@ export default function Today() {
               </button>
               {isOpen && (
                 <div style={{ padding: '0 20px 20px' }}>
+                  {p.lessonLink && p.kind !== 'lesson' && (
+                    <a className="lesson-link small" href={`#/lesson/${p.lessonLink}`}>
+                      📖 Lesson: {p.lessonTitle} →
+                    </a>
+                  )}
                   {p.kind === 'check' && (
                     <>
                       <p>
@@ -232,11 +237,6 @@ export default function Today() {
                       />
                       {p.kind === 'review' && <Review part={p} onRated={() => mark(p.id)} />}
                       <div className="row" style={{ marginTop: 10 }}>
-                        {p.lessonId && p.kind === 'review' && (
-                          <a className="small" href={`#/lesson/${p.lessonId}`}>
-                            Re-read the lesson
-                          </a>
-                        )}
                         <div className="spacer" />
                         <button
                           className="link-btn small"

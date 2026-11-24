@@ -4,7 +4,7 @@ import { TreeIcon, TREE_INFO } from '../components/Tree.jsx';
 
 function LessonRow({ l, current, areaName }) {
   return (
-    <a href={`#/lesson/${l.id}`} className={`lesson-row ${l.done ? 'done' : ''} ${current ? 'current' : ''}`}>
+    <a href={`#/lesson/${l.id}`} className={`lesson-row ${l.done ? "done" : ""} ${current ? "current" : ""} ${!l.done && !current ? "future" : ""}`}>
       <span className="lesson-dot" />
       <span style={{ flex: 1 }}>
         <strong style={{ fontWeight: 600 }}>{l.title}</strong>
@@ -13,15 +13,18 @@ function LessonRow({ l, current, areaName }) {
           {areaName[l.area] ? ` · ${areaName[l.area]}` : ''} · {l.exercises} {l.exercises === 1 ? "exercise" : "exercises"}{l.sessions?.need ? ` · ${l.sessions.done}/${l.sessions.need} sessions` : ""}
         </span>
       </span>
-      {current && <span className="chip accent">Up next</span>}
-      {!current && l.read && !l.done && <span className="chip">started</span>}
+      {current && <span className="chip accent">{l.read ? "In progress" : "Up next"}</span>}
+      {!current && !l.done && (
+        <span className="chip" title="Readable now; it opens for practice when you get there">
+          🔒 later
+        </span>
+      )}
     </a>
   );
 }
 
 export default function PathPage() {
   const [data, setData] = useState(null);
-  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     api.path().then(setData).catch(() => {});
   }, []);
@@ -49,7 +52,6 @@ export default function PathPage() {
       {data.stages.map((s) => {
         const done = s.lessons.length > 0 && s.lessons.every((l) => l.done);
         const current = s.id === data.currentStage;
-        const future = s.id > data.currentStage;
         const count = s.lessons.filter((l) => l.done).length;
         return (
           <section key={s.id} className={`stage ${done ? 'done' : ''} ${current ? 'current' : ''}`}>
@@ -83,18 +85,11 @@ export default function PathPage() {
                 </span>
               </div>
             </div>
-            {(!future || showAll) && (
-              <div className="lesson-list">
-                {s.lessons.map((l) => (
-                  <LessonRow key={l.id} l={l} current={l.id === data.currentLesson} areaName={areaName} />
-                ))}
-              </div>
-            )}
-            {future && !showAll && s.id === data.currentStage + 1 && (
-              <button className="link-btn small" style={{ marginTop: 10 }} onClick={() => setShowAll(true)}>
-                Peek at the lessons ahead
-              </button>
-            )}
+            <div className="lesson-list">
+              {s.lessons.map((l) => (
+                <LessonRow key={l.id} l={l} current={l.id === data.currentLesson} areaName={areaName} />
+              ))}
+            </div>
           </section>
         );
       })}
@@ -118,7 +113,7 @@ export default function PathPage() {
                 {u.open && (
                   <div className="lesson-list">
                     {u.lessons.map((l) => (
-                      <LessonRow key={l.id} l={l} areaName={areaName} />
+                      <LessonRow key={l.id} l={l} current={l.id === data.currentAdultLesson} areaName={areaName} />
                     ))}
                   </div>
                 )}

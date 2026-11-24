@@ -17,6 +17,7 @@ const core = require('./core');
 const stats = require('./stats');
 const { studyPsd } = require('./psd');
 const crit = require('./critique');
+const { lessonMedia } = require('./media');
 
 const DRAW_DIR = path.join(DATA_DIR, 'atelier', 'drawings');
 const REF_DIR = path.join(DATA_DIR, 'atelier', 'refs');
@@ -150,6 +151,7 @@ router.get('/atelier/path', (req, res) => {
   const prof = core.profile(req.user.id);
   const { adult, state, stage } = core.visibleLessons(req.user.id, prof);
   const prog = core.practice(req.user.id);
+  const currentId = core.currentLesson(req.user.id, state, prog)?.id;
   const summary = (l) => ({
     sessions: (({ sessionsDone, sessionsNeeded }) => ({ done: sessionsDone, need: sessionsNeeded }))(core.lessonProgress(l, prog)),
     id: l.id,
@@ -157,12 +159,14 @@ router.get('/atelier/path', (req, res) => {
     area: l.area,
     minutes: l.minutes,
     exercises: l.exercises.length,
-    read: !!state.get(l.id)?.read_at,
+    // "Started" only for the lesson you are on (reading ahead doesn't count).
+    read: !!state.get(l.id)?.read_at && !state.get(l.id)?.done_at && (l.id === currentId || (!!l.unit && core.lessonAccess(req.user.id, l, state, prog) === "current")),
     done: !!state.get(l.id)?.done_at,
   });
   const current = core.currentLesson(req.user.id, state);
   res.json({
     currentLesson: current?.id ?? null,
+    currentAdultLesson: prof.adultTrack ? C.ADULT.find((l) => core.lessonAccess(req.user.id, l, state, prog) === "current")?.id ?? null : null,
     currentStage: stage,
     stages: C.STAGES.map((s) => ({ ...s, progress: core.stageInfo(s, state, prog), lessons: C.MAIN.filter((l) => l.stage === s.id).map(summary) })),
     adult: prof.adultTrack
@@ -181,6 +185,8 @@ router.get('/atelier/lessons/:id', (req, res) => {
   const state = allState.get(lesson.id);
   const prog = core.practice(req.user.id);
   const users = usersById();
+  // Opening a later lesson early doesn't start it: clear an old start mark from before this rule.
+  if (state?.read_at && !state.done_at && core.lessonAccess(req.user.id, lesson, allState, prog) === "future") core.clearRead(req.user.id, lesson.id);
   const drawings = q.myDrawings.all(req.user.id).filter((d) => d.lesson_id === lesson.id).map((d) => drawingView(d, req.user.id, users));
   const order = lesson.unit ? C.ADULT : C.MAIN;
   const i = order.findIndex((l) => l.id === lesson.id);
@@ -189,24 +195,38 @@ router.get('/atelier/lessons/:id', (req, res) => {
     stage: lesson.stage != null ? C.STAGES[lesson.stage] : null,
     unit: lesson.unit ? C.ADULT_UNITS.find((u) => u.id === lesson.unit) : null,
     area: lesson.area ? C.AREA[lesson.area] : null,
-    read: !!state?.read_at,
+
     done: !!state?.done_at,
     drawings,
     progress: core.lessonProgress(lesson, prog),
     stageProgress: lesson.stage != null ? core.stageInfo(C.STAGES[lesson.stage], allState, prog) : null,
-    locked: lesson.stage != null && lesson.stage > core.currentStage(req.user.id, allState, prog),
+    access: core.lessonAccess(req.user.id, lesson, allState, prog),
+    locked: core.lessonAccess(req.user.id, lesson, allState, prog) === "future",
+    read: !!state?.read_at && core.lessonAccess(req.user.id, lesson, allState, prog) !== "future",
     guides: lesson.cspGuides.map((g) => C.CSP_GUIDE.get(g)).filter(Boolean),
     prev: order[i - 1]?.id ?? null,
     next: order[i + 1]?.id ?? null,
   });
 });
 
+// Example media for a lesson: GIFs, videos and pictures from Wikimedia Commons,
+// plus the recommended YouTube videos when a key is set.
+router.get('/atelier/lessons/:id/media', wrap(async (req, res) => {
+  const lesson = C.LESSON.get(req.params.id);
+  if (!lesson || (lesson.unit && !core.profile(req.user.id).adultTrack)) throw new HttpError(404, 'Lesson not found');
+  res.json(await lessonMedia(lesson));
+}));
+
 router.post('/atelier/lessons/:id/:action', (req, res) => {
   const lesson = C.LESSON.get(req.params.id);
   if (!lesson) throw new HttpError(404, 'Lesson not found');
-  if (req.params.action === 'read') core.markRead(req.user.id, lesson.id);
-  else if (req.params.action === "done") {
-    const r = core.markDone(req.user.id, lesson.id, { force: req.body?.force === true });
+  const access = core.lessonAccess(req.user.id, lesson);
+  // Only the current lesson counts as started; reading ahead changes nothing.
+  if (req.params.action === "read") {
+    if (access === "current") core.markRead(req.user.id, lesson.id);
+  } else if (req.params.action === "done") {
+    if (access === "future") return res.status(409).json({ error: "Lessons go in order: finish the ones before this first." });
+    const r = core.markDone(req.user.id, lesson.id);
     if (!r.ok) return res.status(409).json({ error: "This lesson still needs practice sessions.", progress: r.progress });
   }
   else if (req.params.action === 'undo') core.undoDone(req.user.id, lesson.id);
@@ -227,6 +247,7 @@ router.post('/atelier/exercises/done', (req, res) => {
   const lesson = C.LESSON.get(String(req.body?.lessonId ?? ''));
   const exercise = lesson?.exercises.find((e) => e.id === req.body?.exerciseId);
   if (!lesson || !exercise) throw new HttpError(400, 'Unknown exercise');
+  if (core.lessonAccess(req.user.id, lesson) === "future") throw new HttpError(409, "This exercise belongs to a later lesson. Lessons go in order.");
   const id = Number(
     q.insertDrawing.run({ u: req.user.id, lesson: lesson.id, exercise: exercise.id, kind: exercise.kind, skill: lesson.skills[0] ?? null, area: lesson.area, title: exercise.title, file: null, refFile: null, refUrl: null, refPost: null, round: null, adult: adultLevel(lesson), status: 'done', at: Date.now() }).lastInsertRowid,
   );
@@ -328,6 +349,7 @@ router.post('/atelier/drawings', raw, wrap(async (req, res) => {
   const exercise = lesson?.exercises.find((e) => e.id === req.query.exerciseId) ?? null;
   const kind = ['drill', 'study', 'memory', 'project', 'check', 'review', 'free', 'warmup'].includes(req.query.kind) ? req.query.kind : exercise?.kind ?? 'free';
   const check = kind === 'check' ? C.SKILL_CHECK.find((c) => c.id === req.query.exerciseId) : null;
+  if (lesson && core.lessonAccess(req.user.id, lesson) === "future") throw new HttpError(409, "This exercise belongs to a later lesson. Lessons go in order.");
   const file = await saveImage(req.body, DRAW_DIR, `d${req.user.id}`);
   const refFile = req.query.referenceUrl ? await saveReference(req.query.referenceUrl).catch(() => null) : null;
   const id = Number(

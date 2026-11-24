@@ -13,17 +13,17 @@ const MAIN_ORDER = MAIN.map((l) => l.id);
 
 // Warm-ups rotate daily; later stages add their own.
 const WARMUPS = [
-  { id: 'w-lines', fromStage: 0, title: 'Ghosted lines', prompt: 'Fill half a page with ghosted straight lines in all directions, one stroke each.', minutes: 5 },
-  { id: 'w-ellipses', fromStage: 1, title: 'Ellipses', prompt: 'Two rows of ellipses in different degrees, going around 2–3 times each.', minutes: 5 },
-  { id: 'w-boxes', fromStage: 1, title: 'Boxes', prompt: 'Five boxes from imagination in 2-point perspective, drawn through.', minutes: 5 },
-  { id: 'w-curves', fromStage: 1, title: 'Curves', prompt: 'Long C- and S-curves from the shoulder, smooth and confident.', minutes: 5 },
-  { id: 'w-gestures', fromStage: 2, title: 'Quick gestures', prompt: '8 gestures at 30 seconds from references.', minutes: 5, refs: { tags: ['full_body', 'dynamic_pose'] }, practice: { seconds: 30, count: 8 } },
-  { id: 'w-master', fromStage: 2, title: 'Master copy', prompt: 'Copy a small part of an official anime illustration freehand (a face, a hand, a fold) for 10 minutes, then name two things the artist did on purpose. A different artist every time: mixing styles teaches you what makes each one work.', minutes: 10, refs: { tags: ['official_art'] } },
-  { id: 'w-mannequins', fromStage: 2, title: 'Mannequins', prompt: 'Three quick mannequins from imagination.', minutes: 5 },
-  { id: 'w-hands', fromStage: 3, title: 'Hand boxes', prompt: 'Six hands as palm boxes with finger cylinders.', minutes: 5 },
-  { id: 'w-heads', fromStage: 4, title: 'Head constructions', prompt: 'Six constructed heads at different angles, no features.', minutes: 5 },
-  { id: 'w-folds', fromStage: 5, title: 'Fold types', prompt: 'Draw three fold types from memory: pipe, zigzag, spiral.', minutes: 5 },
-  { id: 'w-values', fromStage: 6, title: 'Value spheres', prompt: 'Three lit spheres with different light directions.', minutes: 5 },
+  { id: 'w-lines', lesson: 's1-lines', fromStage: 0, title: 'Ghosted lines', prompt: 'Fill half a page with ghosted straight lines in all directions, one stroke each.', minutes: 5 },
+  { id: 'w-ellipses', lesson: 's1-ellipses', fromStage: 1, title: 'Ellipses', prompt: 'Two rows of ellipses in different degrees, going around 2–3 times each.', minutes: 5 },
+  { id: 'w-boxes', lesson: 's1-persp23', fromStage: 1, title: 'Boxes', prompt: 'Five boxes from imagination in 2-point perspective, drawn through.', minutes: 5 },
+  { id: 'w-curves', lesson: 's1-lines', fromStage: 1, title: 'Curves', prompt: 'Long C- and S-curves from the shoulder, smooth and confident.', minutes: 5 },
+  { id: 'w-gestures', lesson: 's2-gesture', fromStage: 2, title: 'Quick gestures', prompt: '8 gestures at 30 seconds from references.', minutes: 5, refs: { tags: ['full_body', 'dynamic_pose'] }, practice: { seconds: 30, count: 8 } },
+  { id: 'w-master', lesson: 's9-masters', fromStage: 2, title: 'Master copy', prompt: 'Copy a small part of an official anime illustration freehand (a face, a hand, a fold) for 10 minutes, then name two things the artist did on purpose. A different artist every time: mixing styles teaches you what makes each one work.', minutes: 10, refs: { tags: ['official_art'] } },
+  { id: 'w-mannequins', lesson: 's2-mannequin', fromStage: 2, title: 'Mannequins', prompt: 'Three quick mannequins from imagination.', minutes: 5 },
+  { id: 'w-hands', lesson: 's3-hands', fromStage: 3, title: 'Hand boxes', prompt: 'Six hands as palm boxes with finger cylinders.', minutes: 5 },
+  { id: 'w-heads', lesson: 's4-head', fromStage: 4, title: 'Head constructions', prompt: 'Six constructed heads at different angles, no features.', minutes: 5 },
+  { id: 'w-folds', lesson: 's5-folds', fromStage: 5, title: 'Fold types', prompt: 'Draw three fold types from memory: pipe, zigzag, spiral.', minutes: 5 },
+  { id: 'w-values', lesson: 's6-values', fromStage: 6, title: 'Value spheres', prompt: 'Three lit spheres with different light directions.', minutes: 5 },
 ];
 
 // Practice briefs for Stage 10 (like a client would write them).
@@ -143,5 +143,6 @@ for (const l of LESSONS) {
   if (l.stage == null && !l.unit) throw new Error(`Lesson ${l.id}: no stage or unit`);
 }
 if (LESSON.size !== LESSONS.length) throw new Error('Duplicate lesson ids');
+for (const w of WARMUPS) if (!LESSON.has(w.lesson)) throw new Error(`Warm-up ${w.id}: unknown lesson ${w.lesson}`);
 
 module.exports = { AREAS, AREA, STAGES, ADULT_UNITS, SKILL_CHECK, LESSONS, LESSON, MAIN, ADULT, MAIN_ORDER, WARMUPS, BRIEFS, CSP_GUIDES: CSP.GUIDES, CSP_GUIDE: CSP.GUIDE, CSP_GROUPS: CSP.GROUPS };

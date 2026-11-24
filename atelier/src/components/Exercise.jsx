@@ -93,7 +93,7 @@ export function Practice({ refs, seconds, count, area, onClose }) {
 }
 
 // One exercise: prompt, focus timer, references (+ .psd and practice), upload.
-export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 0, done, progress, extraInfo, onDone, compact, compactDetails }) {
+export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 0, done, progress, extraInfo, onDone, compact, compactDetails, locked }) {
   const [howOpen, setHowOpen] = useState(!compact && !compactDetails);
   const timer = useTimer();
   const [refs, setRefs] = useState(null);
@@ -223,6 +223,11 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
           )}
         </div>
       </div>
+      {locked ? (
+        <p className="tiny muted" style={{ margin: "10px 0 0" }}>
+          🔒 Practice opens when you reach this lesson. Lessons go in order, so each one builds on the last.
+        </p>
+      ) : (
       <div className="row" style={{ marginTop: 8 }}>
         {!timer.running && (
           <button className="btn primary small" onClick={() => timer.start({ minutes: Math.max(5, exercise.minutes), kind: k, lessonId, area, label: exercise.title }).catch((e) => setMsg(e.message))}>
@@ -244,6 +249,7 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
         )}
         <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
       </div>
+      )}
       {msg && <p className="small error">{msg}</p>}
       {refs?.length > 0 && (
         <div style={{ marginTop: 12 }}>

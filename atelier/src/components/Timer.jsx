@@ -157,7 +157,7 @@ function Ring({ progress, tree, withered, size = 230 }) {
       <circle r={r} fill="none" stroke={withered ? 'var(--muted)' : 'var(--sage)'} strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - progress)} transform="rotate(-90)" style={{ transition: 'stroke-dashoffset 1s linear' }} />
       <ellipse cx="0" cy="22" rx="62" ry="12" fill="var(--paper-2)" />
       <g transform="translate(0 22)">
-        <Tree type={withered ? 'withered' : tree} scale={0.3 + 0.75 * grow} />
+        <Tree type={withered ? "withered" : tree} scale={0.45 + 1.0 * grow} />
       </g>
     </svg>
   );

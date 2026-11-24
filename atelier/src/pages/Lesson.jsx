@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useApp } from '../App.jsx';
 import Exercise from '../components/Exercise.jsx';
 import Guide from '../components/Guide.jsx';
+import Media from '../components/Media.jsx';
 
 // Retrieval before new material: try to remember the last lesson first.
 function Recall({ prevId }) {
@@ -53,13 +54,6 @@ export default function Lesson({ id }) {
   const adultLevel = !lesson.unit ? 0 : ['A1', 'A7'].includes(lesson.unit) ? 2 : 1;
   const doneEx = new Set(drawings.filter((d) => d.status === 'done').map((d) => d.exerciseId));
 
-  const forceDone = async () => {
-    if (!window.confirm('Finish without the practice sessions? The stage still needs its practice hours, and skipped skills tend to come back as gaps later.')) return;
-    await api.lessonAction(id, 'done', { force: true });
-    toast('Lesson finished');
-    bump();
-    load();
-  };
   const toggleDone = async () => {
     await api.lessonAction(id, data.done ? 'undo' : 'done');
     if (!data.done) toast('Lesson finished – its skills come back for review tomorrow 🪨');
@@ -87,7 +81,7 @@ export default function Lesson({ id }) {
 
       {data.locked && (
         <div className="wash" style={{ marginBottom: 18 }}>
-          <strong>A look ahead.</strong> This lesson belongs to a later stage. Read it if you’re curious, but practise your current stage first: it opens when that stage is complete.
+          <strong>A look ahead.</strong> You can read everything here; the exercises open when you reach this lesson. Opening it early doesn’t start it.
         </div>
       )}
 
@@ -113,6 +107,8 @@ export default function Lesson({ id }) {
           </ol>
         </div>
       )}
+
+      <Media lessonId={lesson.id} />
 
       <div className="grid-2 section" style={{ marginTop: 22 }}>
         <div className="card">
@@ -190,7 +186,7 @@ export default function Lesson({ id }) {
         <h2>Exercises</h2>
         <p className="small muted">Start a focus block for each one. Upload what you draw (photo or export), even when it’s rough: your sketchbook is how you’ll see your progress.</p>
         {lesson.exercises.map((ex) => (
-          <Exercise key={ex.id} lessonId={lesson.id} exercise={ex} area={lesson.area} adultLevel={adultLevel} done={doneEx.has(ex.id)} progress={data.progress?.exercises.find((x) => x.id === ex.id)} onDone={() => load()} />
+          <Exercise key={ex.id} lessonId={lesson.id} exercise={ex} area={lesson.area} adultLevel={adultLevel} done={doneEx.has(ex.id)} progress={data.progress?.exercises.find((x) => x.id === ex.id)} locked={data.locked} onDone={() => load()} />
         ))}
       </section>
 
@@ -218,7 +214,7 @@ export default function Lesson({ id }) {
             <>
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1, minWidth: 240 }}>
-                  <strong>{data.done ? 'Finished.' : p?.ready ? 'Ready to finish.' : 'Practice to finish this lesson'}</strong>
+                  <strong>{data.done ? "Finished." : data.locked ? "A later lesson" : p?.ready ? "Ready to finish." : "Practice to finish this lesson"}</strong>
                   <p className="small muted" style={{ margin: '2px 0 10px' }}>
                     {data.done
                       ? 'Its skills come back as spaced reviews.'
@@ -241,7 +237,7 @@ export default function Lesson({ id }) {
                       ← Previous
                     </a>
                   )}
-                  {(data.done || p?.ready) && (
+                  {(data.done || (p?.ready && !data.locked)) && (
                     <button className={`btn small ${data.done ? '' : 'primary'}`} onClick={toggleDone}>
                       {data.done ? 'Mark as not finished' : 'Finish lesson'}
                     </button>
@@ -253,11 +249,6 @@ export default function Lesson({ id }) {
                   )}
                 </div>
               </div>
-              {!data.done && !p?.ready && (
-                <button className="link-btn tiny" style={{ marginTop: 10 }} onClick={forceDone}>
-                  I already know this: finish without the sessions
-                </button>
-              )}
             </>
           );
         })()}
