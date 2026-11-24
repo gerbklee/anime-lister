@@ -196,6 +196,53 @@ export default function Progress() {
         </div>
       </section>
 
+      {s.milestones && (
+        <section className="section card">
+          <div className="section-head">
+            <h3>Milestones</h3>
+            <span className="small muted">every tier you reach places a landmark in your valley</span>
+          </div>
+          <div className="tiles" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            {s.milestones.map((m) => (
+              <div key={m.id} className="tile">
+                <div className="label">{m.name}</div>
+                <div className="value">{m.value.toLocaleString()}</div>
+                {m.next ? (
+                  <>
+                    <div className="meter" style={{ margin: '8px 0 4px' }}>
+                      <span style={{ width: `${Math.min(100, ((m.value - m.last) / (m.next - m.last)) * 100)}%` }} />
+                    </div>
+                    <div className="tiny muted">
+                      next: {m.next.toLocaleString()} {m.unit} · {m.reached} {m.landmarkName.toLowerCase()}
+                      {m.reached === 1 ? '' : 's'} so far
+                    </div>
+                  </>
+                ) : (
+                  <div className="tiny muted">all {m.tiers.length} tiers reached</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="section card row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <h3 style={{ margin: 0 }}>Portfolio review</h3>
+          <p className="small muted" style={{ margin: '2px 0 0' }}>
+            {s.portfolio?.due
+              ? 'Due now: pick your best pieces and rate them on the professional scale.'
+              : s.portfolio?.dueAt
+                ? `Next one on ${new Date(s.portfolio.dueAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}.`
+                : `Opens once you have 3 finished pieces or projects (${s.portfolio?.pieces ?? 0} so far).`}
+            {s.piece?.active && ` Finished pieces: one every ${s.piece.every === 'month' ? 'month' : 'two weeks'}${s.piece.doneThisPeriod ? ' (this one’s done ✓)' : ''}.`}
+          </p>
+        </div>
+        <a className="btn small" href="#/portfolio">
+          Open
+        </a>
+      </section>
+
       <section className="section card">
         <h3>Pace</h3>
         <p style={{ margin: 0 }}>

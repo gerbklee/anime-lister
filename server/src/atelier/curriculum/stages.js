@@ -2,7 +2,7 @@
 // stage; `building` appears in your valley when you finish it.
 
 // hours: focused practice needed in the stage before the next one opens
-// (about 1,200 hours in total: 2–4 years at 1–2 hours a day). months: the
+// (about 1,580 hours in total: 3–4 years at 1–2 hours a day). months: the
 // rough timeline at about 9 hours a week.
 const STAGES = [
   {
@@ -97,19 +97,49 @@ const STAGES = [
   },
   {
     id: 9,
+    title: 'Backgrounds & environments',
+    subtitle: 'Rooms, streets, nature and sky',
+    months: [25, 28.5],
+    hours: 140,
+    goal: 'Draw convincing anime backgrounds: interiors, city streets, nature, skies and atmosphere, with props that sit in the scene.',
+    tree: 'bamboo',
+    building: { id: 'teahouse', name: 'Teahouse' },
+  },
+  {
+    id: 10,
+    title: 'Materials & effects',
+    subtitle: 'Metal, glass, hair, eyes, magic and weather',
+    months: [28.5, 31],
+    hours: 100,
+    goal: 'Render the materials and effects that make anime illustrations shine: metal, glass, glossy hair and eyes, glow, magic, rain and light.',
+    tree: 'wisteria',
+    building: { id: 'lighthouse', name: 'Lighthouse' },
+  },
+  {
+    id: 11,
+    title: 'Scenes with several characters',
+    subtitle: 'Interaction, staging and storytelling',
+    months: [31, 34],
+    hours: 120,
+    goal: 'Stage two or more characters in one picture: believable contact and interaction, depth, and a story told in a single image.',
+    tree: 'camphor',
+    building: { id: 'pagoda', name: 'Pagoda' },
+  },
+  {
+    id: 12,
     title: 'Rendering & style',
     subtitle: 'Polish, finish and your own voice',
-    months: [25, 28],
+    months: [34, 37],
     hours: 130,
     goal: 'Take a sketch to a finished, polished illustration, and start forming a style of your own.',
     tree: 'magnolia',
     building: { id: 'belltower', name: 'Bell tower' },
   },
   {
-    id: 10,
+    id: 13,
     title: 'Professional',
     subtitle: 'Workflow, briefs and portfolio',
-    months: [28, 32],
+    months: [37, 41],
     hours: 140,
     goal: 'Work like a pro: reliable workflow, design sheets, client briefs, and a portfolio of 8–12 finished pieces.',
     tree: 'sakura',
@@ -126,7 +156,7 @@ const ADULT_UNITS = [
   { id: 'A5', title: 'Skin & light', subtitle: 'Soft rendering and glow', opensWith: 6, hours: 30 },
   { id: 'A6', title: 'Clothing & reveal', subtitle: 'Swimwear, lingerie, sheer and wet fabric', opensWith: 5, hours: 30 },
   { id: 'A7', title: 'Nude illustration', subtitle: 'Full pieces, cropping, implied vs shown', opensWith: 8, hours: 30 },
-  { id: 'A8', title: 'Adult portfolio', subtitle: 'Finished pin-up and nude fan art', opensWith: 9, hours: 40 },
+  { id: 'A8', title: 'Adult portfolio', subtitle: 'Finished pin-up and nude fan art', opensWith: 12, hours: 40 },
 ];
 
 // Every four weeks: the same four prompts, so your progress is comparable.

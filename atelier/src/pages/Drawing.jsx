@@ -79,6 +79,25 @@ function CritiqueView({ c, criteria, self }) {
           </ol>
         </div>
       )}
+      {c.process && (
+        <div className="card" style={{ padding: 14, background: 'var(--paper)' }}>
+          <strong className="small">Your process</strong>
+          <ul className="small" style={{ paddingLeft: 20, margin: '4px 0 0' }}>
+            <li>
+              <strong>Construction:</strong> {c.process.construction}
+            </li>
+            <li>
+              <strong>Layers:</strong> {c.process.organisation}
+            </li>
+            <li>
+              <strong>Time:</strong> {c.process.time}
+            </li>
+            <li>
+              <strong>Clip Studio tip:</strong> {c.process.workflowTip}
+            </li>
+          </ul>
+        </div>
+      )}
       <table className="data">
         <thead>
           <tr>
@@ -110,6 +129,29 @@ function CritiqueView({ c, criteria, self }) {
   );
 }
 
+// Critique levels: cheap for practice, everything for finished pieces.
+const LEVELS = [
+  { id: 'quick', name: 'Quick', price: '≈2¢', text: 'The finished picture only. Short: what works, 1–2 fixes, a next step. For warm-ups and practice.' },
+  { id: 'standard', name: 'Standard', price: '≈8¢', text: 'Plus the reference, up to 3 key layers (sketch, lines, colour) and correction lines drawn on your picture.' },
+  { id: 'full', name: 'Full', price: '≈15–25¢', text: 'Plus up to 8 layers, a review of your process (construction, layers, time) and detailed corrections. For finished pieces.' },
+];
+function LevelPicker({ level, setLevel, hasClip }) {
+  return (
+    <div className="levels" role="radiogroup" aria-label="Critique level">
+      {LEVELS.map((l) => (
+        <button key={l.id} role="radio" aria-checked={level === l.id} className={`level ${level === l.id ? 'active' : ''}`} onClick={() => setLevel(l.id)}>
+          <span className="row" style={{ justifyContent: 'space-between' }}>
+            <strong>{l.name}</strong>
+            <span className="tiny">{l.price}</span>
+          </span>
+          <span className="tiny muted">{l.text}</span>
+          {!hasClip && l.id !== 'quick' && <span className="tiny muted"> Upload the .clip file to include layers.</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Drawing({ id }) {
   const { areas, critiqueInfo, refreshProfile, toast, query } = useApp();
   const timer = useTimer();
@@ -120,6 +162,9 @@ export default function Drawing({ id }) {
   const [flip, setFlip] = useState(false);
   const [busy, setBusy] = useState(null);
   const [title, setTitle] = useState('');
+  const [view, setView] = useState(null); // a layer shown on its own, or null for the final picture
+  const [showMarks, setShowMarks] = useState(true);
+  const [level, setLevel] = useState(null);
   const file = useRef(null);
   const isNew = query.get('new') === '1';
 
@@ -156,10 +201,13 @@ export default function Drawing({ id }) {
     }
     setBusy(null);
   };
+  const chosenLevel = level ?? (['warmup', 'drill', 'memory', 'free'].includes(d.kind) ? 'quick' : ['project', 'piece'].includes(d.kind) ? 'full' : 'standard');
+  const layerShown = view && d.clip?.layers.find((l) => l.id === view);
+  const marks = !layerShown && showMarks && d.critique && !d.critique.refused ? d.critique.marks ?? [] : [];
   const askCritique = async () => {
     setBusy('critique');
     try {
-      setD(await api.critique(d.id));
+      setD(await api.critique(d.id, chosenLevel));
       refreshProfile();
     } catch (e) {
       toast(e.message);
@@ -253,7 +301,7 @@ export default function Drawing({ id }) {
             <button className="btn small" onClick={() => file.current?.click()} disabled={busy === 'upload'}>
               {busy === 'upload' ? 'Uploading…' : 'Upload my drawing'}
             </button>
-            <input ref={file} type="file" accept="image/*" hidden onChange={(e) => uploadFor(e.target.files?.[0])} />
+            <input ref={file} type="file" accept="image/*,.clip" hidden onChange={(e) => uploadFor(e.target.files?.[0])} />
           </div>
         </section>
       )}
@@ -289,16 +337,42 @@ export default function Drawing({ id }) {
           <div className={d.reference && d.file ? 'compare' : ''} style={!d.reference || !d.file ? { maxWidth: 760 } : undefined}>
             {d.file && (
               <figure>
-                <div style={{ position: 'relative', transform: flip ? 'scaleX(-1)' : undefined }}>
-                  <img src={d.file} alt="Your drawing" />
-                  {pins.map((f, i) => (
+                <div style={{ position: 'relative', transform: flip ? 'scaleX(-1)' : undefined, background: layerShown ? '#fff' : undefined, borderRadius: 14 }}>
+                  <img src={layerShown ? layerShown.image : d.file} alt={layerShown ? `Layer: ${layerShown.name}` : 'Your drawing'} />
+                  {marks.length > 0 && (
+                    <svg className="marks" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Correction overlay">
+                      <defs>
+                        <marker id="arrowhead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                          <path d="M0 0 L10 5 L0 10 z" fill="#e8463a" />
+                        </marker>
+                      </defs>
+                      {marks.map((m, i) => {
+                        const [a, b] = m.points;
+                        if (m.kind === 'circle') {
+                          const r = Math.hypot((b.x - a.x) * 100, (b.y - a.y) * 100);
+                          return <ellipse key={i} cx={a.x * 100} cy={a.y * 100} rx={r} ry={r} fill="none" stroke="#e8463a" strokeWidth="0.6" vectorEffect="non-scaling-stroke" strokeDasharray="2 1"><title>{m.note}</title></ellipse>;
+                        }
+                        return (
+                          <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke="#e8463a" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" markerEnd={m.kind === 'arrow' ? 'url(#arrowhead)' : undefined}>
+                            <title>{m.note}</title>
+                          </line>
+                        );
+                      })}
+                    </svg>
+                  )}
+                  {!layerShown && pins.map((f, i) => (
                     <span key={i} className="pin" style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%`, transform: `translate(-50%, -50%)${flip ? ' scaleX(-1)' : ''}` }} title={f.title}>
                       {i + 1}
                     </span>
                   ))}
                 </div>
-                <figcaption className="tiny muted" style={{ marginTop: 4 }}>
-                  Your drawing
+                <figcaption className="tiny muted row" style={{ marginTop: 4, gap: 10 }}>
+                  {layerShown ? `Layer: ${layerShown.name}` : 'Your drawing'}
+                  {d.critique?.marks?.length > 0 && !layerShown && (
+                    <label className="row" style={{ gap: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showMarks} onChange={(e) => setShowMarks(e.target.checked)} /> Correction lines
+                    </label>
+                  )}
                 </figcaption>
               </figure>
             )}
@@ -313,6 +387,62 @@ export default function Drawing({ id }) {
           </div>
         )}
       </section>
+
+      {d.clip && (
+        <section className="section card">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <div className="kicker">Clip Studio file</div>
+              <h3 style={{ margin: 0 }}>Layers</h3>
+              <p className="small muted" style={{ margin: '2px 0 0' }}>
+                {d.clip.layers.length} layers
+                {d.clip.workMinutes ? ` · ${Math.floor(d.clip.workMinutes / 60) ? `${Math.floor(d.clip.workMinutes / 60)} h ` : ''}${d.clip.workMinutes % 60} min of work recorded by Clip Studio` : ''} · {d.clip.width} × {d.clip.height} px
+              </p>
+            </div>
+            <div className="row">
+              {view && (
+                <button className="btn small" onClick={() => setView(null)}>
+                  Show the final picture
+                </button>
+              )}
+              {d.clip.hasFile && (
+                <a className="btn small ghost" href={`/api/atelier/drawings/${d.id}/clip`}>
+                  Download .clip
+                </a>
+              )}
+            </div>
+          </div>
+          <div className="layer-list">
+            {[...d.clip.layers].reverse().map((l) => (
+              <button
+                key={l.id}
+                className={`layer-row ${view === l.id ? 'active' : ''}`}
+                style={{ paddingLeft: 10 + l.depth * 18 }}
+                disabled={!l.image}
+                onClick={() => setView(view === l.id ? null : l.id)}
+                title={l.image ? 'Show this layer on its own' : 'No image for this layer'}
+              >
+                <span className="layer-thumb">{l.image ? <img src={l.image} alt="" loading="lazy" /> : <span aria-hidden="true">{l.kind === 'folder' ? '📁' : '·'}</span>}</span>
+                <span style={{ flex: 1, textAlign: 'left' }}>
+                  <strong style={{ fontWeight: 600 }}>{l.name}</strong>
+                  <span className="tiny muted">
+                    {' '}
+                    · {l.kind}
+                    {l.blend !== 'Normal' ? ` · ${l.blend}` : ''}
+                    {l.clipped ? ' · clipped' : ''}
+                    {l.opacity < 100 ? ` · ${l.opacity}%` : ''}
+                    {!l.visible ? ' · hidden' : ''}
+                    {l.draft ? ' · draft' : ''}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+            Top of the stack first. Click a layer to see it alone: a quick way to check your construction under the line art. Vector layers show in the list without an image for now.
+          </p>
+        </section>
+      )}
 
       {d.file && d.mine && (
         <section className="section grid-2" style={{ alignItems: 'start' }}>
@@ -346,19 +476,24 @@ export default function Drawing({ id }) {
               <p className="small muted">Critiques need an Anthropic API key on the server. Until then: use the overlay and the mirror check, and compare with the lesson’s key points.</p>
             ) : (
               <>
-                <p className="small">Claude looks at your drawing{d.reference ? ' and the reference' : ''} with this lesson’s goals, and gives you what works, the 2–3 fixes that matter most, and one next step.</p>
-                <p className="tiny muted">
-                  About 5¢ · ${left.toFixed(2)} left this month
-                </p>
+                <p className="small">Claude looks at your drawing{d.reference ? ' and the reference' : ''}{d.clip ? ' and your layers' : ''} with this lesson’s goals: what works, the fixes that matter most, and one next step.</p>
+                <LevelPicker level={chosenLevel} setLevel={setLevel} hasClip={!!d.clip} />
+                <p className="tiny muted">${left.toFixed(2)} left this month</p>
                 <button className="btn primary small" onClick={askCritique} disabled={busy === 'critique' || left <= 0}>
-                  {busy === 'critique' ? 'Looking closely… (up to a minute)' : 'Get a critique'}
+                  {busy === 'critique' ? (chosenLevel === 'full' ? 'Looking at everything… (up to two minutes)' : 'Looking closely… (up to a minute)') : `Get a ${chosenLevel} critique`}
                 </button>
               </>
             )}
             {d.critique && critiqueInfo?.available && left > 0 && (
-              <button className="link-btn tiny" style={{ marginTop: 10 }} onClick={askCritique} disabled={busy === 'critique'}>
-                {busy === 'critique' ? 'Looking again…' : 'Ask again (after changes)'}
-              </button>
+              <div style={{ marginTop: 14 }}>
+                <p className="tiny muted" style={{ margin: '0 0 6px' }}>
+                  This was a {d.critique.level ?? 'standard'} critique{d.critique.layersSeen?.length ? ` (layers seen: ${d.critique.layersSeen.join(', ')})` : ''}. Ask again after changes:
+                </p>
+                <LevelPicker level={chosenLevel} setLevel={setLevel} hasClip={!!d.clip} />
+                <button className="btn small" onClick={askCritique} disabled={busy === 'critique'}>
+                  {busy === 'critique' ? 'Looking again…' : `New ${chosenLevel} critique`}
+                </button>
+              </div>
             )}
           </div>
         </section>

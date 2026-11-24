@@ -87,7 +87,7 @@ export default function Home() {
           <div className="row small muted" style={{ marginTop: 8, gap: 14 }}>
             <span>🌳 {world.trees.length} focus blocks</span>
             <span>🪨 {world.stones} lessons</span>
-            <span>🏠 {world.buildings.length} of 11 buildings</span>
+            <span>🏠 {world.buildings.length} of {stages.length || 14} buildings</span>
             <span>🏮 {world.lanterns} weeks on target</span>
             {world.gallery.length > 0 && <span>🖼 {world.gallery.length} skill checks</span>}
             {stage && (
@@ -175,7 +175,7 @@ export default function Home() {
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <div>
               <div className="kicker">
-                Stage {stage.id} of 10
+                Stage {stage.id} of {stages.length - 1}
               </div>
               <h3 style={{ marginBottom: 2 }}>{stage.title}</h3>
               <p className="small muted" style={{ margin: 0 }}>

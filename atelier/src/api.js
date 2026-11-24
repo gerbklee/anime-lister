@@ -56,7 +56,9 @@ export const api = {
   uploadFor: (id, file) => request('POST', `/api/atelier/drawings/${id}/file`, undefined, { raw: file }),
   updateDrawing: (id, patch) => request('PUT', `/api/atelier/drawings/${id}`, patch),
   deleteDrawing: (id) => request('DELETE', `/api/atelier/drawings/${id}`),
-  critique: (id) => request('POST', `/api/atelier/drawings/${id}/critique`),
+  critique: (id, level) => request('POST', `/api/atelier/drawings/${id}/critique`, { level }),
+  portfolio: () => request('GET', '/api/atelier/portfolio'),
+  savePortfolio: (o) => request('POST', '/api/atelier/portfolio', o),
   react: (target, emoji) => request('POST', '/api/reactions', { target, emoji }),
 };
 

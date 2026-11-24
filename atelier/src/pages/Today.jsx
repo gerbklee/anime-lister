@@ -220,7 +220,15 @@ export default function Today() {
                       </button>
                     </>
                   )}
-                  {!['check', 'lesson', 'finish'].includes(p.kind) && (
+                  {p.kind === 'portfolio' && (
+                    <>
+                      <p>{p.prompt}</p>
+                      <a className="btn primary small" href="#/portfolio">
+                        Start the review
+                      </a>
+                    </>
+                  )}
+                  {!['check', 'lesson', 'finish', 'portfolio'].includes(p.kind) && (
                     <>
                       <Exercise
                         compact={p.kind === 'warmup' || p.kind === 'free'}

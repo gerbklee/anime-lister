@@ -67,7 +67,7 @@ export default function Lesson({ id }) {
         ← The path
       </a>
       <div className="kicker" style={{ marginTop: 14 }}>
-        {stage ? `Stage ${stage.id} · ${stage.title}` : unit ? `Adult track · ${unit.id} ${unit.title}` : ''}
+        {stage ? `Stage ${stage.id} · ${stage.title}` : unit ? `Adult track · ${unit.id} ${unit.title}` : data.track ? `${data.track.title} track` : ''}
         {area ? ` · ${area.name}` : ''}
       </div>
       <h1>{lesson.title}</h1>

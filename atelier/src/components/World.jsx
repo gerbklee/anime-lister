@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Tree, TREE_INFO, VARIANTS, mix } from './Tree.jsx';
-import { BUILDINGS, makeIso } from './Buildings.jsx';
+import { BUILDINGS, LANDMARKS, makeIso } from './Buildings.jsx';
 
 // Your valley: a floating isometric island, like a Forest app plot that grows
 // with you. Everything on it comes from what you did:
@@ -160,6 +160,9 @@ const PLOTS = {
   gallery: [0.8, 0.4],
   belltower: [0.32, 0.36],
   museum: [0.56, 0.36],
+  teahouse: [0.02, 0.86],
+  lighthouse: [0.9, 0.0],
+  pagoda: [0.88, 0.86],
 };
 
 export default function World({ world, stages }) {
@@ -179,7 +182,7 @@ export default function World({ world, stages }) {
     const trees = world.trees;
     const stones = Math.min(world.stones ?? 0, 400);
     // The island grows with your trees (plus room for buildings and the path).
-    const N = Math.max(10, Math.min(34, Math.ceil(Math.sqrt((trees.length + 60 + stones * 0.4) * 1.35))));
+    const N = Math.max(10, Math.min(34, Math.ceil(Math.sqrt((trees.length + 60 + stones * 0.4 + (world.landmarks?.length ?? 0) * 2) * 1.35))));
     const A = 520 / N;
     const ox = W / 2;
     const oy = 150;
@@ -234,6 +237,27 @@ export default function World({ world, stages }) {
         }
       }
     }
+    // Milestone landmarks: on tiles beside the stone path (or near the campfire).
+    const pathSet = new Set(path.map(([u, v]) => `${u},${v}`));
+    const landmarkTiles = [];
+    {
+      const want = (world.landmarks ?? []).length;
+      const near = [];
+      for (let u = 0; u < N; u++)
+        for (let v = 0; v < N; v++) {
+          const key = `${u},${v}`;
+          if (taken.has(key) || clearing.has(key)) continue;
+          const byPath = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([du, dv]) => pathSet.has(`${u + du},${v + dv}`));
+          const [cu, cv] = plots.campfire;
+          near.push({ u, v, score: (byPath ? 0 : 6) + Math.hypot(u - cu - 1, v - cv - 1) * 0.3 + rand(u * 7 + v) });
+        }
+      near.sort((a, b) => a.score - b.score);
+      for (const t of near.slice(0, want)) {
+        landmarkTiles.push([t.u, t.v]);
+        taken.add(`${t.u},${t.v}`);
+      }
+    }
+
     // Tree tiles: from the middle outwards, in a stable shuffled order.
     const free = [];
     for (let u = 0; u < N; u++) for (let v = 0; v < N; v++) if (!taken.has(`${u},${v}`) && !clearing.has(`${u},${v}`)) free.push([u, v]);
@@ -262,6 +286,11 @@ export default function World({ world, stages }) {
       const [u, v] = plots[id];
       if (done.has(id)) objects.push({ kind: 'building', id, depth: u + v + 2.5, u, v, label: `${st.building.name}: Stage ${i}, ${st.title}, finished` });
       else if (i === world.stage) objects.push({ kind: 'building', id, depth: u + v + 2.5, u, v, ghost: true, label: `Next: ${st.building.name} (finish Stage ${i}: ${st.title})` });
+    });
+    (world.landmarks ?? []).forEach((lm, i) => {
+      const t = landmarkTiles[i];
+      if (!t) return;
+      objects.push({ kind: 'landmark', depth: t[0] + t[1] + 1, u: t[0], v: t[1], lm });
     });
     // Easels around the campfire.
     const [fu, fv] = plots.campfire;
@@ -392,6 +421,17 @@ export default function World({ world, stages }) {
               <g key={`b${o.id}`} opacity={o.ghost ? 0.3 : 1} onPointerEnter={(e) => showTip(e, o.label)}>
                 <title>{o.label}</title>
                 {BUILDINGS[o.id](I, { night: night || time === 'dusk' })}
+              </g>
+            );
+          }
+          if (o.kind === 'landmark') {
+            const [lx, ly] = P(o.u, o.v);
+            const draw = LANDMARKS[o.lm.kind];
+            if (!draw) return null;
+            return (
+              <g key={`m${i}`} onPointerEnter={(e) => showTip(e, o.lm.label)}>
+                <title>{o.lm.label}</title>
+                {draw(makeIso(A, lx, ly), { night: night || time === 'dusk', tier: o.lm.tier })}
               </g>
             );
           }

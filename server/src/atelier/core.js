@@ -32,6 +32,9 @@ const q = {
   lastCheck: db.prepare(`SELECT MAX(check_round) AS round, MAX(created_at) AS at FROM atelier_drawings WHERE user_id = ? AND kind = 'check'`),
   lastCritique: db.prepare('SELECT id, critique FROM atelier_drawings WHERE user_id = ? AND critique IS NOT NULL AND created_at >= ? ORDER BY created_at DESC LIMIT 1'),
   lastSelf: db.prepare('SELECT id, area, self_scores FROM atelier_drawings WHERE user_id = ? AND self_scores IS NOT NULL AND created_at >= ? ORDER BY created_at DESC LIMIT 1'),
+  piecesSince: db.prepare("SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND kind = 'piece' AND file IS NOT NULL AND created_at >= ?"),
+  lastPortfolio: db.prepare('SELECT MAX(created_at) AS at FROM atelier_portfolio_reviews WHERE user_id = ?'),
+  finishedCount: db.prepare("SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND kind IN ('project', 'piece') AND file IS NOT NULL"),
   anyCheck: db.prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM atelier_drawings WHERE user_id = ? AND kind = 'check' AND file IS NOT NULL"),
   stageMinutes: db.prepare("SELECT stage, COALESCE(SUM(minutes), 0) AS m FROM atelier_blocks WHERE user_id = ? AND status = 'done' AND stage IS NOT NULL GROUP BY stage"),
   exerciseDays: db.prepare(`SELECT lesson_id, exercise_id, COUNT(DISTINCT date(created_at / 1000, 'unixepoch')) AS n, MAX(created_at) AS last
@@ -166,7 +169,7 @@ function stageInfo(stage, state, prog) {
 
 // The stage you're in: the first one not complete.
 function currentStage(userId, state = lessonState(userId), prog = practice(userId)) {
-  return C.STAGES.find((s) => !stageInfo(s, state, prog).complete)?.id ?? 10;
+  return C.STAGES.find((s) => !stageInfo(s, state, prog).complete)?.id ?? C.STAGES.length - 1;
 }
 // The first unfinished lesson of the current stage; null when only practice hours are left.
 function currentLesson(userId, state = lessonState(userId), prog = practice(userId)) {
@@ -178,6 +181,12 @@ function currentLesson(userId, state = lessonState(userId), prog = practice(user
 // adult units go in order too, among the units already open.
 function lessonAccess(userId, lesson, state = lessonState(userId), prog = practice(userId)) {
   if (state.get(lesson.id)?.done_at) return 'done';
+  if (lesson.track) {
+    const t = C.TRACKS.find((x) => x.id === lesson.track);
+    if (!t || currentStage(userId, state, prog) < t.opensWith) return 'future';
+    const cur = C.TRACK_LESSONS.find((l) => l.track === lesson.track && !state.get(l.id)?.done_at);
+    return cur?.id === lesson.id ? 'current' : 'future';
+  }
   if (lesson.unit) {
     const stage = currentStage(userId, state, prog);
     const open = C.ADULT.filter((l) => (C.ADULT_UNITS.find((u) => u.id === l.unit)?.opensWith ?? 99) <= stage);
@@ -312,6 +321,39 @@ function todaySession(userId) {
     if (lessonReady(lesson, prog) && read) parts.push({ id: `finish:${lesson.id}`, kind: 'finish', lessonId: lesson.id, title: `Finish “${lesson.title}”`, prompt: 'Every exercise has had its sessions: mark the lesson as finished to schedule its reviews.', minutes: 2 });
   }
 
+  // Finished pieces: from Stage 8 one a month, from Stage 12 one every two weeks.
+  const piece = pieceStatus(userId, stage);
+  if (piece.active && !piece.doneThisPeriod && budget >= 15) {
+    const minutes = Math.min(45, budget);
+    parts.push({
+      id: 'piece', kind: 'piece', title: piece.every === 'month' ? 'Finished piece of the month' : 'Finished piece (every two weeks)', minutes, exerciseId: 'piece', sessions: 1, session: 1, due: piece.dueAt,
+      prompt: `One complete illustration from thumbnails to polish, worked on across several days. ${piece.daysLeft} ${piece.daysLeft === 1 ? 'day' : 'days'} left. Pick your own idea or use a brief.`,
+      steps: ['Write a one-sentence brief (or get one in Atelier).', 'Ten thumbnails, pick one.', 'Sketch with construction, then values.', 'Lines, flats, shading, polish across several focus blocks.', 'Upload the .clip and ask for a full critique.'],
+      success: ['Finished to the edges, nothing left rough by accident', 'A clear focal point and consistent light'],
+      example: 'A month’s piece: your character reading on a train at sunset, warm light through the windows, the city blurred outside; about 6 hours over 5 days.',
+      exampleUrl: null,
+    });
+    budget -= minutes;
+  }
+  // Every three months: the portfolio review.
+  const review = portfolioStatus(userId);
+  if (review.due) parts.push({ id: 'portfolio', kind: 'portfolio', title: 'Quarterly portfolio review', minutes: 20, prompt: 'Pick your best 3–5 pieces, rate them against the professional rubric, and see how your level moves over the years.' });
+
+  // A track you've started: the next exercise of its current lesson.
+  if (budget >= 15) {
+    const started = C.TRACKS.filter((t) => stage >= t.opensWith)
+      .map((t) => ({ t, l: C.TRACK_LESSONS.find((l) => l.track === t.id && !state.get(l.id)?.done_at) }))
+      .filter((x) => x.l && state.get(x.l.id)?.read_at)
+      .sort((a, b) => state.get(b.l.id).read_at - state.get(a.l.id).read_at);
+    const pick = started[0];
+    const e = pick?.l.exercises.find((x) => exProgress(pick.l, x, prog).days < x.sessions && exProgress(pick.l, x, prog).last < dayStart);
+    if (e) {
+      const minutes = Math.min(e.minutes, budget, 45);
+      parts.push(exPart(pick.l, e, minutes, { id: `track:${pick.l.id}:${e.id}`, practiceOf: `${pick.t.title} track` }));
+      budget -= minutes;
+    }
+  }
+
   // Stage practice: when today's lesson work is done (or only practice hours
   // are left in the stage), mix exercises from the stage's finished lessons,
   // the ones practised longest ago first, one per area.
@@ -345,6 +387,34 @@ function todaySession(userId) {
 
   const minutesToday = q.minutesSince.get(userId, startOfDay(Date.now(), tz)).m;
   return { day: today, dailyMinutes: D, minutesToday: Math.round(minutesToday), stage, stageInfo: stageInfo(C.STAGES[stage], state, prog), lessonId: lesson?.id ?? null, parts, check, focus: focusPoint(userId, lesson) };
+}
+
+// The finished-piece rhythm: from Stage 8 one finished illustration a month,
+// from Stage 12 one every two weeks.
+function pieceStatus(userId, stage = currentStage(userId)) {
+  if (stage < 8) return { active: false };
+  const every = stage >= 12 ? 'fortnight' : 'month';
+  const now = new Date();
+  let start;
+  let end;
+  if (every === 'month') {
+    start = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    end = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1);
+  } else {
+    const period = 14 * DAY;
+    start = Math.floor(Date.now() / period) * period;
+    end = start + period;
+  }
+  const done = q.piecesSince.get(userId, start).n > 0;
+  return { active: true, every, doneThisPeriod: done, dueAt: end, daysLeft: Math.max(1, Math.ceil((end - Date.now()) / DAY)) };
+}
+
+// The quarterly portfolio review: due every 91 days once you have 3 finished pieces or projects.
+function portfolioStatus(userId) {
+  const last = q.lastPortfolio.get(userId)?.at ?? null;
+  const pieces = q.finishedCount.get(userId).n;
+  const dueAt = last ? last + 91 * DAY : null;
+  return { last, dueAt, pieces, due: pieces >= 3 && (!last || Date.now() >= dueAt) };
 }
 
 // Deliberate practice works on one specific thing at a time. Today's "one
@@ -397,6 +467,8 @@ module.exports = {
   currentStage,
   stagesDone,
   lessonAccess,
+  pieceStatus,
+  portfolioStatus,
   practice,
   lessonProgress,
   lessonReady,

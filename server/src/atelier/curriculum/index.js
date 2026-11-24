@@ -4,10 +4,16 @@
 const { AREAS, AREA } = require('./areas');
 const { STAGES, ADULT_UNITS, SKILL_CHECK } = require('./stages');
 
-const MAIN = [...require('./s00-s01'), ...require('./s02-s03'), ...require('./s04-s05'), ...require('./s06-s07'), ...require('./s08-s10')];
+// Main path in stage order (a stable sort keeps the order within each stage).
+const MAIN = [...require('./s00-s01'), ...require('./s02-s03'), ...require('./s04-s05'), ...require('./s06-s07'), ...require('./s08-s10'), ...require('./s09-s11')]
+  .map((l, i) => [l, i])
+  .sort((a, b) => a[0].stage - b[0].stage || a[1] - b[1])
+  .map(([l]) => l);
 const ADULT = require('./adult');
+// Optional tracks (character design, manga, business, key visuals).
+const { TRACKS, TRACK_LESSONS } = require('./tracks');
 
-const LESSONS = [...MAIN, ...ADULT];
+const LESSONS = [...MAIN, ...ADULT, ...TRACK_LESSONS];
 const LESSON = new Map(LESSONS.map((l) => [l.id, l]));
 const MAIN_ORDER = MAIN.map((l) => l.id);
 
@@ -110,6 +116,38 @@ const LESSON_GUIDES = {
   'a6-sheer': ['blending', 'clipping'],
   'a7-nude': ['correction', 'checking'],
   'a8-portfolio': ['timelapse'],
+  'bg-interiors': ['rulers', 'backgrounds-3d'],
+  'bg-streets': ['rulers', 'backgrounds-3d'],
+  'bg-nature': ['brushes', 'clipping'],
+  'bg-sky': ['correction', 'blending'],
+  'bg-integrate': ['correction', 'checking'],
+  'mx-metal-glass': ['blending', 'clipping'],
+  'mx-hair-eyes': ['clipping', 'blending'],
+  'mx-effects': ['effects', 'blending'],
+  'mx-weather': ['effects', 'brushes'],
+  'ms-staging': ['3d-figure', 'checking'],
+  'ms-contact': ['3d-figure', '3d-hand'],
+  'ms-group': ['3d-figure', 'transform'],
+  'ms-story': ['layers', 'checking'],
+  'ms-project': ['timelapse', 'correction'],
+  'cd-silhouette': ['layers', 'checking'],
+  'cd-costume': ['colour', 'symmetry'],
+  'cd-turnaround': ['3d-figure', 'rulers'],
+  'cd-sheet': ['colour', 'layers'],
+  'cd-vtuber': ['layers', 'timelapse'],
+  'mg-panels': ['frames'],
+  'mg-storytelling': ['frames', '3d-figure'],
+  'mg-tone': ['tones', 'vector-lines'],
+  'mg-lettering': ['balloons'],
+  'mg-short': ['frames', 'tones', 'balloons'],
+  'biz-pricing': ['timelapse'],
+  'biz-audience': ['timelapse'],
+  'biz-clients': ['layers'],
+  'biz-files': ['setup-canvas', 'correction'],
+  'kv-poses': ['3d-figure', 'transform'],
+  'kv-layers': ['effects', 'layers'],
+  'kv-polish': ['correction', 'effects'],
+  'kv-piece': ['effects', 'timelapse'],
 };
 for (const l of LESSONS) l.cspGuides = LESSON_GUIDES[l.id] ?? [];
 
@@ -119,7 +157,8 @@ for (const l of LESSONS) l.cspGuides = LESSON_GUIDES[l.id] ?? [];
 const DETAILS = Object.assign({}, ...['d-s0-s1', 'd-s2-s3', 'd-s4-s5', 'd-s6-s7', 'd-s8-s10', 'd-adult'].map((f) => require(`./details/${f}`)));
 const imageSearch = (q) => `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`;
 for (const l of LESSONS) {
-  const d = DETAILS[l.id];
+  // Newer lessons carry their detail inline (method, more, and per exercise).
+  const d = DETAILS[l.id] ?? (l.method ? { method: l.method, more: l.more, ex: Object.fromEntries(l.exercises.map((e) => [e.id, e])) } : null);
   if (!d) throw new Error(`Lesson ${l.id}: no details`);
   if (!d.method?.length) throw new Error(`Lesson ${l.id}: no method`);
   l.method = d.method;
@@ -140,9 +179,10 @@ for (const [id, guides] of Object.entries(LESSON_GUIDES)) {
 }
 for (const l of LESSONS) {
   if (l.area && !AREA[l.area]) throw new Error(`Lesson ${l.id}: unknown area ${l.area}`);
-  if (l.stage == null && !l.unit) throw new Error(`Lesson ${l.id}: no stage or unit`);
+  if (l.stage == null && !l.unit && !l.track) throw new Error(`Lesson ${l.id}: no stage, unit or track`);
+  if (l.track && !TRACKS.some((t) => t.id === l.track)) throw new Error(`Lesson ${l.id}: unknown track ${l.track}`);
 }
 if (LESSON.size !== LESSONS.length) throw new Error('Duplicate lesson ids');
 for (const w of WARMUPS) if (!LESSON.has(w.lesson)) throw new Error(`Warm-up ${w.id}: unknown lesson ${w.lesson}`);
 
-module.exports = { AREAS, AREA, STAGES, ADULT_UNITS, SKILL_CHECK, LESSONS, LESSON, MAIN, ADULT, MAIN_ORDER, WARMUPS, BRIEFS, CSP_GUIDES: CSP.GUIDES, CSP_GUIDE: CSP.GUIDE, CSP_GROUPS: CSP.GROUPS };
+module.exports = { AREAS, AREA, STAGES, ADULT_UNITS, SKILL_CHECK, LESSONS, LESSON, MAIN, ADULT, TRACKS, TRACK_LESSONS, MAIN_ORDER, WARMUPS, BRIEFS, CSP_GUIDES: CSP.GUIDES, CSP_GUIDE: CSP.GUIDE, CSP_GROUPS: CSP.GROUPS };

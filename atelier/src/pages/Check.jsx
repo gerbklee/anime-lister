@@ -52,7 +52,7 @@ function Prompt({ p, round, done, onDone }) {
           <button className="btn small" onClick={() => file.current?.click()} disabled={busy}>
             {busy ? 'Uploading…' : 'Upload'}
           </button>
-          <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+          <input ref={file} type="file" accept="image/*,.clip" hidden onChange={(e) => upload(e.target.files?.[0])} />
         </div>
       )}
       {err && <p className="error small">{err}</p>}

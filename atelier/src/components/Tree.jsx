@@ -17,6 +17,9 @@ export const TREE_INFO = {
   cypress: { name: 'Cypress', leaf: '#2f8a5f' },
   plane: { name: 'Plane tree', leaf: '#7fbf55' },
   magnolia: { name: 'Magnolia', leaf: '#6aa85a', flower: '#fbe3ec' },
+  bamboo: { name: 'Bamboo', leaf: '#7cc46a' },
+  wisteria: { name: 'Wisteria', leaf: '#7fae5c', flower: '#b48ae6' },
+  camphor: { name: 'Camphor tree', leaf: '#4f9a55' },
   sakura: { name: 'Sakura', leaf: '#f6b3c8' },
   withered: { name: 'Withered tree', leaf: '#9b8b7a' },
 };
@@ -227,6 +230,60 @@ function Crown({ type, v, season }) {
             layout.flatMap(([x, y, r], i) =>
               [0, 1, 2].map((k) => <circle key={`${i}-${k}`} cx={x + Math.cos(k * 2.1 + i) * r * 0.55} cy={y + Math.sin(k * 2.1 + i) * r * 0.45} r={1.8} fill={mix(petals, '#ffffff', 0.4)} />),
             )}
+        </g>
+      );
+    }
+    case 'bamboo': {
+      const stalks = [[-6, 58], [0, 66], [6, 52], [-11, 44], [10, 60]].slice(0, 3 + v);
+      const s = shades('#6fae52');
+      return (
+        <g>
+          {stalks.map(([x, h], i) => (
+            <g key={i}>
+              <path d={`M${x - 1.6} 0 L${x - 1.4} ${-h} L${x} ${-h} L${x} 0 Z`} fill={s.light} />
+              <path d={`M${x} 0 L${x} ${-h} L${x + 1.4} ${-h} L${x + 1.6} 0 Z`} fill={s.dark} />
+              {[0.25, 0.5, 0.75].map((k) => (
+                <path key={k} d={`M${x - 1.8} ${-h * k} h3.6`} stroke={s.dark} strokeWidth="0.9" />
+              ))}
+              <Gem cx={x + (i % 2 ? 4 : -4)} cy={-h + 2} rx={6} ry={4} c={c} snow={snow} rot={i} />
+              <Gem cx={x + (i % 2 ? -3 : 3)} cy={-h * 0.62} rx={4.5} ry={3} c={mix(c, '#1f5f5a', 0.1)} snow={snow} rot={i + 1} />
+            </g>
+          ))}
+        </g>
+      );
+    }
+    case 'wisteria': {
+      const fl = TREE_INFO.wisteria.flower;
+      const bloom = season !== 'winter' && season !== 'autumn';
+      return (
+        <g>
+          <Trunk h={28} w={2.8} c="#7a5c40" />
+          <Gem cx={0} cy={-44} rx={21 + v * 2} ry={12} c={season === 'autumn' ? '#c9a24a' : c} snow={snow} />
+          {bloom &&
+            [-15, -8, -1, 6, 13].map((x, i) => {
+              const len = 14 + ((i + v) % 3) * 4;
+              return (
+                <g key={i}>
+                  <path d={`M${x - 3} -38 L${x + 3} -38 L${x} ${-38 + len} Z`} fill={mix(fl, '#ffffff', 0.2)} />
+                  <path d={`M${x} -38 L${x + 3} -38 L${x} ${-38 + len} Z`} fill={mix(fl, '#3a2a5a', 0.25)} />
+                </g>
+              );
+            })}
+        </g>
+      );
+    }
+    case 'camphor': {
+      const layout = [
+        [[-18, -40, 14], [18, -42, 14], [-6, -54, 16], [10, -58, 14], [0, -38, 13]],
+        [[-14, -42, 15], [14, -44, 15], [0, -58, 17]],
+        [[-20, -36, 12], [20, -38, 12], [-8, -50, 14], [8, -52, 14], [0, -64, 12]],
+      ][v];
+      return (
+        <g>
+          <Trunk h={30} w={3.4} c="#6a4e38" />
+          {layout.map(([x, y, r], i) => (
+            <Gem key={i} cx={x} cy={y} rx={r} ry={r * 0.88} c={i % 2 ? mix(c, '#1f5f5a', 0.1) : c} snow={snow} rot={i * 0.6} />
+          ))}
         </g>
       );
     }

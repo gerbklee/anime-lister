@@ -81,7 +81,7 @@ module.exports = [
   // ---- Stage 9: Rendering & style -------------------------------------------------------------
   {
     id: 's9-lineart',
-    stage: 9,
+    stage: 12,
     title: 'Professional lineart',
     area: 'rendering',
     skills: ['lineart'],
@@ -96,7 +96,7 @@ module.exports = [
   },
   {
     id: 's9-polish',
-    stage: 9,
+    stage: 12,
     title: 'Polish and effects',
     area: 'rendering',
     skills: ['polish'],
@@ -111,7 +111,7 @@ module.exports = [
   },
   {
     id: 's9-masters',
-    stage: 9,
+    stage: 12,
     title: 'Master copies',
     area: 'rendering',
     skills: ['master-copies'],
@@ -126,7 +126,7 @@ module.exports = [
   },
   {
     id: 's9-style',
-    stage: 9,
+    stage: 12,
     title: 'Finding your style',
     area: 'rendering',
     skills: ['style'],
@@ -141,7 +141,7 @@ module.exports = [
   },
   {
     id: 's9-project',
-    stage: 9,
+    stage: 12,
     title: 'Stage project: a finished illustration',
     area: 'rendering',
     skills: ['lineart', 'polish'],
@@ -158,7 +158,7 @@ module.exports = [
   // ---- Stage 10: Professional -----------------------------------------------------------------
   {
     id: 's10-workflow',
-    stage: 10,
+    stage: 13,
     title: 'A reliable workflow',
     area: 'rendering',
     skills: ['workflow'],
@@ -173,7 +173,7 @@ module.exports = [
   },
   {
     id: 's10-design',
-    stage: 10,
+    stage: 13,
     title: 'Character design sheets',
     area: 'rendering',
     skills: ['design-sheets'],
@@ -188,7 +188,7 @@ module.exports = [
   },
   {
     id: 's10-briefs',
-    stage: 10,
+    stage: 13,
     title: 'Working from a brief',
     area: 'composition',
     skills: ['briefs'],
@@ -203,7 +203,7 @@ module.exports = [
   },
   {
     id: 's10-speed',
-    stage: 10,
+    stage: 13,
     title: 'Speed without losing quality',
     area: 'gesture',
     skills: ['speed'],
@@ -218,7 +218,7 @@ module.exports = [
   },
   {
     id: 's10-portfolio',
-    stage: 10,
+    stage: 13,
     title: 'Your portfolio',
     area: 'composition',
     skills: ['portfolio'],

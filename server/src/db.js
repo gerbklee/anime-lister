@@ -607,6 +607,23 @@ const MIGRATIONS = {
     );
     CREATE INDEX idx_kv_cache_expires ON kv_cache (expires);
   `,
+  // v20: Atelier: Clip Studio files (original + layers), critique levels,
+  // gesture pose counts, finished pieces and quarterly portfolio reviews.
+  20: `
+    ALTER TABLE atelier_drawings ADD COLUMN clip_file TEXT;
+    ALTER TABLE atelier_drawings ADD COLUMN clip_info TEXT;
+    ALTER TABLE atelier_blocks ADD COLUMN poses INTEGER;
+    CREATE TABLE atelier_portfolio_reviews (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  INTEGER NOT NULL,
+      drawings    TEXT    NOT NULL,
+      self        TEXT,
+      critique    TEXT,
+      cost        REAL    NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_atelier_portfolio_user ON atelier_portfolio_reviews (user_id, created_at);
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

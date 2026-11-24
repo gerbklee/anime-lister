@@ -12,6 +12,7 @@ import Settings from './pages/Settings.jsx';
 import Check from './pages/Check.jsx';
 import Handbook from './pages/Handbook.jsx';
 import Method from './pages/Method.jsx';
+import Portfolio from './pages/Portfolio.jsx';
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -183,11 +184,14 @@ export default function App() {
     case 'method':
       body = <Method />;
       break;
+    case 'portfolio':
+      body = <Portfolio />;
+      break;
     default:
       body = <Home />;
   }
 
-  const active = ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
+  const active = page === 'portfolio' ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
 
   return (
     <AppContext.Provider value={ctx}>

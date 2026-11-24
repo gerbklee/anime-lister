@@ -37,7 +37,7 @@ export default function PathPage() {
         <div className="kicker">From first line to professional</div>
         <h1>The path</h1>
         <p className="muted" style={{ maxWidth: 680 }}>
-          Eleven stages, about 1,200 hours of practice: two to four years at an hour or two a day. Each stage has its own tree for your valley and a building when you finish it. A stage opens when the one before is complete: every lesson practised on enough days, and the stage’s practice hours put in. Finished lessons come back as short reviews, spaced out so they stick.
+          Fourteen stages, about 1,580 hours of practice: three to four years at an hour or two a day. Each stage has its own tree for your valley and a building when you finish it. A stage opens when the one before is complete: every lesson practised on enough days, and the stage’s practice hours put in. Finished lessons come back as short reviews, spaced out so they stick.
         </p>
         <div className="row" style={{ marginTop: 10 }}>
           <a className="btn small" href="#/method">
@@ -93,6 +93,32 @@ export default function PathPage() {
           </section>
         );
       })}
+
+      {data.tracks?.length > 0 && (
+        <section className="section">
+          <h2>Tracks</h2>
+          <p className="small muted" style={{ maxWidth: 680 }}>
+            Optional specialisms beside the main path. Each opens with a main stage and goes in order; start one by opening its first lesson, and Today adds its exercises on longer days.
+          </p>
+          {data.tracks.map((t) => (
+            <div key={t.id} className="card" style={{ marginTop: 12, opacity: t.open ? 1 : 0.6 }}>
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ marginBottom: 2 }}>{t.title}</h3>
+                  <p className="small muted" style={{ margin: 0 }}>
+                    {t.subtitle} · {t.open ? `${t.lessons.filter((l) => l.done).length} of ${t.lessons.length} lessons` : `opens with Stage ${t.opensWith}`}
+                  </p>
+                </div>
+              </div>
+              <div className="lesson-list">
+                {t.lessons.map((l) => (
+                  <LessonRow key={l.id} l={l} current={t.open && l.id === t.current} areaName={areaName} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
 
       {data.adult && (
         <section className="section">

@@ -200,10 +200,40 @@ function world(userId) {
     stones: [...state.values()].filter((r) => r.done_at).length,
     buildings: core.stagesDone(userId, state).map((id) => C.STAGES[id].building),
     lanterns: cons.metWeeks,
+    landmarks: milestones(userId, cons).flatMap((m) => m.tiers.slice(0, m.reached).map((t, i) => ({ kind: m.landmark, tier: i, label: `${m.landmarkName}: ${t} ${m.unit}` }))),
     gallery: [...checks.keys()].sort((a, b) => a - b),
     stage: core.currentStage(userId, state),
     startedAt: prof.startedAt,
   };
+}
+
+// Volume milestones: skill is built on mileage. Each tier reached places a
+// landmark in your valley.
+const MILESTONES = [
+  { id: 'hours', name: 'Focus hours', unit: 'hours', landmark: 'toro', landmarkName: 'Stone lantern', tiers: [10, 25, 50, 100, 250, 500, 750, 1000, 1500, 2000] },
+  { id: 'drawings', name: 'Drawings uploaded', unit: 'drawings', landmark: 'statue', landmarkName: 'Statue', tiers: [10, 50, 100, 250, 500, 1000, 2000] },
+  { id: 'poses', name: 'Gesture poses', unit: 'poses', landmark: 'torii', landmarkName: 'Torii gate', tiers: [100, 500, 1000, 2500, 5000, 10000] },
+  { id: 'pieces', name: 'Finished pieces', unit: 'pieces', landmark: 'fountain', landmarkName: 'Fountain', tiers: [1, 5, 10, 25, 50, 100] },
+  { id: 'streak', name: 'Best week streak', unit: 'weeks', landmark: 'shrine', landmarkName: 'Shrine', tiers: [4, 12, 26, 52, 104] },
+];
+const qm = {
+  poses: db.prepare("SELECT COALESCE(SUM(poses), 0) AS n FROM atelier_blocks WHERE user_id = ? AND status = 'done'"),
+  drawings: db.prepare('SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND file IS NOT NULL'),
+  pieces: db.prepare("SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND file IS NOT NULL AND kind IN ('piece', 'project')"),
+};
+function milestones(userId, cons = consistency(userId)) {
+  const values = {
+    hours: Math.floor(cons.totalMinutes / 60),
+    drawings: qm.drawings.get(userId).n,
+    poses: qm.poses.get(userId).n,
+    pieces: qm.pieces.get(userId).n,
+    streak: cons.bestStreakWeeks,
+  };
+  return MILESTONES.map((m) => {
+    const value = values[m.id];
+    const reached = m.tiers.filter((t) => value >= t);
+    return { ...m, value, reached: reached.length, next: m.tiers.find((t) => value < t) ?? null, last: reached[reached.length - 1] ?? 0 };
+  });
 }
 
 // The weekly review (shown on Mondays, available any time).
@@ -239,4 +269,4 @@ function isFreshStart(tz) {
   return { monday: d.getUTCDay() === 1, newMonth: day.endsWith('-01') };
 }
 
-module.exports = { consistency, skills, pace, world, weeklyReview, scoresOf };
+module.exports = { consistency, skills, pace, world, weeklyReview, scoresOf, milestones, MILESTONES };

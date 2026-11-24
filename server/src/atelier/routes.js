@@ -18,17 +18,22 @@ const stats = require('./stats');
 const { studyPsd } = require('./psd');
 const crit = require('./critique');
 const { lessonMedia } = require('./media');
+const { readClip } = require('./clip');
 
 const DRAW_DIR = path.join(DATA_DIR, 'atelier', 'drawings');
 const REF_DIR = path.join(DATA_DIR, 'atelier', 'refs');
 fs.mkdirSync(DRAW_DIR, { recursive: true });
 fs.mkdirSync(REF_DIR, { recursive: true });
+const CLIP_DIR = path.join(DATA_DIR, 'atelier', 'clips');
+const LAYER_DIR = path.join(DATA_DIR, 'atelier', 'layers');
+fs.mkdirSync(CLIP_DIR, { recursive: true });
+fs.mkdirSync(LAYER_DIR, { recursive: true });
 
 const q = {
   insertBlock: db.prepare('INSERT INTO atelier_blocks (user_id, started_at, planned, kind, lesson_id, area, tree, stage, status) VALUES (@u, @at, @planned, @kind, @lesson, @area, @tree, @stage, @status)'),
   block: db.prepare('SELECT * FROM atelier_blocks WHERE id = ? AND user_id = ?'),
   finishBlock: db.prepare('UPDATE atelier_blocks SET status = ?, ended_at = ?, minutes = ? WHERE id = ?'),
-  logBlock: db.prepare("INSERT INTO atelier_blocks (user_id, started_at, ended_at, planned, minutes, status, kind, area, tree, stage) VALUES (@u, @start, @end, @planned, @minutes, 'done', @kind, @area, @tree, @stage)"),
+  logBlock: db.prepare("INSERT INTO atelier_blocks (user_id, started_at, ended_at, planned, minutes, status, kind, area, tree, stage, poses) VALUES (@u, @start, @end, @planned, @minutes, 'done', @kind, @area, @tree, @stage, @poses)"),
   staleBlocks: db.prepare("UPDATE atelier_blocks SET status = 'done', ended_at = started_at + planned * 60000, minutes = planned WHERE user_id = ? AND status = 'running' AND started_at + planned * 60000 + 3600000 < ?"),
   insertDrawing: db.prepare(`INSERT INTO atelier_drawings (user_id, lesson_id, exercise_id, kind, skill, area, title, file, reference_file, reference_url, reference_post, check_round, adult, status, created_at)
     VALUES (@u, @lesson, @exercise, @kind, @skill, @area, @title, @file, @refFile, @refUrl, @refPost, @round, @adult, @status, @at)`),
@@ -39,6 +44,7 @@ const q = {
   setSelf: db.prepare('UPDATE atelier_drawings SET self_scores = ? WHERE id = ?'),
   setShared: db.prepare('UPDATE atelier_drawings SET shared = ? WHERE id = ?'),
   setTitle: db.prepare('UPDATE atelier_drawings SET title = ? WHERE id = ?'),
+  setClip: db.prepare('UPDATE atelier_drawings SET clip_file = ?, clip_info = ? WHERE id = ?'),
   setCritique: db.prepare('UPDATE atelier_drawings SET critique = ?, critique_cost = COALESCE(critique_cost, 0) + ? WHERE id = ?'),
   deleteDrawing: db.prepare('DELETE FROM atelier_drawings WHERE id = ?'),
   checkRounds: db.prepare("SELECT * FROM atelier_drawings WHERE user_id = ? AND kind = 'check' AND file IS NOT NULL ORDER BY check_round, exercise_id"),
@@ -58,6 +64,14 @@ const randomName = (prefix) => `${prefix}-${crypto.randomBytes(10).toString('hex
 
 // Adult-track level of a lesson: 2 for nude units (A1, A7), 1 for the rest of the track.
 const adultLevel = (lesson) => (!lesson?.unit ? 0 : ['A1', 'A7'].includes(lesson.unit) ? 2 : 1);
+
+function clipInfoOf(d) {
+  try {
+    return d.clip_info ? JSON.parse(d.clip_info) : null;
+  } catch {
+    return null;
+  }
+}
 
 function drawingView(d, me, users) {
   let critique = null;
@@ -95,6 +109,11 @@ function drawingView(d, me, users) {
     status: d.status,
     createdAt: d.created_at,
     reactions: d.shared ? activity.reactionSummary(`drawing:${d.id}`, me) : null,
+    clip: (() => {
+      const c = clipInfoOf(d);
+      if (!c) return null;
+      return { width: c.width, height: c.height, workMinutes: c.workMinutes, hasFile: !!d.clip_file && d.user_id === me, layers: c.layers.map(({ image, ...l }) => ({ ...l, image: fileUrl(image) })) };
+    })(),
   };
 }
 
@@ -132,7 +151,8 @@ function treeFor(userId) {
 // ---- Routes --------------------------------------------------------------------------------------
 
 const router = express.Router();
-const raw = express.raw({ type: ['image/*', 'application/octet-stream'], limit: '40mb' });
+// Pictures up to 40 MB; Clip Studio files can be larger.
+const raw = express.raw({ type: ['image/*', 'application/octet-stream'], limit: '150mb' });
 
 router.get('/atelier/me', (req, res) => {
   const p = core.profile(req.user.id);
@@ -160,7 +180,7 @@ router.get('/atelier/path', (req, res) => {
     minutes: l.minutes,
     exercises: l.exercises.length,
     // "Started" only for the lesson you are on (reading ahead doesn't count).
-    read: !!state.get(l.id)?.read_at && !state.get(l.id)?.done_at && (l.id === currentId || (!!l.unit && core.lessonAccess(req.user.id, l, state, prog) === "current")),
+    read: !!state.get(l.id)?.read_at && !state.get(l.id)?.done_at && (l.id === currentId || ((!!l.unit || !!l.track) && core.lessonAccess(req.user.id, l, state, prog) === "current")),
     done: !!state.get(l.id)?.done_at,
   });
   const current = core.currentLesson(req.user.id, state);
@@ -172,6 +192,7 @@ router.get('/atelier/path', (req, res) => {
     adult: prof.adultTrack
       ? C.ADULT_UNITS.map((u) => ({ ...u, open: u.opensWith <= stage, lessons: C.ADULT.filter((l) => l.unit === u.id).map(summary) }))
       : null,
+    tracks: C.TRACKS.map((t) => ({ ...t, open: stage >= t.opensWith, current: C.TRACK_LESSONS.find((l) => l.track === t.id && core.lessonAccess(req.user.id, l, state, prog) === "current")?.id ?? null, lessons: C.TRACK_LESSONS.filter((l) => l.track === t.id).map(summary) })),
     adultAllowed: prof.adultAllowed,
     areas: C.AREAS,
   });
@@ -188,12 +209,13 @@ router.get('/atelier/lessons/:id', (req, res) => {
   // Opening a later lesson early doesn't start it: clear an old start mark from before this rule.
   if (state?.read_at && !state.done_at && core.lessonAccess(req.user.id, lesson, allState, prog) === "future") core.clearRead(req.user.id, lesson.id);
   const drawings = q.myDrawings.all(req.user.id).filter((d) => d.lesson_id === lesson.id).map((d) => drawingView(d, req.user.id, users));
-  const order = lesson.unit ? C.ADULT : C.MAIN;
+  const order = lesson.track ? C.TRACK_LESSONS.filter((l) => l.track === lesson.track) : lesson.unit ? C.ADULT : C.MAIN;
   const i = order.findIndex((l) => l.id === lesson.id);
   res.json({
     lesson,
     stage: lesson.stage != null ? C.STAGES[lesson.stage] : null,
     unit: lesson.unit ? C.ADULT_UNITS.find((u) => u.id === lesson.unit) : null,
+    track: lesson.track ? C.TRACKS.find((t) => t.id === lesson.track) : null,
     area: lesson.area ? C.AREA[lesson.area] : null,
 
     done: !!state?.done_at,
@@ -286,7 +308,7 @@ router.post('/atelier/blocks/log', (req, res) => {
   const { tree, stage } = treeFor(req.user.id);
   const end = Date.now();
   const area = C.AREA[req.body?.area] ? req.body.area : 'gesture';
-  const id = Number(q.logBlock.run({ u: req.user.id, start: end - minutes * 60000, end, planned: minutes, minutes, kind: String(req.body?.kind ?? 'practice').slice(0, 20), area, tree, stage }).lastInsertRowid);
+  const id = Number(q.logBlock.run({ u: req.user.id, start: end - minutes * 60000, end, planned: minutes, minutes, kind: String(req.body?.kind ?? 'practice').slice(0, 20), area, tree, stage, poses: Math.max(0, Math.min(500, Math.round(Number(req.body?.poses) || 0))) || null }).lastInsertRowid);
   res.status(201).json({ id, tree, minutes });
 });
 
@@ -295,10 +317,60 @@ router.post('/atelier/blocks/log', (req, res) => {
 router.get('/atelier/world', (req, res) => res.json(stats.world(req.user.id)));
 
 router.get('/atelier/stats', (req, res) => {
-  res.json({ consistency: stats.consistency(req.user.id), skills: stats.skills(req.user.id), pace: stats.pace(req.user.id), areas: C.AREAS, stages: C.STAGES.map(({ id, title, tree, building }) => ({ id, title, tree, building })) });
+  res.json({ consistency: stats.consistency(req.user.id), skills: stats.skills(req.user.id), pace: stats.pace(req.user.id), milestones: stats.milestones(req.user.id), portfolio: core.portfolioStatus(req.user.id), piece: core.pieceStatus(req.user.id), areas: C.AREAS, stages: C.STAGES.map(({ id, title, tree, building }) => ({ id, title, tree, building })) });
 });
 
 router.get('/atelier/review', (req, res) => res.json(stats.weeklyReview(req.user.id)));
+
+// ---- Quarterly portfolio review ------------------------------------------------------------------
+
+const parseJson = (s) => {
+  try {
+    return s ? JSON.parse(s) : null;
+  } catch {
+    return null;
+  }
+};
+router.get('/atelier/portfolio', (req, res) => {
+  const users = usersById();
+  const mine = q.myDrawings.all(req.user.id).filter((d) => d.file);
+  const byId = new Map(mine.map((d) => [d.id, d]));
+  const reviews = db.prepare('SELECT * FROM atelier_portfolio_reviews WHERE user_id = ? ORDER BY created_at').all(req.user.id).map((r) => ({
+    id: r.id,
+    at: r.created_at,
+    self: parseJson(r.self),
+    critique: parseJson(r.critique),
+    drawings: (parseJson(r.drawings) ?? []).map((id) => byId.get(id)).filter(Boolean).map((d) => ({ id: d.id, title: d.title, file: fileUrl(d.file) })),
+  }));
+  // Finished pieces and projects first, then everything else (newest first).
+  const rank = (d) => (['piece', 'project'].includes(d.kind) ? 0 : d.kind === 'study' ? 1 : 2);
+  const candidates = [...mine].sort((a, b) => rank(a) - rank(b) || b.created_at - a.created_at).slice(0, 80).map((d) => drawingView(d, req.user.id, users));
+  res.json({ status: core.portfolioStatus(req.user.id), rubric: crit.PRO_RUBRIC, levels: crit.PRO_LEVELS, reviews, candidates, critiqueAvailable: crit.available() });
+});
+
+// Saves a review: 3–5 of your drawings, your 1–10 ratings, and optionally a critique of the set.
+router.post('/atelier/portfolio', wrap(async (req, res) => {
+  const ids = [...new Set((req.body?.drawingIds ?? []).map(Number))].slice(0, 5);
+  const pieces = ids.map((id) => q.drawing.get(id)).filter((d) => d && d.user_id === req.user.id && d.file);
+  if (pieces.length < 3) throw new HttpError(400, 'Pick 3 to 5 of your finished drawings.');
+  const self = Object.fromEntries(crit.PRO_RUBRIC.map((c) => [c.id, Math.max(1, Math.min(10, Math.round(Number(req.body?.self?.[c.id]) || 0)))]).filter(([, v]) => v));
+  let critique = null;
+  let cost = 0;
+  if (req.body?.critique === true) {
+    if (!crit.available()) throw new HttpError(503, 'Critiques need an Anthropic API key on the server (ANTHROPIC_API_KEY).');
+    const prof = core.profile(req.user.id);
+    if (crit.spentThisMonth(req.user.id) >= prof.critiqueCap / 100) throw new HttpError(402, 'This month’s critique budget is used up. Raise it in Settings if you like.');
+    try {
+      const out = await crit.portfolioCritique(await Promise.all(pieces.map(async (d) => ({ title: d.title, buf: await fs.promises.readFile(path.join(DRAW_DIR, d.file)) }))));
+      critique = out.result;
+      cost = out.cost;
+    } catch (err) {
+      throw new HttpError(502, `The review didn’t work: ${err.message}`);
+    }
+  }
+  const id = Number(db.prepare('INSERT INTO atelier_portfolio_reviews (user_id, created_at, drawings, self, critique, cost) VALUES (?, ?, ?, ?, ?, ?)').run(req.user.id, Date.now(), JSON.stringify(pieces.map((d) => d.id)), JSON.stringify(self), critique ? JSON.stringify(critique) : null, cost).lastInsertRowid);
+  res.status(201).json({ id, critique });
+}));
 
 // Skill checks: status and every round so far (for "Then & now").
 router.get('/atelier/checks', (req, res) => {
@@ -343,14 +415,43 @@ router.get('/atelier/drawings/:id', (req, res) => {
   res.json(drawingView(d, req.user.id, usersById()));
 });
 
-// Upload: the picture is the request body; details in the query string.
+// A .clip upload: keep the original, use its preview as the picture, save
+// every raster layer as its own image, and remember the layer tree and the
+// work time. Anything else is treated as a picture.
+async function ingest(buf, userId) {
+  if (!buf?.length) throw new HttpError(400, 'No file uploaded');
+  if (buf.slice(0, 8).toString('latin1') !== 'CSFCHUNK') return { file: await saveImage(buf, DRAW_DIR, `d${userId}`), clipFile: null, clipInfo: null };
+  let clip;
+  try {
+    clip = await readClip(buf, { layerImages: true, max: 1600 });
+  } catch (err) {
+    throw new HttpError(400, `Couldn’t read this Clip Studio file: ${err.message}`);
+  }
+  if (!clip.preview) throw new HttpError(400, 'This .clip file has no preview. Open it in Clip Studio, save it once more, and upload it again.');
+  const file = await saveImage(clip.preview, DRAW_DIR, `d${userId}`);
+  const clipFile = `c${userId}-${crypto.randomBytes(10).toString('hex')}.clip`;
+  await fs.promises.writeFile(path.join(CLIP_DIR, clipFile), buf);
+  const layers = [];
+  for (const l of clip.layers) {
+    let image = null;
+    if (clip.images[l.id]) {
+      image = `l${userId}-${crypto.randomBytes(10).toString('hex')}.webp`;
+      await sharp(clip.images[l.id]).webp({ quality: 85, alphaQuality: 90 }).toFile(path.join(LAYER_DIR, image));
+    }
+    layers.push({ ...l, image });
+  }
+  return { file, clipFile, clipInfo: JSON.stringify({ width: clip.width, height: clip.height, dpi: clip.dpi, workMinutes: clip.workMinutes, layers }) };
+}
+const KINDS = ['drill', 'study', 'memory', 'project', 'check', 'review', 'free', 'warmup', 'piece'];
+
+// Upload: the picture (or .clip file) is the request body; details in the query string.
 router.post('/atelier/drawings', raw, wrap(async (req, res) => {
   const lesson = req.query.lessonId ? C.LESSON.get(String(req.query.lessonId)) : null;
   const exercise = lesson?.exercises.find((e) => e.id === req.query.exerciseId) ?? null;
-  const kind = ['drill', 'study', 'memory', 'project', 'check', 'review', 'free', 'warmup'].includes(req.query.kind) ? req.query.kind : exercise?.kind ?? 'free';
+  const kind = KINDS.includes(req.query.kind) ? req.query.kind : exercise?.kind ?? 'free';
   const check = kind === 'check' ? C.SKILL_CHECK.find((c) => c.id === req.query.exerciseId) : null;
   if (lesson && core.lessonAccess(req.user.id, lesson) === "future") throw new HttpError(409, "This exercise belongs to a later lesson. Lessons go in order.");
-  const file = await saveImage(req.body, DRAW_DIR, `d${req.user.id}`);
+  const { file, clipFile, clipInfo } = await ingest(req.body, req.user.id);
   const refFile = req.query.referenceUrl ? await saveReference(req.query.referenceUrl).catch(() => null) : null;
   const id = Number(
     q.insertDrawing.run({
@@ -371,6 +472,7 @@ router.post('/atelier/drawings', raw, wrap(async (req, res) => {
       at: Date.now(),
     }).lastInsertRowid,
   );
+  if (clipFile) q.setClip.run(clipFile, clipInfo, id);
   res.status(201).json(drawingView(q.drawing.get(id), req.user.id, usersById()));
 }));
 
@@ -385,11 +487,13 @@ router.post('/atelier/studies', wrap(async (req, res) => {
   res.status(201).json(drawingView(q.drawing.get(id), req.user.id, usersById()));
 }));
 
-// Upload the drawing for a waiting study.
+// Upload the drawing (or .clip) for a waiting study, or replace a drawing's file.
 router.post('/atelier/drawings/:id/file', raw, wrap(async (req, res) => {
   const d = ownDrawing(parseId(req.params.id), req.user.id);
-  const file = await saveImage(req.body, DRAW_DIR, `d${req.user.id}`);
+  const { file, clipFile, clipInfo } = await ingest(req.body, req.user.id);
+  removeClipFiles(d);
   q.setFile.run(file, Date.now(), d.id);
+  q.setClip.run(clipFile, clipInfo, d.id);
   res.json(drawingView(q.drawing.get(d.id), req.user.id, usersById()));
 }));
 
@@ -408,21 +512,39 @@ router.put('/atelier/drawings/:id', (req, res) => {
   res.json(drawingView(q.drawing.get(d.id), req.user.id, usersById()));
 });
 
+// Deletes a drawing's stored .clip and layer images.
+function removeClipFiles(d) {
+  if (d.clip_file) fs.promises.unlink(path.join(CLIP_DIR, d.clip_file)).catch(() => {});
+  for (const l of clipInfoOf(d)?.layers ?? []) if (l.image) fs.promises.unlink(path.join(LAYER_DIR, l.image)).catch(() => {});
+}
+
 router.delete('/atelier/drawings/:id', (req, res) => {
   const d = ownDrawing(parseId(req.params.id), req.user.id);
   q.deleteDrawing.run(d.id);
   for (const [dir, name] of [[DRAW_DIR, d.file], [REF_DIR, d.reference_file]]) if (name) fs.promises.unlink(path.join(dir, name)).catch(() => {});
+  removeClipFiles(d);
   res.status(204).end();
 });
 
-// Files: your own, or shared ones you're allowed to see.
+// Files: your own, or shared ones you're allowed to see (drawings, references, layers).
 router.get('/atelier/file/:name', (req, res) => {
   const name = path.basename(String(req.params.name));
-  if (!/^(d\d+|ref)-[0-9a-f]+\.jpg$/.test(name)) throw new HttpError(404, 'Not found');
-  const row = db.prepare('SELECT user_id, shared, adult FROM atelier_drawings WHERE file = ? OR reference_file = ? LIMIT 1').get(name, name);
+  if (!/^((d\d+|ref)-[0-9a-f]+\.jpg|l\d+-[0-9a-f]+\.webp)$/.test(name)) throw new HttpError(404, 'Not found');
+  const layer = name.startsWith('l');
+  const row = layer
+    ? db.prepare('SELECT user_id, shared, adult FROM atelier_drawings WHERE instr(clip_info, ?) > 0 LIMIT 1').get(`"${name}"`)
+    : db.prepare('SELECT user_id, shared, adult FROM atelier_drawings WHERE file = ? OR reference_file = ? LIMIT 1').get(name, name);
   if (!row || (row.user_id !== req.user.id && !(row.shared && row.adult <= isSpicy(req.user.id)))) throw new HttpError(404, 'Not found');
   res.set('Cache-Control', 'private, max-age=31536000, immutable');
-  res.sendFile(path.join(name.startsWith('ref') ? REF_DIR : DRAW_DIR, name));
+  res.sendFile(path.join(layer ? LAYER_DIR : name.startsWith('ref') ? REF_DIR : DRAW_DIR, name));
+});
+
+// The original .clip file (yours only).
+router.get('/atelier/drawings/:id/clip', (req, res) => {
+  const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (!d.clip_file) throw new HttpError(404, 'No Clip Studio file for this drawing');
+  const safe = (d.title ?? 'drawing').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 40) || 'drawing';
+  res.download(path.join(CLIP_DIR, d.clip_file), `${safe}.clip`);
 });
 
 // A Clip Studio study file (.psd) for a reference: ?ref=<url> or ?drawing=<id>.
@@ -446,16 +568,38 @@ router.get('/atelier/psd', wrap(async (req, res) => {
   res.send(psd);
 }));
 
-// A critique from Claude, within your monthly cap.
+// The layers worth showing a critic: construction sketch, line art and
+// colour/flats first (by name, then by position), then the rest.
+function pickLayers(info, max) {
+  const raster = (info?.layers ?? []).filter((l) => l.image && l.kind === 'raster');
+  if (!max || !raster.length) return [];
+  const find = (re) => raster.find((l) => re.test(l.name));
+  const picks = [];
+  const add = (l) => l && !picks.includes(l) && picks.push(l);
+  add(find(/sketch|skizze|rough|entwurf|construct|konstrukt|draft|gesture|pose|mannequin/i) ?? raster.find((l) => l.draft) ?? raster.find((l) => !l.visible) ?? raster[0]);
+  add(find(/line|lineart|ink|linie|outline|kontur/i) ?? raster[raster.length - 1]);
+  add(find(/colou?r|farbe|flat|base|fill|shade|schatten|render/i) ?? raster[Math.floor(raster.length / 2)]);
+  for (const l of raster) add(l);
+  return picks.slice(0, max);
+}
+
+// A critique from Claude, within your monthly cap. Body: { level: 'quick'|'standard'|'full' }.
 router.post('/atelier/drawings/:id/critique', wrap(async (req, res) => {
   const d = ownDrawing(parseId(req.params.id), req.user.id);
   if (!crit.available()) throw new HttpError(503, 'Critiques need an Anthropic API key on the server (ANTHROPIC_API_KEY).');
   if (!d.file) throw new HttpError(400, 'Upload your drawing first');
+  const level = crit.LEVELS[req.body?.level] ? req.body.level : crit.defaultLevel(d.kind);
   const prof = core.profile(req.user.id);
   const spent = crit.spentThisMonth(req.user.id);
   if (spent >= prof.critiqueCap / 100) throw new HttpError(402, `This month’s critique budget ($${(prof.critiqueCap / 100).toFixed(2)}) is used up. Raise it in Settings if you like.`);
   const files = { drawing: await fs.promises.readFile(path.join(DRAW_DIR, d.file)) };
   if (d.reference_file) files.reference = await fs.promises.readFile(path.join(REF_DIR, d.reference_file)).catch(() => undefined);
+  const clip = clipInfoOf(d);
+  files.layers = [];
+  for (const l of pickLayers(clip, crit.LEVELS[level].layers)) {
+    const buf = await fs.promises.readFile(path.join(LAYER_DIR, l.image)).catch(() => null);
+    if (buf) files.layers.push({ name: l.name, buf });
+  }
   let selfScores = null;
   try {
     selfScores = d.self_scores ? JSON.parse(d.self_scores) : null;
@@ -464,7 +608,7 @@ router.post('/atelier/drawings/:id/critique', wrap(async (req, res) => {
   }
   let out;
   try {
-    out = await crit.critique(d, files, { selfScores });
+    out = await crit.critique(d, files, { selfScores, level, clip });
   } catch (err) {
     throw new HttpError(502, `The critique didn’t work: ${err.message}`);
   }

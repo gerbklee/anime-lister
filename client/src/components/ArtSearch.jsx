@@ -1292,8 +1292,8 @@ export function GesturePractice({ items, onClose }) {
   const total = done.reduce((s, x) => s + x.seconds, 0);
   // A finished session counts as drawing time in Atelier (gesture area).
   useEffect(() => {
-    if (finished && total >= 60) api.atelierLog({ minutes: Math.round(total / 60), kind: 'practice', area: 'gesture' }).catch(() => {});
-  }, [finished, total]);
+    if (finished && total >= 60) api.atelierLog({ minutes: Math.round(total / 60), kind: 'practice', area: 'gesture', poses: done.length }).catch(() => {});
+  }, [finished, total, done.length]);
   return createPortal(
     <div className="practice" role="dialog" aria-modal="true" aria-label="Gesture practice">
       {setup ? (

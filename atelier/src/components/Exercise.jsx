@@ -11,6 +11,8 @@ const KIND = {
   warmup: 'Warm-up',
   review: 'Review',
   free: 'Free drawing',
+  piece: 'Finished piece',
+  portfolio: 'Portfolio review',
 };
 export const kindLabel = (k) => KIND[k] ?? k;
 
@@ -34,7 +36,7 @@ export function Practice({ refs, seconds, count, area, onClose }) {
     const minutes = Math.round((Date.now() - started.current) / 60000);
     if (!logged.current && minutes >= 1) {
       logged.current = true;
-      api.logBlock({ minutes, kind: 'practice', area: area ?? 'gesture' }).catch(() => {});
+      api.logBlock({ minutes, kind: 'practice', area: area ?? 'gesture', poses: i + 1 }).catch(() => {});
     }
     onClose(minutes);
   };
@@ -240,14 +242,14 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
           </button>
         )}
         <button className="btn small" onClick={() => file.current?.click()} disabled={busy}>
-          {busy ? 'Uploading…' : 'Upload drawing'}
+          {busy ? 'Uploading…' : 'Upload (.clip, .png, .jpg)'}
         </button>
         {!compact && lessonId && (progress ? progress.done < progress.need : !done) && (
           <button className="btn small ghost" onClick={paper} disabled={busy}>
             Done on paper
           </button>
         )}
-        <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+        <input ref={file} type="file" accept="image/*,.clip" hidden onChange={(e) => upload(e.target.files?.[0])} />
       </div>
       )}
       {msg && <p className="small error">{msg}</p>}

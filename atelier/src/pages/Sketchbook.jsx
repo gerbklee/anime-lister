@@ -68,7 +68,7 @@ export default function Sketchbook({ tab = 'mine' }) {
           <button className="btn primary small" onClick={() => file.current?.click()} disabled={busy}>
             {busy ? 'Uploading…' : '+ Add a drawing'}
           </button>
-          <input ref={file} type="file" accept="image/*" hidden onChange={(e) => upload(e.target.files?.[0])} />
+          <input ref={file} type="file" accept="image/*,.clip" hidden onChange={(e) => upload(e.target.files?.[0])} />
         </div>
       </section>
       {err && <p className="error small">{err}</p>}

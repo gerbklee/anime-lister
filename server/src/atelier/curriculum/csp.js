@@ -321,7 +321,78 @@ const GUIDES = [
   ),
 ];
 
+GUIDES.push(
+  G(
+    'backgrounds-3d',
+    'Backgrounds & comics',
+    '3D materials for backgrounds',
+    'Clip Studio’s 3D rooms, buildings and props give you any camera angle for a background, as a guide to draw over.',
+    [
+      'Material palette → 3D → Background (or search Clip Studio Assets for “classroom”, “street”).',
+      'Drag it onto the canvas; move the camera until the composition works and match the lens (wider for interiors).',
+      'Lower the 3D layer’s opacity and draw your own lines on a layer above; use it as perspective, not as the final picture.',
+      'Layer property → Extract line (LT conversion, EX) turns a 3D scene into line art, useful for checking.',
+    ],
+    ['Leaving the 3D render in the final piece: it looks stiff next to hand-drawn characters.', 'A camera lens that doesn’t match your character’s perspective.'],
+    [{ title: '3D background tutorials', url: tips('3d background material camera') }],
+  ),
+  G(
+    'frames',
+    'Backgrounds & comics',
+    'Manga panels with frame borders',
+    'Frame border folders crop each panel automatically, so drawing past the edges is safe.',
+    [
+      'File → New → Comic (or a manga template) for page size, bleed and safe area.',
+      'Layer → New layer → Frame border folder; then the Divide frame folder tool to split panels.',
+      'Draw inside each panel folder; anything outside is masked.',
+      'Adjust gutters in the tool property before dividing.',
+    ],
+    ['Art crossing panel borders by accident.', 'Text placed in the bleed area.'],
+    [{ title: 'Frame border tutorials', url: tips('frame border divide comic page') }],
+  ),
+  G(
+    'tones',
+    'Backgrounds & comics',
+    'Screentone',
+    'Tone gives manga its greys while staying printable in black and white.',
+    [
+      'Select the area (fill tool or lasso), then Layer → New layer → Tone, or drag a tone from the Material palette.',
+      'Layer property: set the line frequency (55–65 lpi is typical) and density.',
+      'Use a gradient tone for skies and lighting; erase on the tone layer for highlights.',
+    ],
+    ['Many different tone frequencies on one page (moiré in print).'],
+    [{ title: 'Screentone tutorials', url: tips('screentone tone layer manga') }],
+  ),
+  G(
+    'balloons',
+    'Backgrounds & comics',
+    'Speech bubbles and text',
+    'Balloons and text on their own layers keep lettering editable and translations easy.',
+    [
+      'Text tool: click to type; set font and size in Tool property.',
+      'Balloon tool: drag around the text; the Balloon tail sub tool adds a tail pointing at the speaker.',
+      'Keep all text in one folder at the top of the layer stack.',
+    ],
+    ['Hand-lettering on the art layer (no edits later).'],
+    [{ title: 'Balloon tutorials', url: tips('speech balloon text tool') }],
+  ),
+  G(
+    'effects',
+    'Colour & light',
+    'Blur, glow and depth effects',
+    'Depth of field and glow make key visuals and effects feel cinematic.',
+    [
+      'Filter → Blur → Gaussian blur for soft glow copies; set the copy to Add (Glow) or Screen.',
+      'Filter → Blur → Lens blur (Ver. 4.0+) for camera-like depth of field on foreground and far background.',
+      'Filter → Blur → Motion blur for speed lines and rain.',
+      'Keep effects on separate layers or folders so you can tone them down.',
+    ],
+    ['Blurring the character’s face.', 'Glow everywhere: contrast disappears.'],
+    [{ title: 'Effects tutorials', url: tips('glow effect blur filter') }],
+  ),
+);
+
 const GUIDE = new Map(GUIDES.map((g) => [g.id, g]));
-const GROUPS = ['Set up', 'Lines', 'Structure & reference', 'Colour & light'];
+const GROUPS = ['Set up', 'Lines', 'Structure & reference', 'Colour & light', 'Backgrounds & comics'];
 
 module.exports = { GUIDES, GUIDE, GROUPS, help };

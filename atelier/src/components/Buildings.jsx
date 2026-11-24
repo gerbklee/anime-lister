@@ -196,6 +196,41 @@ export const BUILDINGS = {
     <circle key="bell" cx={I.P(1, 1.35, 48)[0]} cy={I.P(1, 1.35, 48)[1]} r={3.5 * I.k} fill="#d9a83a" />,
     ...I.pyramid(0.6, 0.6, 0.8, 0.8, 60, 22, ROOF),
   ],
+  teahouse: (I, { night }) => [
+    ...I.box(0.15, 0.25, 1.7, 1.5, 3, '#c9b48f'),
+    ...I.box(0.3, 0.4, 1.4, 1.2, 18, '#f3e6cc', 3),
+    ...[0.45, 0.85, 1.25].map((u) => I.winL(u, u + 0.3, 1.6, 6, 16, night ? '#ffd77a' : '#e9dcc0')).flat(),
+    I.winR(1.7, 0.6, 1.3, 6, 16, night ? '#ffd77a' : '#d9cba8'),
+    ...I.gable(0.3, 0.4, 1.4, 1.2, 21, 9, '#5a6e5a', 0.28),
+    ...I.box(1.55, 1.75, 0.12, 0.12, 10, '#9a2f2a'),
+    <circle key="lantern" cx={I.P(1.61, 1.81, 11)[0]} cy={I.P(1.61, 1.81, 11)[1]} r={3 * I.k} fill={night ? '#ffcf5a' : '#e8643a'} />,
+  ],
+  lighthouse: (I, { night }) => {
+    const [lx, ly] = I.P(1, 1, 70);
+    const k = I.k;
+    return [
+      ...I.box(0.45, 0.45, 1.1, 1.1, 6, STONE),
+      ...I.cylinder(1, 1, 0.34, 64, '#fbf6ea', 6),
+      ...[20, 42].map((z) => I.cylinder(1, 1, 0.345, 7, '#d9463a', z)).flat(),
+      night && <circle key="beam" cx={lx} cy={ly} r={46 * k} fill="url(#glow)" />,
+      ...I.cylinder(1, 1, 0.26, 9, night ? '#ffe08a' : '#bfe3f3', 70),
+      ...I.cone(1, 1, 0.34, 79, 12, '#3b4a5a'),
+    ];
+  },
+  pagoda: (I, { night }) => {
+    const out = [];
+    [0, 1, 2, 3].forEach((i) => {
+      const inset = 0.32 + i * 0.12;
+      const w = 2 - inset * 2;
+      const z = i * 20;
+      out.push(...I.box(inset + 0.1, inset + 0.1, w - 0.2, w - 0.2, 14, '#c2453a', z));
+      out.push(I.winL(1 - 0.12, 1 + 0.12, 2 - inset - 0.1, z + 3, z + 11, night ? '#ffd77a' : '#4a2a26'));
+      out.push(...I.pyramid(inset - 0.12, inset - 0.12, w + 0.24, w + 0.24, z + 14, 6, '#3d4a52'));
+    });
+    const [sx, sy] = I.P(1, 1, 86);
+    out.push(<path key="spire" d={`M${sx} ${sy} V${sy - 14 * I.k}`} stroke="#d9a83a" strokeWidth={1.6 * I.k} />);
+    return out;
+  },
   museum: (I, { night }) => {
     const [dx, dy] = I.P(1, 1, 30);
     const k = I.k;
@@ -211,4 +246,59 @@ export const BUILDINGS = {
       <circle key="domeT" cx={dx} cy={dy - r * 0.9 - 2 * k} r={2 * k} fill="#d9a83a" />,
     ];
   },
+};
+
+// Milestone landmarks, each on a single tile (u, v in 0..1). `tier` makes
+// higher tiers a little grander.
+export const LANDMARKS = {
+  toro: (I, { night, tier }) => {
+    const [x, y] = I.P(0.5, 0.5, 20 + tier);
+    return [
+      ...I.box(0.36, 0.36, 0.28, 0.28, 3, STONE),
+      ...I.box(0.44, 0.44, 0.12, 0.12, 10 + tier, '#a8a196', 3),
+      ...I.box(0.34, 0.34, 0.32, 0.32, 7, '#c9c2b6', 13 + tier),
+      <rect key="light" x={x - 2.5 * I.k} y={y + 1 * I.k} width={5 * I.k} height={4 * I.k} fill={night ? '#ffd77a' : '#6e665c'} />,
+      ...I.pyramid(0.3, 0.3, 0.4, 0.4, 20 + tier, 7, '#8f887c'),
+      night && <circle key="glow" cx={x} cy={y + 3 * I.k} r={14 * I.k} fill="url(#glow)" />,
+    ];
+  },
+  statue: (I, { tier }) => {
+    const [x, y] = I.P(0.5, 0.5, 14);
+    const k = I.k;
+    const gold = tier >= 3;
+    return [
+      ...I.box(0.3, 0.3, 0.4, 0.4, 12, '#d9d2c4'),
+      <g key="fig" transform={`translate(${x} ${y}) scale(${k})`}>
+        <path d="M-3 0 L-2 -12 L2 -12 L3 0 Z" fill={gold ? '#e0b04a' : '#b9b2a6'} />
+        <circle cy="-15" r="3" fill={gold ? '#e8c060' : '#c9c2b6'} />
+        <path d="M2 -11 L7 -18" stroke={gold ? '#e0b04a' : '#b9b2a6'} strokeWidth="1.6" strokeLinecap="round" />
+        <rect x="6" y="-22" width="4" height="5" fill={gold ? '#f0d080' : '#d9d2c4'} />
+      </g>,
+    ];
+  },
+  torii: (I, { tier }) => {
+    const red = '#d9412f';
+    return [
+      ...I.box(0.18, 0.46, 0.08, 0.08, 30 + tier * 2, red),
+      ...I.box(0.74, 0.46, 0.08, 0.08, 30 + tier * 2, red),
+      ...I.box(0.1, 0.44, 0.8, 0.12, 3, red, 22 + tier * 2),
+      ...I.box(0.04, 0.42, 0.92, 0.16, 4, '#2e2a2a', 30 + tier * 2),
+    ];
+  },
+  fountain: (I, { tier }) => {
+    const [x, y] = I.P(0.5, 0.5, 6);
+    const k = I.k;
+    return [
+      ...I.cylinder(0.5, 0.5, 0.42, 6, STONE),
+      <ellipse key="water" cx={x} cy={y} rx={0.36 * 24 * k * 1.414} ry={0.18 * 24 * k * 1.414} fill="#5fb0e8" />,
+      ...I.cylinder(0.5, 0.5, 0.08, 10 + tier * 2, '#d9d2c4', 6),
+      <path key="jet" className="w-twinkle" d={`M${x} ${y - (16 + tier * 2) * k} q ${-6 * k} ${4 * k} ${-9 * k} ${12 * k} M${x} ${y - (16 + tier * 2) * k} q ${6 * k} ${4 * k} ${9 * k} ${12 * k}`} stroke="#bfe6fb" strokeWidth={1.4 * k} fill="none" />,
+    ];
+  },
+  shrine: (I, { night }) => [
+    ...I.box(0.2, 0.25, 0.6, 0.5, 3, STONE),
+    ...I.box(0.28, 0.32, 0.44, 0.36, 12, '#c2453a', 3),
+    I.winL(0.42, 0.58, 0.68, 3, 11, night ? '#ffd77a' : '#4a2a26'),
+    ...I.gable(0.28, 0.32, 0.44, 0.36, 15, 8, '#3d4a52', 0.12),
+  ],
 };
