@@ -35,7 +35,7 @@ export default function Guide({ g, open: initial = false, showLessons = false })
           )}
           <div className="row small" style={{ gap: 14 }}>
             {g.links.map((l) => (
-              <a key={l.url} href={l.url} target="_blank" rel="noreferrer">
+              <a key={l.url} href={l.url} {...(l.url.startsWith("#") ? {} : { target: "_blank", rel: "noreferrer" })}>
                 {l.title} ↗
               </a>
             ))}

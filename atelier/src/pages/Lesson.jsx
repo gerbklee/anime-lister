@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useApp } from '../App.jsx';
 import Exercise from '../components/Exercise.jsx';
 import Guide from '../components/Guide.jsx';
+import BrushCard from '../components/BrushCard.jsx';
 import Media from '../components/Media.jsx';
 
 // Retrieval before new material: try to remember the last lesson first.
@@ -146,6 +147,23 @@ export default function Lesson({ id }) {
             Clip Studio tutorials on this ↗
           </a>
         </div>
+      )}
+
+      {data.brushes?.length > 0 && (
+        <section className="section">
+          <div className="row" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>{lesson.id === 's0-brushes' ? 'The whole kit' : 'Brushes for this lesson'}</h3>
+            <a className="small" href="#/brushes">
+              {lesson.id === 's0-brushes' ? 'Kit page' : 'The whole kit'}
+            </a>
+          </div>
+          {lesson.id === 's0-brushes' && <p className="small muted">The three marked “new” are your Stage 0 kit: set them up now. The rest open later, with the stage that teaches them; read them once to see where the path goes.</p>}
+          <div style={{ display: 'grid', gap: 8 }}>
+            {data.brushes.map((b) => (
+              <BrushCard key={b.id} b={b} open={lesson.id === 's0-brushes' && b.isNew} showStages={lesson.id === 's0-brushes'} />
+            ))}
+          </div>
+        </section>
       )}
 
       {data.guides?.length > 0 && (

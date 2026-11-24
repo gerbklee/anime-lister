@@ -1487,3 +1487,16 @@ table.data th {
   height: 100%;
   pointer-events: none;
 }
+
+/* ---- Brush kit ------------------------------------------------------------ */
+.brush-icon {
+  font-size: 1.1rem;
+  font-weight: 400;
+}
+.brush-h {
+  margin: 12px 0 6px;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

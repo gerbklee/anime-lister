@@ -15,6 +15,15 @@ export default function Handbook() {
       <p className="muted">
         Everything in CSP you need to draw anime, from canvas setup to cel shading. Each lesson shows the guides it needs; here they are all in one place. Learn a tool when a lesson needs it, not before: the drawing is the skill, the software is the pencil.
       </p>
+      <a className="lesson-row section" href="#/brushes" style={{ display: 'flex' }}>
+        <span style={{ fontSize: 20 }}>🖌</span>
+        <span style={{ flex: 1 }}>
+          <strong>Your brush kit</strong>
+          <br />
+          <span className="small muted">Every brush the path uses, with links, settings and what each one is for.</span>
+        </span>
+        <span className="muted">→</span>
+      </a>
       {!data ? (
         <p className="muted">Loading…</p>
       ) : (

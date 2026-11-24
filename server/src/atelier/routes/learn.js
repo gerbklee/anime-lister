@@ -75,6 +75,7 @@ router.get('/atelier/lessons/:id', (req, res) => {
     locked: core.lessonAccess(req.user.id, lesson, allState, prog) === "future",
     read: !!state?.read_at && core.lessonAccess(req.user.id, lesson, allState, prog) !== "future",
     guides: lesson.cspGuides.map((g) => C.CSP_GUIDE.get(g)).filter(Boolean),
+    brushes: C.KIT.kitFor(lesson, { stageOf: lesson.unit ? C.ADULT_UNITS.find((u) => u.id === lesson.unit)?.opensWith : null }),
     prev: order[i - 1]?.id ?? null,
     next: order[i + 1]?.id ?? null,
   });
@@ -140,6 +141,20 @@ router.get('/atelier/csp', (req, res) => {
   const prof = core.profile(req.user.id);
   const visible = C.LESSONS.filter((l) => !l.unit || prof.adultTrack);
   res.json({ groups: C.CSP_GROUPS, guides: C.CSP_GUIDES.map((g) => ({ ...g, lessons: visible.filter((l) => l.cspGuides.includes(g.id)).map((l) => ({ id: l.id, title: l.title })) })) });
+});
+
+// The brush kit for the whole path, with the stages and tracks that use each brush.
+router.get('/atelier/brushes', (req, res) => {
+  const K = C.KIT;
+  res.json({
+    slots: K.SLOTS,
+    assetsHome: K.ASSETS_HOME,
+    brushes: K.BRUSHES.map((b) => ({
+      ...b,
+      stages: Object.entries(K.STAGE_KIT).filter(([, ids]) => ids.includes(b.id)).map(([s]) => Number(s)),
+      tracks: Object.entries(K.TRACK_KIT).filter(([, ids]) => ids.includes(b.id)).map(([t]) => C.TRACKS.find((x) => x.id === t)?.title ?? t),
+    })),
+  });
 });
 
 router.get('/atelier/brief', (req, res) => res.json({ brief: C.BRIEFS[Math.floor(Math.random() * C.BRIEFS.length)] }));

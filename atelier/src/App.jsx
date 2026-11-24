@@ -17,6 +17,7 @@ import Method from './pages/Method.jsx';
 import Portfolio from './pages/Portfolio.jsx';
 import { Project, Projects } from './pages/Projects.jsx';
 import Compare from './pages/Compare.jsx';
+import Brushes from './pages/Brushes.jsx';
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -185,6 +186,9 @@ export default function App() {
     case 'clip-studio':
       body = <Handbook />;
       break;
+    case 'brushes':
+      body = <Brushes />;
+      break;
     case 'method':
       body = <Method />;
       break;
@@ -204,7 +208,7 @@ export default function App() {
       body = <Home />;
   }
 
-  const active = ['projects', 'project'].includes(page) ? 'sketchbook' : ['portfolio', 'compare'].includes(page) ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
+  const active = ['projects', 'project'].includes(page) ? 'sketchbook' : ['portfolio', 'compare'].includes(page) ? 'progress' : ['lesson', 'clip-studio', 'method', 'brushes'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
 
   return (
     <AppContext.Provider value={ctx}>

@@ -14,7 +14,7 @@ test('a new user starts at the first lesson, with details and a 14-stage path', 
   const path = await u.call('GET', '/api/atelier/path');
   assert.equal(path.status, 200);
   assert.equal(path.data.stages.length, 14);
-  assert.equal(path.data.currentLesson, 's0-how');
+  assert.equal(path.data.currentLesson, 's0-brushes');
   assert.equal(path.data.tracks.length, 4);
   const lesson = await u.call('GET', '/api/atelier/lessons/s0-tablet');
   assert.ok(lesson.data.lesson.method.length > 3);
@@ -30,8 +30,12 @@ test('lessons go strictly in order', async () => {
   assert.equal((await u.call('POST', '/api/atelier/lessons/s0-tablet/done')).status, 409, 'cannot finish a later lesson');
   assert.equal((await u.call('POST', '/api/atelier/exercises/done', { lessonId: 's1-lines', exerciseId: 'ghosted' })).status, 409, 'cannot practise a later lesson');
   assert.equal((await u.call('POST', '/api/atelier/lessons/s1-lines/done', { force: true })).status, 409, 'force does not skip');
-  await u.call('POST', '/api/atelier/lessons/s0-how/read');
-  assert.equal((await u.call('GET', '/api/atelier/lessons/s0-how')).data.access, 'current');
+  await u.call('POST', '/api/atelier/lessons/s0-brushes/read');
+  assert.equal((await u.call('GET', '/api/atelier/lessons/s0-brushes')).data.access, 'current');
+  assert.equal((await u.call('POST', '/api/atelier/lessons/s0-brushes/done')).status, 409, 'its exercises come first');
+  await u.call('POST', '/api/atelier/exercises/done', { lessonId: 's0-brushes', exerciseId: 'kit-setup' });
+  await u.call('POST', '/api/atelier/exercises/done', { lessonId: 's0-brushes', exerciseId: 'test-sheet' });
+  assert.equal((await u.call('POST', '/api/atelier/lessons/s0-brushes/done')).status, 200);
   assert.equal((await u.call('POST', '/api/atelier/lessons/s0-how/done')).status, 200);
 });
 
@@ -43,6 +47,9 @@ test('sessions count once per day, stages need their hours, then the next stage 
   const sessions = (lesson, ex, n) => {
     for (let d = 1; d <= n; d++) ins.run(uid, lesson, ex, Date.now() - d * 86400000);
   };
+  sessions('s0-brushes', 'kit-setup', 1);
+  sessions('s0-brushes', 'test-sheet', 1);
+  assert.equal((await u.call('POST', '/api/atelier/lessons/s0-brushes/done')).status, 200);
   assert.equal((await u.call('POST', '/api/atelier/lessons/s0-how/done')).status, 200);
   const refused = await u.call('POST', '/api/atelier/lessons/s0-csp/done');
   assert.equal(refused.status, 409);
@@ -76,6 +83,8 @@ test('sessions count once per day, stages need their hours, then the next stage 
 
 test('today: every planned task links to its lesson and ends with open free time', async () => {
   const u = await user(server, 'today');
+  for (const exerciseId of ['kit-setup', 'test-sheet']) await u.call('POST', '/api/atelier/exercises/done', { lessonId: 's0-brushes', exerciseId });
+  await u.call('POST', '/api/atelier/lessons/s0-brushes/done');
   await u.call('POST', '/api/atelier/lessons/s0-how/done');
   const t = await u.call('GET', '/api/atelier/today');
   const last = t.data.parts[t.data.parts.length - 1];
@@ -91,4 +100,19 @@ test('tracks are readable but locked before their stage', async () => {
   assert.equal(l.data.locked, true);
   assert.equal(l.data.track.id, 'design');
   assert.equal((await u.call('POST', '/api/atelier/exercises/done', { lessonId: 'cd-silhouette', exerciseId: 'sil-sheet' })).status, 409);
+});
+
+test('the brush kit: whole kit in the first lesson, a stage’s part in later ones', async () => {
+  const u = await user(server, 'brushes');
+  const first = await u.call('GET', '/api/atelier/lessons/s0-brushes');
+  assert.ok(first.data.brushes.length >= 12, 'the first lesson shows the whole kit');
+  assert.deepEqual(first.data.brushes.filter((b) => b.isNew).map((b) => b.id), ['su-cream', 'g-pen', 'erasers']);
+  for (const b of first.data.brushes) assert.ok(b.use && b.setup.length && b.how.length && b.where, `${b.id} is explained`);
+  assert.ok(first.data.brushes.filter((b) => b.asset).every((b) => /^https:\/\/assets\.clip-studio\.com\/en-us\/detail\?id=\d+$/.test(b.asset.url)));
+  const face = await u.call('GET', '/api/atelier/lessons/s4-head');
+  assert.ok(face.data.brushes.some((b) => b.id === 'anime-gpen' && b.isNew), 'the anime line pen opens with faces');
+  const manga = (await u.call('GET', '/api/atelier/path')).data.tracks.find((t) => t.id === 'manga');
+  const kit = await u.call('GET', '/api/atelier/brushes');
+  assert.ok(kit.data.brushes.find((b) => b.id === 'manga-tools').tracks.includes(manga.title));
+  assert.deepEqual(kit.data.brushes.find((b) => b.id === 'su-cream').stages.slice(0, 2), [0, 1]);
 });

@@ -44,6 +44,7 @@ const BRIEFS = [
 // Clip Studio guides each lesson uses (shown with the lesson, in order).
 const CSP = require('./csp');
 const LESSON_GUIDES = {
+  's0-brushes': ['brushes', 'pressure', 'shortcuts'],
   's0-how': ['checking'],
   's0-csp': ['setup-canvas', 'layers', 'brushes', 'shortcuts'],
   's0-tablet': ['pressure', 'shortcuts'],
@@ -193,4 +194,4 @@ for (const l of LESSONS) {
 if (LESSON.size !== LESSONS.length) throw new Error('Duplicate lesson ids');
 for (const w of WARMUPS) if (!LESSON.has(w.lesson)) throw new Error(`Warm-up ${w.id}: unknown lesson ${w.lesson}`);
 
-module.exports = { AREAS, AREA, STAGES, ADULT_UNITS, SKILL_CHECK, LESSONS, LESSON, MAIN, ADULT, TRACKS, TRACK_LESSONS, MAIN_ORDER, WARMUPS, BRIEFS, CSP_GUIDES: CSP.GUIDES, CSP_GUIDE: CSP.GUIDE, CSP_GROUPS: CSP.GROUPS };
+module.exports = { AREAS, AREA, STAGES, ADULT_UNITS, SKILL_CHECK, LESSONS, LESSON, MAIN, ADULT, TRACKS, TRACK_LESSONS, MAIN_ORDER, WARMUPS, BRIEFS, CSP_GUIDES: CSP.GUIDES, CSP_GUIDE: CSP.GUIDE, CSP_GROUPS: CSP.GROUPS, KIT: require('./brushes') };

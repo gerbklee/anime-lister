@@ -90,6 +90,7 @@ export const api = {
   brief: () => request('GET', '/api/atelier/brief'),
   characters: () => request('GET', '/api/atelier/characters'),
   csp: () => request('GET', '/api/atelier/csp'),
+  brushes: () => request('GET', '/api/atelier/brushes'),
   lessonMedia: (id) => request('GET', `/api/atelier/lessons/${encodeURIComponent(id)}/media`),
 
   drawings: () => request('GET', '/api/atelier/drawings'),

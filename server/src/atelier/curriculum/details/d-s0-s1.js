@@ -22,7 +22,7 @@ module.exports = {
   's0-csp': {
     method: [
       'Create the canvas and save it as a template (File → Save as template).',
-      'Pick exactly two brushes: Real pencil for sketching, G-pen for lines.',
+      'Use exactly the two kit brushes: SU-Cream Pencil for sketching, G-pen for lines.',
       'Set the Flip horizontally shortcut and test it.',
       'Make three layers: Sketch (30% opacity, blue), Lines, Colour.',
       'Practise the sketch-then-clean-lines workflow once on something simple.',
@@ -36,13 +36,13 @@ module.exports = {
         sessions: 1,
         steps: [
           'File → New → Illustration: 3000 × 2000 px, 300 dpi. Save it as your practice template.',
-          'In the Tool palette choose Pencil → Real pencil and Pen → G-pen; drag both into Quick Access.',
+          'Pick SU-Cream Pencil and the G-pen from Quick Access (set up in “Your brush kit”).',
           'File → Shortcut settings → View menu → Flip horizontally: assign H.',
           'Create layers “Sketch”, “Lines”, “Colour”; set Sketch to 30% opacity and blue layer colour.',
           'Sketch a simple object (a mug) for 2 minutes on Sketch, then draw clean lines over it on Lines.',
         ],
         success: ['You can switch between the two brushes without searching', 'H flips the canvas', 'Your clean lines are on their own layer above a faint blue sketch'],
-        example: 'A finished setup page: a loose blue pencil sketch of a mug at low opacity, and on top a single clean G-pen outline of the mug with a handle. Three layers named Sketch, Lines, Colour in the Layer palette.',
+        example: 'A finished setup page: a loose blue SU-Cream Pencil sketch of a mug at low opacity, and on top a single clean G-pen outline of the mug with a handle. Three layers named Sketch, Lines, Colour in the Layer palette.',
         search: 'clip studio paint sketch layer blue lineart layer',
       },
     },
