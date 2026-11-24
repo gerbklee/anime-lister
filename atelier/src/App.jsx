@@ -3,6 +3,8 @@ import { api, hubUrl } from './api.js';
 import { TimerMini, TimerProvider } from './components/Timer.jsx';
 import { MusicProvider } from './components/Music.jsx';
 import UploadStatus from './components/UploadStatus.jsx';
+import LevelUp from './components/LevelUp.jsx';
+import Skills from './pages/Skills.jsx';
 import Home from './pages/Home.jsx';
 import Today from './pages/Today.jsx';
 import PathPage from './pages/Path.jsx';
@@ -101,6 +103,7 @@ const NAV = [
   ['path', 'Path'],
   ['sketchbook', 'Sketchbook'],
   ['progress', 'Progress'],
+  ['skills', 'Skills'],
 ];
 
 export default function App() {
@@ -186,6 +189,9 @@ export default function App() {
     case 'clip-studio':
       body = <Handbook />;
       break;
+    case 'skills':
+      body = <Skills key={version} />;
+      break;
     case 'brushes':
       body = <Brushes />;
       break;
@@ -243,6 +249,7 @@ export default function App() {
         {page !== '' && <TimerMini />}
         {toast && <div className="toast">{toast}</div>}
         <UploadStatus />
+        <LevelUp userId={user.id} version={version} />
       </TimerProvider>
       </MusicProvider>
     </AppContext.Provider>

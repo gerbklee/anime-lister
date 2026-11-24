@@ -192,15 +192,8 @@ function pickLayers(info, max) {
   return picks.slice(0, max);
 }
 
-// A critique from Claude, within your monthly cap. Body: { level: 'quick'|'standard'|'full' }.
-router.post('/atelier/drawings/:id/critique', wrap(async (req, res) => {
-  const d = ownDrawing(parseId(req.params.id), req.user.id);
-  if (!crit.available()) throw new HttpError(503, 'Critiques need an Anthropic API key on the server (ANTHROPIC_API_KEY).');
-  if (!d.file) throw new HttpError(400, 'Upload your drawing first');
-  const level = crit.LEVELS[req.body?.level] ? req.body.level : crit.defaultLevel(d.kind);
-  const prof = core.profile(req.user.id);
-  const spent = crit.spentThisMonth(req.user.id);
-  if (spent >= prof.critiqueCap / 100) throw new HttpError(402, `This month’s critique budget ($${(prof.critiqueCap / 100).toFixed(2)}) is used up. Raise it in Settings if you like.`);
+// The files a critique looks at: the drawing, its reference and key layers.
+async function critiqueInput(d, level) {
   const files = { drawing: await fs.promises.readFile(path.join(DRAW_DIR, d.file)) };
   if (d.reference_file) files.reference = await fs.promises.readFile(path.join(REF_DIR, d.reference_file)).catch(() => undefined);
   const clip = clipInfoOf(d);
@@ -215,16 +208,76 @@ router.post('/atelier/drawings/:id/critique', wrap(async (req, res) => {
   } catch {
     // ignore
   }
+  return { files, opts: { selfScores, level, clip } };
+}
+const levelOf = (d, wanted) => (crit.LEVELS[wanted] ? wanted : crit.defaultLevel(d.kind));
+// A critique was saved: weak scores bring the skill back tomorrow.
+function afterCritique(userId, d, result) {
+  const vals = Object.values(result.scores ?? {});
+  if (vals.length && d.skill && vals.reduce((a, b) => a + b, 0) / vals.length <= 2.5) core.flagWeak(userId, d.skill);
+}
+
+// A critique from Claude, within your monthly cap. Body: { level: 'quick'|'standard'|'full' }.
+router.post('/atelier/drawings/:id/critique', wrap(async (req, res) => {
+  const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (!crit.available()) throw new HttpError(503, 'Critiques need an Anthropic API key on the server (ANTHROPIC_API_KEY).');
+  if (!d.file) throw new HttpError(400, 'Upload your drawing first');
+  const level = levelOf(d, req.body?.level);
+  const prof = core.profile(req.user.id);
+  const spent = crit.spentThisMonth(req.user.id);
+  if (spent >= prof.critiqueCap / 100) throw new HttpError(402, `This month’s critique budget ($${(prof.critiqueCap / 100).toFixed(2)}) is used up. Raise it in Settings if you like.`);
+  const { files, opts } = await critiqueInput(d, level);
   let out;
   try {
-    out = await crit.critique(d, files, { selfScores, level, clip });
+    out = await crit.critique(d, files, opts);
   } catch (err) {
     throw new HttpError(502, `The critique didn’t work: ${err.message}`);
   }
   q.setCritique.run(JSON.stringify(out.result), out.cost, d.id);
-  // Weak scores bring the skill back tomorrow.
-  const vals = Object.values(out.result.scores ?? {});
-  if (vals.length && d.skill && vals.reduce((a, b) => a + b, 0) / vals.length <= 2.5) core.flagWeak(req.user.id, d.skill);
+  afterCritique(req.user.id, d, out.result);
+  res.json(drawingView(q.drawing.get(d.id), req.user.id, usersById()));
+}));
+
+// Critique in Claude.ai with your own subscription: the prompt to paste, and
+// the images to attach (?level=quick|standard|full).
+router.get('/atelier/drawings/:id/critique/manual', wrap(async (req, res) => {
+  const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (!d.file) throw new HttpError(400, 'Upload your drawing first');
+  const level = levelOf(d, req.query.level);
+  const { files, opts } = await critiqueInput(d, level);
+  const m = await crit.manualPrompt(d, files, opts);
+  res.json({
+    level: m.level,
+    prompt: m.prompt,
+    images: m.images.map((img, i) => ({ label: img.label, url: `/api/atelier/drawings/${d.id}/critique/manual/${i}.jpg?level=${m.level}`, name: `atelier-${d.id}-${i + 1}.jpg` })),
+  });
+}));
+router.get('/atelier/drawings/:id/critique/manual/:n.jpg', wrap(async (req, res) => {
+  const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (!d.file) throw new HttpError(400, 'Upload your drawing first');
+  const level = levelOf(d, req.query.level);
+  const { files, opts } = await critiqueInput(d, level);
+  const m = await crit.manualPrompt(d, files, opts);
+  const img = m.images[Number(req.params.n)];
+  if (!img) throw new HttpError(404, 'No such image');
+  res.set('Cache-Control', 'private, no-store').type('image/jpeg').send(img.buf);
+}));
+// Body: { level, text } where text is Claude.ai's answer.
+router.post('/atelier/drawings/:id/critique/manual', wrap(async (req, res) => {
+  const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (!d.file) throw new HttpError(400, 'Upload your drawing first');
+  const text = typeof req.body?.text === 'string' ? req.body.text : '';
+  if (text.length > 200000) throw new HttpError(413, 'That answer is too long.');
+  const level = levelOf(d, req.body?.level);
+  const { files, opts } = await critiqueInput(d, level);
+  let result;
+  try {
+    result = await crit.manualResult(d, files, opts, text);
+  } catch (err) {
+    throw new HttpError(400, err.message);
+  }
+  q.setCritique.run(JSON.stringify(result), 0, d.id);
+  afterCritique(req.user.id, d, result);
   res.json(drawingView(q.drawing.get(d.id), req.user.id, usersById()));
 }));
 

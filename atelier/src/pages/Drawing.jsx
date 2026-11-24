@@ -3,6 +3,8 @@ import { api, psdUrl } from '../api.js';
 import { useApp } from '../App.jsx';
 import { useTimer } from '../components/Timer.jsx';
 import { kindLabel } from '../components/Exercise.jsx';
+import { GOAL, rankName } from '../components/ranks.js';
+import ManualCritique from '../components/ManualCritique.jsx';
 
 const EMOJIS = ['❤️', '😂', '😮', '😳', '🔥'];
 
@@ -52,7 +54,7 @@ function Rubric({ criteria, value, onSave, locked }) {
   );
 }
 
-function CritiqueView({ c, criteria, self }) {
+function CritiqueView({ c, criteria, self, areaNames }) {
   if (c.refused) return <p className="muted">{c.message}</p>;
   return (
     <div style={{ display: 'grid', gap: 14 }}>
@@ -77,6 +79,52 @@ function CritiqueView({ c, criteria, self }) {
               </li>
             ))}
           </ol>
+        </div>
+      )}
+      {c.marks?.some((m) => m.note) && (
+        <div>
+          <strong className="small">Marked on your drawing</strong>
+          <ul className="small" style={{ paddingLeft: 20, margin: '4px 0 0' }}>
+            {c.marks
+              .filter((m) => m.note)
+              .map((m, i) => (
+                <li key={i} style={{ marginBottom: 3 }}>
+                  <span className={`chip ${m.severity === 'minor' ? '' : 'accent'}`} style={{ marginRight: 6 }}>
+                    {m.severity === 'minor' ? 'minor' : 'major'}
+                    {m.fix >= 0 ? ` · fix ${m.fix + 1}` : ''}
+                  </span>
+                  {m.note}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+      {c.industry?.length > 0 && (
+        <div className="card" style={{ padding: 14, background: 'var(--paper)' }}>
+          <strong className="small">Industry level (against published professional work)</strong>
+          <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
+            {c.industry.map((r) => (
+              <div key={r.area} className="industry-row">
+                <span className="small">
+                  <strong>{areaNames?.[r.area] ?? r.area}</strong>
+                  <br />
+                  <span className="tiny muted">
+                    Lv {r.level} · {rankName(r.level)}
+                  </span>
+                </span>
+                <span>
+                  <span className="level-bar" aria-hidden="true">
+                    <span style={{ width: `${r.level * 10}%` }} />
+                    <i className="goal" style={{ left: `${GOAL * 10}%` }} />
+                  </span>
+                  <span className="tiny muted">{r.why}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ margin: '8px 0 0' }}>
+            {c.source === 'claude.ai' ? 'From Claude.ai: shown here, but it doesn’t count as proof for your skill levels.' : 'Counts as proof for your skill levels.'} The line marks Lv {GOAL}, Industry pro.
+          </p>
         </div>
       )}
       {c.process && (
@@ -153,7 +201,7 @@ function LevelPicker({ level, setLevel, hasClip }) {
 }
 
 export default function Drawing({ id }) {
-  const { areas, critiqueInfo, refreshProfile, toast, query } = useApp();
+  const { areas, critiqueInfo, refreshProfile, toast, query, bump } = useApp();
   const timer = useTimer();
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
@@ -209,6 +257,7 @@ export default function Drawing({ id }) {
     try {
       setD(await api.critique(d.id, chosenLevel));
       refreshProfile();
+      bump();
     } catch (e) {
       toast(e.message);
     }
@@ -353,17 +402,35 @@ export default function Drawing({ id }) {
                       </defs>
                       {marks.map((m, i) => {
                         const [a, b] = m.points;
+                        const colour = m.severity === 'minor' ? '#e8a33a' : '#e8463a';
+                        if (m.kind === 'region') {
+                          const x = Math.min(a.x, b.x) * 100;
+                          const y = Math.min(a.y, b.y) * 100;
+                          return (
+                            <rect key={i} className="mark-region" x={x} y={y} width={Math.max(1, Math.abs(b.x - a.x) * 100)} height={Math.max(1, Math.abs(b.y - a.y) * 100)} rx="1" fill={colour} fillOpacity="0.16" stroke={colour} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeDasharray={m.severity === 'minor' ? '5 3' : undefined}>
+                              <title>{m.note}</title>
+                            </rect>
+                          );
+                        }
                         if (m.kind === 'circle') {
                           const r = Math.hypot((b.x - a.x) * 100, (b.y - a.y) * 100);
-                          return <ellipse key={i} cx={a.x * 100} cy={a.y * 100} rx={r} ry={r} fill="none" stroke="#e8463a" strokeWidth="0.6" vectorEffect="non-scaling-stroke" strokeDasharray="2 1"><title>{m.note}</title></ellipse>;
+                          return <ellipse key={i} cx={a.x * 100} cy={a.y * 100} rx={r} ry={r} fill="none" stroke={colour} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeDasharray="4 2"><title>{m.note}</title></ellipse>;
                         }
                         return (
-                          <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke="#e8463a" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" markerEnd={m.kind === 'arrow' ? 'url(#arrowhead)' : undefined}>
+                          <line key={i} x1={a.x * 100} y1={a.y * 100} x2={b.x * 100} y2={b.y * 100} stroke={colour} strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinecap="round" markerEnd={m.kind === 'arrow' ? 'url(#arrowhead)' : undefined}>
                             <title>{m.note}</title>
                           </line>
                         );
                       })}
                     </svg>
+                  )}
+                  {marks.map((m, i) =>
+                    m.kind === 'region' ? (
+                      <span key={`t${i}`} className={`region-tag ${m.severity}`} style={{ left: `${Math.min(m.points[0].x, m.points[1].x) * 100}%`, top: `${Math.min(m.points[0].y, m.points[1].y) * 100}%`, transform: flip ? 'scaleX(-1)' : undefined }} title={m.note}>
+                        {m.fix >= 0 ? m.fix + 1 : '!'}
+                        {m.note ? ` · ${m.note}` : ''}
+                      </span>
+                    ) : null,
                   )}
                   {!layerShown && pins.map((f, i) => (
                     <span key={i} className="pin" style={{ left: `${f.x * 100}%`, top: `${f.y * 100}%`, transform: `translate(-50%, -50%)${flip ? ' scaleX(-1)' : ''}` }} title={f.title}>
@@ -476,9 +543,9 @@ export default function Drawing({ id }) {
             <div className="kicker">Step 2</div>
             <h3>Critique</h3>
             {d.critique ? (
-              <CritiqueView c={d.critique} criteria={criteria} self={d.selfScores} />
+              <CritiqueView c={d.critique} criteria={criteria} self={d.selfScores} areaNames={Object.fromEntries(areas.map((a) => [a.id, a.name]))} />
             ) : !critiqueInfo?.available ? (
-              <p className="small muted">Critiques need an Anthropic API key on the server. Until then: use the overlay and the mirror check, and compare with the lesson’s key points.</p>
+              <p className="small muted">Critiques through Atelier need an Anthropic API key on the server. You can use your Claude subscription instead (below), or the overlay and the mirror check with the lesson’s key points.</p>
             ) : (
               <>
                 <p className="small">Claude looks at your drawing{d.reference ? ' and the reference' : ''}{d.clip ? ' and your layers' : ''} with this lesson’s goals: what works, the fixes that matter most, and one next step.</p>
@@ -498,6 +565,20 @@ export default function Drawing({ id }) {
                 <button className="btn small" onClick={askCritique} disabled={busy === 'critique'}>
                   {busy === 'critique' ? 'Looking again…' : `New ${chosenLevel} critique`}
                 </button>
+              </div>
+            )}
+            {d.file && (
+              <div style={{ marginTop: 14 }}>
+                <ManualCritique
+                  key={d.id}
+                  drawing={d}
+                  defaultLevel={chosenLevel}
+                  toast={toast}
+                  onSaved={(x) => {
+                    setD(x);
+                    bump();
+                  }}
+                />
               </div>
             )}
           </div>

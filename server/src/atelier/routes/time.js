@@ -51,4 +51,7 @@ router.get('/atelier/stats', (req, res) => {
 
 router.get('/atelier/review', (req, res) => res.json(stats.weeklyReview(req.user.id)));
 
+// Your skill levels, RPG-style: character sheet, history, quests, skill tree.
+router.get('/atelier/skills', (req, res) => res.json(require('../skills').skillSheet(req.user.id)));
+
 };
