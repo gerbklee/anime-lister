@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, hubUrl } from '../api.js';
 import { useApp } from '../App.jsx';
 import { MusicSettings } from '../components/Music.jsx';
+import AppSection from '../components/AppSection.jsx';
 
 export default function Settings() {
   const { profile, setProfile, critiqueInfo, toast, theme, setTheme, user } = useApp();
@@ -128,6 +129,19 @@ export default function Settings() {
           Save
         </button>
       </div>
+
+      <section className="card section">
+        <h3>Your data</h3>
+        <p className="small muted">Download your whole sketchbook as one archive: every drawing, reference and original .clip file with readable names, plus a spreadsheet (index.csv) with dates, lessons, scores and critiques. Large sketchbooks take a while.</p>
+        <a className="btn small" href="/api/atelier/export">
+          Download everything (.tar)
+        </a>
+      </section>
+
+      <section className="card section">
+        <h3>App</h3>
+        <AppSection />
+      </section>
 
       <section className="card section">
         <h3>Look</h3>

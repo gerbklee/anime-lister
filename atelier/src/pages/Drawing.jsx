@@ -275,6 +275,11 @@ export default function Drawing({ id }) {
                 <input type="checkbox" checked={d.shared} onChange={(e) => save({ shared: e.target.checked })} /> Share with friends
               </label>
             )}
+            {d.file && (
+              <a className="btn small ghost" href={`#/compare?a=${d.id}`}>
+                Compare
+              </a>
+            )}
             <button className="btn small ghost" onClick={remove}>
               Delete
             </button>

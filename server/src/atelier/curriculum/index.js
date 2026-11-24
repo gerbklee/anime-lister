@@ -171,6 +171,14 @@ for (const l of LESSONS) {
   for (const id of Object.keys(d.ex ?? {})) if (!l.exercises.some((e) => e.id === id)) throw new Error(`Details for unknown exercise ${l.id}/${id}`);
 }
 for (const id of Object.keys(DETAILS)) if (!LESSON.has(id)) throw new Error(`Details for unknown lesson ${id}`);
+// Extra explanation for lessons whose theory was short.
+const EXTRA = {};
+for (const f of ['d-extra-a', 'd-extra-b', 'd-extra-c']) for (const [id, paras] of Object.entries(require(`./details/${f}`))) EXTRA[id] = [...(EXTRA[id] ?? []), ...paras];
+for (const [id, paras] of Object.entries(EXTRA)) {
+  const l = LESSON.get(id);
+  if (!l) throw new Error(`Extra text for unknown lesson ${id}`);
+  l.more = [...(l.more ?? []), ...paras];
+}
 
 // Sanity check at startup.
 for (const [id, guides] of Object.entries(LESSON_GUIDES)) {

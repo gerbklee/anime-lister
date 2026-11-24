@@ -1,4 +1,4 @@
-# Builds the Docker image on every push to main and publishes it to
+# Tests, then builds the Docker image on every push to main and publishes it to
 # GitHub Container Registry as ghcr.io/<owner>/anime-lister.
 # Watchtower on the server picks up the new :latest image automatically.
 name: Build and publish Docker image
@@ -17,7 +17,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Builds the image once for amd64 and runs the server tests inside it.
+  # Nothing is published unless they pass.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: anime-lister:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run tests
+        run: docker run --rm anime-lister:test npm test
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

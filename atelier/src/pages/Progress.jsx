@@ -151,6 +151,7 @@ export default function Progress() {
         <div className="card">
           <div className="section-head">
             <h3>Then & now</h3>
+            <a className="small" href="#/compare">Compare any two drawings →</a>
           </div>
           {checks ? <ThenNow checks={checks} /> : <p className="muted">Loading…</p>}
         </div>

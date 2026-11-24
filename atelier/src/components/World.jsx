@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Tree, TREE_INFO, VARIANTS, mix } from './Tree.jsx';
 import { BUILDINGS, LANDMARKS, makeIso } from './Buildings.jsx';
 
@@ -13,6 +13,8 @@ import { BUILDINGS, LANDMARKS, makeIso } from './Buildings.jsx';
 // the sky your clock.
 
 const W = 1200;
+// From this many objects on, the island is kept as one picture.
+const RASTER_AT = 250;
 
 function season(date = new Date()) {
   const m = date.getMonth();
@@ -80,7 +82,7 @@ function Particles({ sea, night, h }) {
       list.push(
         <g key={`f${i}`} transform={`translate(${250 + rand(i + 300) * 700} ${h * 0.3 + rand(i + 400) * h * 0.5})`}>
           <g className="w-firefly" style={{ animationDuration: `${5 + rand(i) * 5}s`, animationDelay: `${-rand(i + 9) * 8}s` }}>
-            <circle r="7" fill="url(#glow)" />
+            <circle r="7" fill="url(#glow-p)" />
             <circle r="1.6" fill="#fff6c4" />
           </g>
         </g>,
@@ -168,6 +170,10 @@ const PLOTS = {
 export default function World({ world, stages }) {
   const [tip, setTip] = useState(null);
   const box = useRef(null);
+  const islandRef = useRef(null);
+  // Big islands are drawn once and kept as a single picture (cheap to show,
+  // also on phones); small ones stay live SVG.
+  const [raster, setRaster] = useState(null);
   const now = new Date();
   const preview = (window.location.hash.split('?')[1] ?? '').match(/valley=(dawn|day|dusk|night)?-?(spring|summer|autumn|winter)?/);
   const sea = preview?.[2] ?? season(now);
@@ -314,11 +320,25 @@ export default function World({ world, stages }) {
     return { N, A, P, k, ox, oy, objects, water, path: new Set(path.map(([u, v]) => `${u},${v}`)), plots, height };
   }, [world, stages, sea]);
 
-  const showTip = (e, text) => {
-    const r = box.current?.getBoundingClientRect();
-    if (!r) return;
-    setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text });
-  };
+  // New data: draw live again, then (if big) turn it into a picture.
+  useEffect(() => {
+    setRaster((old) => {
+      if (old) URL.revokeObjectURL(old);
+      return null;
+    });
+  }, [scene]);
+  useEffect(() => {
+    if (raster || !scene || scene.objects.length < RASTER_AT || !islandRef.current) return undefined;
+    const id = requestAnimationFrame(() => {
+      try {
+        const svg = new XMLSerializer().serializeToString(islandRef.current);
+        setRaster(URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })));
+      } catch {
+        // keep the live SVG
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [scene, raster]);
 
   if (!scene) return <div className="world" style={{ aspectRatio: '1200 / 760' }} />;
   const { N, A, P, k, objects, water, path, height } = scene;
@@ -342,7 +362,7 @@ export default function World({ world, stages }) {
       }
       if (water.has(key)) {
         const [x, y] = P(u + 0.5, v + 0.5);
-        tiles.push(<path key={`w${key}`} className="w-twinkle" style={{ animationDelay: `${-rand(u + v * 3) * 3}s` }} d={`M${x - 6 * k} ${y} h${5 * k} M${x + 2 * k} ${y + 3 * k} h${4 * k}`} stroke="#ffffff" strokeWidth={1.4 * k} strokeLinecap="round" />);
+        tiles.push(<path key={`w${key}`} d={`M${x - 6 * k} ${y} h${5 * k} M${x + 2 * k} ${y + 3 * k} h${4 * k}`} stroke="#ffffff" strokeWidth={1.4 * k} strokeLinecap="round" />);
       }
     }
   // Island sides with a grass lip and soil layers.
@@ -355,50 +375,48 @@ export default function World({ world, stages }) {
       return <path key={`${f}${i}`} d={`M${a[0]} ${a[1] + z0} L${b[0]} ${b[1] + z0} L${b[0]} ${b[1] + z1} L${a[0]} ${a[1] + z1} Z`} fill={f} />;
     });
 
-  return (
-    <div className="world" ref={box} onPointerLeave={() => setTip(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Your valley: ${world.trees.length} trees, ${world.stones} lessons on the path, ${world.buildings.length} buildings, ${world.lanterns} lanterns`}>
-        <defs>
-          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={sky[0]} />
-            <stop offset="0.4" stopColor={sky[1]} />
-            <stop offset="0.75" stopColor={sky[2]} />
-            <stop offset="1" stopColor={sky[3]} />
-          </linearGradient>
-          <radialGradient id="glow">
-            <stop offset="0" stopColor="#ffe08a" stopOpacity="0.9" />
-            <stop offset="1" stopColor="#ffe08a" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="sunglow">
-            <stop offset="0" stopColor={night ? '#dfe6ff' : '#fff6d8'} stopOpacity={night ? 0.35 : 0.8} />
-            <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <rect width={W} height={H} fill="url(#sky)" />
-        {(night || time === 'dusk') &&
-          Array.from({ length: night ? 90 : 25 }, (_, i) => (
-            <circle key={i} className={i % 3 === 0 ? 'w-twinkle' : undefined} style={{ animationDelay: `${-rand(i) * 4}s` }} cx={rand(i + 1) * W} cy={rand(i + 2) * H * 0.45} r={rand(i + 3) * 1.2 + 0.5} fill="#ffffff" opacity={0.4 + rand(i + 4) * 0.5} />
-          ))}
-        <circle cx={night ? 1010 : 980} cy={95} r={night ? 110 : 190} fill="url(#sunglow)" />
-        {night ? (
-          <g>
-            <circle cx={1010} cy={95} r="24" fill="#f6f1dc" />
-            <circle cx={1019} cy={90} r="21" fill={sky[1]} />
-          </g>
-        ) : (
-          <circle cx={980} cy={95} r="30" fill={time === 'day' ? '#fffbe8' : '#ffe1b0'} />
-        )}
-        <Cloud x={170} y={110} s={1} colours={CLOUD[time]} dur={70} delay={0} />
-        <Cloud x={760} y={70} s={0.7} colours={CLOUD[time]} dur={90} delay={-30} />
-        <Cloud x={1080} y={230} s={0.6} colours={CLOUD[time]} dur={100} delay={-50} />
-        <Cloud x={90} y={H - 150} s={0.8} colours={CLOUD[time]} dur={80} delay={-12} />
 
-        {/* The floating island */}
-        <ellipse cx={W / 2} cy={P(N, N)[1] + D + 40} rx={N * A * 0.9} ry={30} fill="#1d2b3a" opacity="0.12" />
-        {side(left[0], left[1], [t(mix(grass[0], '#1d2b3a', 0.2)), ...soil.map((s) => mix(s, '#ffffff', 0.08))])}
-        {side(right[0], right[1], [t(mix(grass[0], '#1d2b3a', 0.35)), ...soil.map((s) => mix(s, '#1d2b3a', 0.22))])}
-        {tiles}
+  // What's on each tile, for the hover tooltip (works on the picture too).
+  const onTile = new Map();
+  for (const o of objects) {
+    if (o.kind === 'tree') {
+      const label = `${TREE_INFO[o.tr.tree]?.name ?? 'Tree'} · ${o.tr.minutes} min · ${new Date(o.tr.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      const u = Math.round((o.x - scene.ox) / A / 2 + (o.y - scene.oy) / A - 0.5);
+      const v = Math.round((o.y - scene.oy) / A - (o.x - scene.ox) / A / 2 - 0.5);
+      onTile.set(`${u},${v}`, label);
+    } else if (o.kind === 'building') {
+      for (const [du, dv] of [[0, 0], [1, 0], [0, 1], [1, 1]]) onTile.set(`${o.u + du},${o.v + dv}`, o.label);
+    } else if (o.kind === 'landmark') onTile.set(`${o.u},${o.v}`, o.lm.label);
+  }
+  const hover = (e) => {
+    const r = box.current?.getBoundingClientRect();
+    if (!r) return;
+    const x = ((e.clientX - r.left) / r.width) * W;
+    const y = ((e.clientY - r.top) / r.height) * H;
+    const a = (x - scene.ox) / A;
+    const b = (2 * (y - scene.oy)) / A;
+    const u = Math.floor((a + b) / 2);
+    const v = Math.floor((b - a) / 2);
+    // Trees and buildings rise above their tile: prefer what stands in front.
+    let label = null;
+    for (let i = 3; i >= 0 && !label; i--) label = onTile.get(`${u + i},${v + i}`) ?? onTile.get(`${u + i},${v + i - 1}`) ?? null;
+    if (label) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text: label });
+    else setTip(null);
+  };
 
+  const label = `Your valley: ${world.trees.length} trees, ${world.stones} lessons on the path, ${world.buildings.length} buildings, ${world.lanterns} lanterns`;
+  const islandSvg = (
+    <svg ref={islandRef} xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${W} ${H}`} className="world-layer" aria-hidden="true">
+      <defs>
+        <radialGradient id="glow">
+          <stop offset="0" stopColor="#ffe08a" stopOpacity="0.9" />
+          <stop offset="1" stopColor="#ffe08a" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <ellipse cx={W / 2} cy={P(N, N)[1] + D + 40} rx={N * A * 0.9} ry={30} fill="#1d2b3a" opacity="0.12" />
+      {side(left[0], left[1], [t(mix(grass[0], '#1d2b3a', 0.2)), ...soil.map((s) => mix(s, '#ffffff', 0.08))])}
+      {side(right[0], right[1], [t(mix(grass[0], '#1d2b3a', 0.35)), ...soil.map((s) => mix(s, '#1d2b3a', 0.22))])}
+      {tiles}
         {objects.map((o, i) => {
           if (o.kind === 'tree')
             return (
@@ -410,7 +428,7 @@ export default function World({ world, stages }) {
                 x={o.x}
                 y={o.y}
                 scale={o.s}
-                onPointerEnter={(e) => showTip(e, `${TREE_INFO[o.tr.tree]?.name ?? 'Tree'} · ${o.tr.minutes} min · ${new Date(o.tr.at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`)}
+
               />
             );
           if (o.kind === 'deco') return <Decoration key={`d${i}`} kind={o.deco} x={o.x} y={o.y} s={o.s} sea={sea} seed={o.seed} />;
@@ -418,7 +436,7 @@ export default function World({ world, stages }) {
             const [bx, by] = P(o.u, o.v);
             const I = makeIso(A, bx, by);
             return (
-              <g key={`b${o.id}`} opacity={o.ghost ? 0.3 : 1} onPointerEnter={(e) => showTip(e, o.label)}>
+              <g key={`b${o.id}`} opacity={o.ghost ? 0.3 : 1}>
                 <title>{o.label}</title>
                 {BUILDINGS[o.id](I, { night: night || time === 'dusk' })}
               </g>
@@ -429,7 +447,7 @@ export default function World({ world, stages }) {
             const draw = LANDMARKS[o.lm.kind];
             if (!draw) return null;
             return (
-              <g key={`m${i}`} onPointerEnter={(e) => showTip(e, o.lm.label)}>
+              <g key={`m${i}`}>
                 <title>{o.lm.label}</title>
                 {draw(makeIso(A, lx, ly), { night: night || time === 'dusk', tier: o.lm.tier })}
               </g>
@@ -455,6 +473,54 @@ export default function World({ world, stages }) {
             );
           return null;
         })}
+    </svg>
+  );
+
+  return (
+    <div className="world" ref={box} onPointerMove={hover} onPointerLeave={() => setTip(null)}>
+      {/* Layer 1: sky (its own small animations) */}
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={sky[0]} />
+            <stop offset="0.4" stopColor={sky[1]} />
+            <stop offset="0.75" stopColor={sky[2]} />
+            <stop offset="1" stopColor={sky[3]} />
+          </linearGradient>
+          <radialGradient id="sunglow">
+            <stop offset="0" stopColor={night ? '#dfe6ff' : '#fff6d8'} stopOpacity={night ? 0.35 : 0.8} />
+            <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <rect width={W} height={H} fill="url(#sky)" />
+        {(night || time === 'dusk') &&
+          Array.from({ length: night ? 90 : 25 }, (_, i) => (
+            <circle key={i} className={i % 3 === 0 ? 'w-twinkle' : undefined} style={{ animationDelay: `${-rand(i) * 4}s` }} cx={rand(i + 1) * W} cy={rand(i + 2) * H * 0.45} r={rand(i + 3) * 1.2 + 0.5} fill="#ffffff" opacity={0.4 + rand(i + 4) * 0.5} />
+          ))}
+        <circle cx={night ? 1010 : 980} cy={95} r={night ? 110 : 190} fill="url(#sunglow)" />
+        {night ? (
+          <g>
+            <circle cx={1010} cy={95} r="24" fill="#f6f1dc" />
+            <circle cx={1019} cy={90} r="21" fill={sky[1]} />
+          </g>
+        ) : (
+          <circle cx={980} cy={95} r="30" fill={time === 'day' ? '#fffbe8' : '#ffe1b0'} />
+        )}
+        <Cloud x={170} y={110} s={1} colours={CLOUD[time]} dur={70} delay={0} />
+        <Cloud x={760} y={70} s={0.7} colours={CLOUD[time]} dur={90} delay={-30} />
+        <Cloud x={1080} y={230} s={0.6} colours={CLOUD[time]} dur={100} delay={-50} />
+        <Cloud x={90} y={H - 150} s={0.8} colours={CLOUD[time]} dur={80} delay={-12} />
+      </svg>
+      {/* Layer 2: the island, static; turned into one picture when it gets big */}
+      {raster ? <img className="world-layer" src={raster} alt="" /> : islandSvg}
+      {/* Layer 3: falling petals, leaves, snow and fireflies */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="world-layer" aria-hidden="true">
+        <defs>
+          <radialGradient id="glow-p">
+            <stop offset="0" stopColor="#ffe08a" stopOpacity="0.9" />
+            <stop offset="1" stopColor="#ffe08a" stopOpacity="0" />
+          </radialGradient>
+        </defs>
         <Particles sea={sea} night={night} h={H} />
       </svg>
       {tip && (

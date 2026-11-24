@@ -1450,3 +1450,40 @@ table.data th {
   display: block;
   background: var(--paper-2);
 }
+
+/* ---- Upload progress --------------------------------------------------------- */
+.upload-status {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  transform: translateX(-50%);
+  z-index: 320;
+  width: min(380px, calc(100vw - 24px));
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+.upload-status.error {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.meter > span.indeterminate {
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.world {
+  position: relative;
+}
+.world > .world-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}

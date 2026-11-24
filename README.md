@@ -178,6 +178,13 @@ A second website in the same container, with the same accounts and data: `http:/
 - **References** come from the Art search, with your own characters wherever an exercise says so, and always safe outside the adult track. Every study offers a Clip Studio **.psd** (reference locked, Sketch/Lines/Colour layers), side by side or as a faint underlay. In Art, **✏️ Study this** puts any picture in your sketchbook as a study to draw.
 - **Sketchbook**: private by default, shared per drawing (reactions). Each drawing has side-by-side and overlay views with the reference, a mirror check, a **self-rating** on the area's criteria, and an optional **critique by Claude** (what works, the 2–3 biggest fixes as pins on your drawing, scores, one next step). A critique costs about 5¢, with a monthly budget in Settings. It needs `ANTHROPIC_API_KEY` in the compose file.
 - **Progress**: week streak with 2 grace days a month (target: X days a week at Y+ minutes), the year as a heatmap, weeks against the target, growth rings, a skill radar (now vs 3 months ago), trends per area, how close your self-ratings are to critiques, when you draw, where your time goes, and your pace. A **skill check** every 4 weeks (the same 4 timed prompts) feeds **Then & now**.
+- **Weak spot**: your lowest-rated area over the last 30 days (critiques first, else self-ratings; at least 3 drawings, average below 3) is named on Today, its reviews come first, and Today adds extra practice from a finished lesson in that area.
+- **Then & now for any two drawings**: *Progress → Compare any two drawings* (or *Compare* on a drawing) lets you pick two drawings, filtered by area, lesson or project, and slide between them.
+- **Free time & projects**: after the day's exercises, Today ends with open-ended free drawing (the timer counts up, *Done for now* stops it). Name projects in the Sketchbook to collect their versions and time.
+- **Music**: a Spotify playlist in Settings plays with the focus timer and pauses with it.
+- **App & notifications**: over HTTPS (Tailscale), Atelier installs as its own app (*Settings → App*, or Safari → Share → *Add to Home Screen*). With notifications on, it tells you when a block is done or a break is over while the page is in the background.
+- **Uploads** show their progress at the top (big `.clip` files take a while), then "Reading Clip Studio layers…".
+- **Your data**: *Settings → Your data* downloads everything as a `.tar` archive: drawings, references, original `.clip` files, an index (CSV and JSON), projects and portfolio reviews.
 - **Habits**: a "when and where" plan, a push reminder at your time if you haven't drawn (uses Anime Hub's notifications), and a fresh-start review on Mondays and the 1st.
 - **Adult track (18+, optional)**: 8 units (life drawing, adult proportions, pin-up posing, sensual expression, skin and light, clothing and reveal, nude illustration, adult portfolio). It is only available with Spicy art on, needs an 18+ confirmation, and uses adult characters only, with references through the same adults-only rules as Art.
 
@@ -213,6 +220,17 @@ All data lives in the `./data` folder next to `docker-compose.yml`:
 - `data/images/`: cached character images
 
 To back up, stop the container (`docker compose down`) and copy the `data` folder. To restore, put the folder back and start again.
+
+## Tests
+
+The server tests in [server/test/](server/test/) start the real server with an empty, temporary database and walk through Atelier (lesson order, sessions, stage hours, uploads, focus blocks, projects, portfolio review, export). GitHub Actions runs them in the built image before every publish, so a failing test stops the deploy. To run them locally:
+
+```bash
+docker build -t anime-lister:test .
+docker run --rm anime-lister:test npm test
+# with a Clip Studio file (mounted read-only):
+docker run --rm -v "/path/to/clips:/clips:ro" -e CLIP_SAMPLE=/clips/some.clip anime-lister:test npm test
+```
 
 ## Development (without Docker)
 

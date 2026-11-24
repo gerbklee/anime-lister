@@ -20,6 +20,49 @@ async function request(method, url, body, { raw } = {}) {
   return data;
 }
 
+// Uploads with progress (big .clip files take a while). Listeners get
+// { name, loaded, total, phase: 'upload' | 'processing' | 'done' | 'error' }.
+const uploadListeners = new Set();
+export const subscribeUploads = (fn) => {
+  uploadListeners.add(fn);
+  return () => uploadListeners.delete(fn);
+};
+const emit = (s) => uploadListeners.forEach((fn) => fn(s));
+function uploadFile(url, file) {
+  return new Promise((resolve, reject) => {
+    const name = file.name || 'drawing';
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+    xhr.upload.onprogress = (e) => emit({ name, loaded: e.loaded, total: e.lengthComputable ? e.total : file.size, phase: 'upload' });
+    xhr.upload.onload = () => emit({ name, loaded: file.size, total: file.size, phase: 'processing', clip: /\.clip$/i.test(name) });
+    xhr.onload = () => {
+      let data = null;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        // ignore
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        emit({ name, phase: 'done' });
+        resolve(data);
+      } else {
+        const err = new Error(data?.error || (xhr.status === 413 ? 'That file is too big (the limit is 150 MB).' : `Upload failed (${xhr.status})`));
+        emit({ name, phase: 'error', message: err.message });
+        reject(err);
+      }
+    };
+    xhr.onerror = () => {
+      const err = new Error('The upload was interrupted (connection lost). Check your connection and try again.');
+      emit({ name, phase: 'error', message: err.message });
+      reject(err);
+    };
+    emit({ name, loaded: 0, total: file.size, phase: 'upload' });
+    xhr.send(file);
+  });
+}
+
 const qs = (o) => new URLSearchParams(Object.entries(o).filter(([, v]) => v != null && v !== '')).toString();
 
 export const api = {
@@ -52,8 +95,8 @@ export const api = {
   drawings: () => request('GET', '/api/atelier/drawings'),
   sharedDrawings: () => request('GET', '/api/atelier/drawings/shared'),
   drawing: (id) => request('GET', `/api/atelier/drawings/${id}`),
-  upload: (file, info) => request('POST', `/api/atelier/drawings?${qs(info)}`, undefined, { raw: file }),
-  uploadFor: (id, file) => request('POST', `/api/atelier/drawings/${id}/file`, undefined, { raw: file }),
+  upload: (file, info) => uploadFile(`/api/atelier/drawings?${qs(info)}`, file),
+  uploadFor: (id, file) => uploadFile(`/api/atelier/drawings/${id}/file`, file),
   updateDrawing: (id, patch) => request('PUT', `/api/atelier/drawings/${id}`, patch),
   deleteDrawing: (id) => request('DELETE', `/api/atelier/drawings/${id}`),
   critique: (id, level) => request('POST', `/api/atelier/drawings/${id}/critique`, { level }),

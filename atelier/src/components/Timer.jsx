@@ -28,6 +28,32 @@ const save = (s) => {
   }
 };
 
+// System notifications when a block or break ends while Atelier is in the
+// background (e.g. you're drawing in Clip Studio). On by default; asked for
+// on the first timer start, switchable in Settings.
+export const notifyWanted = () => {
+  try {
+    return localStorage.getItem('atelier.notify') !== '0';
+  } catch {
+    return true;
+  }
+};
+export function askNotifyPermission() {
+  if (!('Notification' in window) || !notifyWanted() || Notification.permission !== 'default') return;
+  Notification.requestPermission().catch(() => {});
+}
+async function notifyUser(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted' || !notifyWanted() || !document.hidden) return;
+  const options = { body, icon: '/icons/atelier-192.png', tag: 'atelier-timer', data: { url: '#/' } };
+  try {
+    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    if (reg) await reg.showNotification(title, options);
+    else new Notification(title, options);
+  } catch {
+    // ignore
+  }
+}
+
 function chime() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -85,7 +111,10 @@ export function TimerProvider({ children, onChange }) {
         // the server closes stale blocks on its own
       }
       busy.current = false;
-      if (status === 'done') chime();
+      if (status === 'done') {
+        chime();
+        notifyUser(`Your ${TREE_INFO[s.tree]?.name.toLowerCase() ?? 'tree'} has grown`, `${Math.round(minutes)} focused minutes. Time for a break.`);
+      }
       update({ ...s, phase: status === 'done' ? 'done' : 'withered', endedAt: Date.now(), minutes: Math.round(minutes), ...extra });
       if (status === 'done') musicRef.current?.onBreak();
       else musicRef.current?.onStop();
@@ -104,6 +133,7 @@ export function TimerProvider({ children, onChange }) {
     if (state?.phase === 'focus' && now >= state.startedAt + state.planned * 60000) finish('done');
     if (state?.phase === 'break' && now >= state.breakEndsAt) {
       chime();
+      notifyUser('Break over', 'Ready for the next block?');
       update({ ...state, phase: 'breakOver' });
       musicRef.current?.onStop();
     }
@@ -135,6 +165,7 @@ export function TimerProvider({ children, onChange }) {
 
   const start = useCallback(
     async ({ minutes, kind = 'free', lessonId, area, label, guard, open = false, projectId = null }) => {
+      askNotifyPermission();
       // Start the music right away, while the click still counts as a user action (autoplay rules).
       musicRef.current?.onFocus();
       const b = await api.startBlock({ minutes, kind, lessonId, area, open, projectId });

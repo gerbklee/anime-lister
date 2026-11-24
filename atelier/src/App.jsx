@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { api, hubUrl } from './api.js';
 import { TimerMini, TimerProvider } from './components/Timer.jsx';
 import { MusicProvider } from './components/Music.jsx';
+import UploadStatus from './components/UploadStatus.jsx';
 import Home from './pages/Home.jsx';
 import Today from './pages/Today.jsx';
 import PathPage from './pages/Path.jsx';
@@ -15,6 +16,7 @@ import Handbook from './pages/Handbook.jsx';
 import Method from './pages/Method.jsx';
 import Portfolio from './pages/Portfolio.jsx';
 import { Project, Projects } from './pages/Projects.jsx';
+import Compare from './pages/Compare.jsx';
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -192,6 +194,9 @@ export default function App() {
     case 'projects':
       body = <Projects />;
       break;
+    case 'compare':
+      body = <Compare key={window.location.hash} />;
+      break;
     case 'project':
       body = <Project id={id} key={id} />;
       break;
@@ -199,7 +204,7 @@ export default function App() {
       body = <Home />;
   }
 
-  const active = ['projects', 'project'].includes(page) ? 'sketchbook' : page === 'portfolio' ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
+  const active = ['projects', 'project'].includes(page) ? 'sketchbook' : ['portfolio', 'compare'].includes(page) ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
 
   return (
     <AppContext.Provider value={ctx}>
@@ -233,6 +238,7 @@ export default function App() {
         </main>
         {page !== '' && <TimerMini />}
         {toast && <div className="toast">{toast}</div>}
+        <UploadStatus />
       </TimerProvider>
       </MusicProvider>
     </AppContext.Provider>

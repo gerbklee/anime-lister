@@ -35,6 +35,7 @@ const q = {
   piecesSince: db.prepare("SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND kind = 'piece' AND file IS NOT NULL AND created_at >= ?"),
   lastPortfolio: db.prepare('SELECT MAX(created_at) AS at FROM atelier_portfolio_reviews WHERE user_id = ?'),
   finishedCount: db.prepare("SELECT COUNT(*) AS n FROM atelier_drawings WHERE user_id = ? AND kind IN ('project', 'piece') AND file IS NOT NULL"),
+  recentScored: db.prepare("SELECT area, critique, self_scores FROM atelier_drawings WHERE user_id = ? AND created_at >= ? AND status = 'done' AND (critique IS NOT NULL OR self_scores IS NOT NULL)"),
   anyCheck: db.prepare("SELECT COUNT(*) AS n, MAX(created_at) AS last FROM atelier_drawings WHERE user_id = ? AND kind = 'check' AND file IS NOT NULL"),
   stageMinutes: db.prepare("SELECT stage, COALESCE(SUM(minutes), 0) AS m FROM atelier_blocks WHERE user_id = ? AND status = 'done' AND stage IS NOT NULL GROUP BY stage"),
   exerciseDays: db.prepare(`SELECT lesson_id, exercise_id, COUNT(DISTINCT date(created_at / 1000, 'unixepoch')) AS n, MAX(created_at) AS last
@@ -286,7 +287,9 @@ function todaySession(userId) {
 
   // Due reviews, interleaved: at most one per area, oldest first.
   const maxReviews = D >= 120 ? 3 : D >= 60 ? 2 : D >= 30 ? 1 : 0;
-  const due = q.reviews.all(userId).filter((r) => r.due_at <= Date.now() + 6 * 3600 * 1000).sort((a, b) => a.due_at - b.due_at);
+  // Your weak spot's reviews come first.
+  const weak = weakSpot(userId);
+  const due = q.reviews.all(userId).filter((r) => r.due_at <= Date.now() + 6 * 3600 * 1000).sort((a, b) => (weak ? (skillHome(b.skill)?.area === weak.area) - (skillHome(a.skill)?.area === weak.area) : 0) || a.due_at - b.due_at);
   const usedAreas = new Set();
   for (const r of due) {
     if (parts.filter((p) => p.kind === 'review').length >= maxReviews) break;
@@ -354,6 +357,20 @@ function todaySession(userId) {
     }
   }
 
+  // Extra practice for your weak spot, from a finished lesson in that area
+  // (unless a review of it is already planned).
+  if (weak && budget >= 10 && !parts.some((p) => p.kind === 'review' && p.area === weak.area)) {
+    const pick = C.LESSONS.filter((l) => l.area === weak.area && state.get(l.id)?.done_at)
+      .flatMap((l) => l.exercises.filter((e) => e.kind !== 'check' && e.kind !== 'project').map((e) => ({ l, e, last: exProgress(l, e, prog).last })))
+      .filter((x) => x.last < dayStart)
+      .sort((a, b) => a.last - b.last)[0];
+    if (pick) {
+      const minutes = Math.min(pick.e.minutes, budget, 25);
+      parts.push(exPart(pick.l, pick.e, minutes, { id: `weak:${pick.l.id}:${pick.e.id}`, practiceOf: `weak spot: ${weak.name}` }));
+      budget -= minutes;
+    }
+  }
+
   // Stage practice: when today's lesson work is done (or only practice hours
   // are left in the stage), mix exercises from the stage's finished lessons,
   // the ones practised longest ago first, one per area.
@@ -384,7 +401,37 @@ function todaySession(userId) {
   }
 
   const minutesToday = q.minutesSince.get(userId, startOfDay(Date.now(), tz)).m;
-  return { day: today, dailyMinutes: D, minutesToday: Math.round(minutesToday), stage, stageInfo: stageInfo(C.STAGES[stage], state, prog), lessonId: lesson?.id ?? null, parts, check, focus: focusPoint(userId, lesson) };
+  return { day: today, dailyMinutes: D, minutesToday: Math.round(minutesToday), stage, stageInfo: stageInfo(C.STAGES[stage], state, prog), lessonId: lesson?.id ?? null, parts, check, focus: focusPoint(userId, lesson), weakSpot: weak };
+}
+
+// Your weakest area lately: the lowest average score (critique first, else
+// your own rating) over at least 3 rated drawings in the last 30 days, if
+// it's below 3 ("working"). Today leans towards it.
+function weakSpot(userId) {
+  const rows = q.recentScored.all(userId, Date.now() - 30 * DAY);
+  const per = new Map();
+  for (const r of rows) {
+    if (!r.area || !C.AREA[r.area]) continue;
+    let scores = null;
+    try {
+      const c = r.critique ? JSON.parse(r.critique) : null;
+      scores = c?.scores && !c.refused ? c.scores : r.self_scores ? JSON.parse(r.self_scores) : null;
+    } catch {
+      scores = null;
+    }
+    const vals = Object.values(scores ?? {}).map(Number).filter((n) => n >= 1 && n <= 5);
+    if (!vals.length) continue;
+    const a = per.get(r.area) ?? [];
+    a.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+    per.set(r.area, a);
+  }
+  let worst = null;
+  for (const [area, list] of per) {
+    if (list.length < 3) continue;
+    const avg = list.reduce((s, v) => s + v, 0) / list.length;
+    if (avg < 3 && (!worst || avg < worst.avg)) worst = { area, name: C.AREA[area].name, avg: Math.round(avg * 10) / 10, drawings: list.length };
+  }
+  return worst;
 }
 
 // The finished-piece rhythm: from Stage 8 one finished illustration a month,
@@ -466,6 +513,7 @@ module.exports = {
   stagesDone,
   lessonAccess,
   pieceStatus,
+  weakSpot,
   portfolioStatus,
   practice,
   lessonProgress,

@@ -124,6 +124,7 @@ export default function Today() {
             <p className="tiny muted" style={{ margin: 0 }}>
               {data.focus.from === 'critique' ? 'From your last critique. ' : data.focus.from === 'self' ? 'Your lowest self-rating lately. ' : 'A key point of your current lesson. '}
               Keep it in mind in every exercise today: practice works best aimed at one thing.
+              {data.weakSpot && ` Weak spot lately: ${data.weakSpot.name} (average ${data.weakSpot.avg} over ${data.weakSpot.drawings} drawings), so today leans that way.`}
               {data.focus.drawingId && (
                 <>
                   {' '}

@@ -49,6 +49,25 @@ async function asImage(buf, max, { flatten = false } = {}) {
   return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: out.toString('base64') } };
 }
 
+// The final drawing with a faint coordinate grid (a line every 0.1, the 0.5
+// lines stronger), so fix pins and correction lines land where they should.
+// No text labels: the server has no fonts.
+async function withGrid(buf, max) {
+  const base = await sharp(buf, { failOn: 'none' }).rotate().resize({ width: max, height: max, fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).toBuffer({ resolveWithObject: true });
+  const { width: w, height: h } = base.info;
+  const lines = [];
+  for (let i = 1; i < 10; i++) {
+    const x = Math.round((w * i) / 10);
+    const y = Math.round((h * i) / 10);
+    const strong = i === 5;
+    const attrs = `stroke="#00a0ff" stroke-opacity="${strong ? 0.5 : 0.25}" stroke-width="${strong ? 2 : 1}"`;
+    lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="${h}" ${attrs}/><line x1="0" y1="${y}" x2="${w}" y2="${y}" ${attrs}/>`);
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${lines.join('')}</svg>`;
+  const out = await sharp(base.data).composite([{ input: Buffer.from(svg) }]).jpeg({ quality: 85 }).toBuffer();
+  return { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: out.toString('base64') } };
+}
+
 const SYSTEM = `You are a warm but honest drawing teacher in an online art school for anime-style illustration. A student uploads a drawing. Your feedback must help them improve next time.
 Rules:
 - Be specific to THIS drawing: point at real places in it.
@@ -57,7 +76,7 @@ Rules:
 - Score each criterion 1-5 for this student's stage: 1 not yet, 2 emerging, 3 working, 4 solid, 5 confident. Be calibrated, not generous.
 - End with exactly one concrete next step they can do in the next session.
 - If the lesson doesn't match what was drawn, critique what was drawn.
-- Coordinates are fractions of the student's final drawing (0,0 top left, 1,1 bottom right).
+- Coordinates are fractions of the student's final drawing (0,0 top left, 1,1 bottom right). The final drawing carries a faint blue grid with a line every 0.1 (the 0.5 lines are stronger) to help you place coordinates precisely; it is not part of the drawing, so ignore it when judging.
 - Keep it concise and encouraging; no generic praise.`;
 
 const point = { type: 'object', properties: { x: { type: 'number' }, y: { type: 'number' } }, required: ['x', 'y'], additionalProperties: false };
@@ -132,7 +151,7 @@ async function critique(drawing, files, { selfScores, level = 'standard', clip =
 
   const content = [];
   if (files.reference) content.push(await asImage(files.reference, L.refImage));
-  content.push(await asImage(files.drawing, L.image));
+  content.push(await withGrid(files.drawing, L.image));
   for (const l of layers) content.push(await asImage(l.buf, 1024, { flatten: true }));
   content.push({ type: 'text', text: context });
 
