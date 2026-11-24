@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, hubUrl } from '../api.js';
 import { useApp } from '../App.jsx';
+import { MusicSettings } from '../components/Music.jsx';
 
 export default function Settings() {
   const { profile, setProfile, critiqueInfo, toast, theme, setTheme, user } = useApp();
@@ -99,6 +100,12 @@ export default function Settings() {
             <input type="number" min="1" max="60" value={f.breakMinutes} onChange={set('breakMinutes')} />
           </label>
         </div>
+      </section>
+
+      <section className="card section">
+        <h3>Music (Spotify)</h3>
+        <p className="small muted">A small Spotify player in the corner of Atelier that follows the focus timer: your focus playlist starts with a block, the break playlist (or a pause) comes with the bell.</p>
+        <MusicSettings />
       </section>
 
       <section className="card section">

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, cached, findReferences, psdUrl, refSource } from '../api.js';
 import { useTimer } from './Timer.jsx';
+import { DIAGRAMS, diagramFor, stepSearch } from './Diagrams.jsx';
 
 const KIND = {
   drill: 'Drill',
@@ -194,10 +195,28 @@ export default function Exercise({ lessonId, exercise, area, kind, adultLevel = 
               {howOpen && (
                 <div className="how-body">
                   <strong className="small">Step by step</strong>
-                  <ol>
-                    {exercise.steps.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
+                  <ol className="step-list">
+                    {(() => {
+                      // Each step gets a diagram (once per exercise) or a picture search.
+                      const used = new Set();
+                      return exercise.steps.map((s) => {
+                        let id = diagramFor(s);
+                        if (id && used.has(id)) id = null;
+                        if (id) used.add(id);
+                        return (
+                          <li key={s}>
+                            <span>{s}</span>
+                            {id ? (
+                              <span className="step-visual">{DIAGRAMS[id]}</span>
+                            ) : (
+                              <a className="step-search" href={stepSearch(s, exercise)} target="_blank" rel="noreferrer" title="Example pictures for this step">
+                                🔍 examples
+                              </a>
+                            )}
+                          </li>
+                        );
+                      });
+                    })()}
                   </ol>
                   <strong className="small">You’ve got it when</strong>
                   <ul className="points">

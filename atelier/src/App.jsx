@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { api, hubUrl } from './api.js';
 import { TimerMini, TimerProvider } from './components/Timer.jsx';
+import { MusicProvider } from './components/Music.jsx';
 import Home from './pages/Home.jsx';
 import Today from './pages/Today.jsx';
 import PathPage from './pages/Path.jsx';
@@ -13,6 +14,7 @@ import Check from './pages/Check.jsx';
 import Handbook from './pages/Handbook.jsx';
 import Method from './pages/Method.jsx';
 import Portfolio from './pages/Portfolio.jsx';
+import { Project, Projects } from './pages/Projects.jsx';
 
 const AppContext = createContext(null);
 export const useApp = () => useContext(AppContext);
@@ -187,14 +189,21 @@ export default function App() {
     case 'portfolio':
       body = <Portfolio />;
       break;
+    case 'projects':
+      body = <Projects />;
+      break;
+    case 'project':
+      body = <Project id={id} key={id} />;
+      break;
     default:
       body = <Home />;
   }
 
-  const active = page === 'portfolio' ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
+  const active = ['projects', 'project'].includes(page) ? 'sketchbook' : page === 'portfolio' ? 'progress' : ['lesson', 'clip-studio', 'method'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
 
   return (
     <AppContext.Provider value={ctx}>
+      <MusicProvider>
       <TimerProvider onChange={ctx.bump}>
         <header className="topbar">
           <a className="brand" href="#/">
@@ -225,6 +234,7 @@ export default function App() {
         {page !== '' && <TimerMini />}
         {toast && <div className="toast">{toast}</div>}
       </TimerProvider>
+      </MusicProvider>
     </AppContext.Provider>
   );
 }

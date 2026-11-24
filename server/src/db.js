@@ -624,6 +624,19 @@ const MIGRATIONS = {
     );
     CREATE INDEX idx_atelier_portfolio_user ON atelier_portfolio_reviews (user_id, created_at);
   `,
+  // v21: Atelier: personal projects (free drawing), with versions and time.
+  21: `
+    CREATE TABLE atelier_projects (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL,
+      archived    INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX idx_atelier_projects_user ON atelier_projects (user_id);
+    ALTER TABLE atelier_drawings ADD COLUMN project_id INTEGER;
+    ALTER TABLE atelier_blocks ADD COLUMN project_id INTEGER;
+  `,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

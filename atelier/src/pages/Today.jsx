@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useApp } from '../App.jsx';
 import Exercise, { kindLabel } from '../components/Exercise.jsx';
+import FreeTime from '../components/FreeTime.jsx';
 
 const doneKey = (day) => `atelier.done.${day}`;
 const loadDone = (day) => {
@@ -81,7 +82,8 @@ export default function Today() {
   if (!data) return <p className="muted">Loading today’s session…</p>;
   const parts = data.parts;
   const total = parts.reduce((s, p) => s + p.minutes, 0);
-  const doneCount = parts.filter((p) => done.has(p.id)).length;
+  const planned = parts.filter((p) => !p.open);
+  const doneCount = planned.filter((p) => done.has(p.id)).length;
   const firstOpen = parts.find((p) => !done.has(p.id))?.id;
   const current = open ?? firstOpen;
 
@@ -98,7 +100,7 @@ export default function Today() {
         <div className="kicker">{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
         <h1>Today’s session</h1>
         <p className="muted">
-          About {total} minutes · {doneCount} of {parts.length} done · {data.minutesToday} minutes drawn today
+          About {total} minutes + free time · {doneCount} of {planned.length} done · {data.minutesToday} minutes drawn today
         </p>
         {profile?.planWhen ? (
           <p className="small">
@@ -185,7 +187,7 @@ export default function Today() {
                     </span>
                   )}
                 </span>
-                <span className="chip">{p.minutes} min</span>
+                <span className={`chip ${p.open ? 'sage' : ''}`}>{p.open ? 'no limit' : `${p.minutes} min`}</span>
               </button>
               {isOpen && (
                 <div style={{ padding: '0 20px 20px' }}>
@@ -228,7 +230,13 @@ export default function Today() {
                       </a>
                     </>
                   )}
-                  {!['check', 'lesson', 'finish', 'portfolio'].includes(p.kind) && (
+                  {p.open && (
+                    <>
+                      <p>{p.prompt}</p>
+                      <FreeTime />
+                    </>
+                  )}
+                  {!p.open && !['check', 'lesson', 'finish', 'portfolio'].includes(p.kind) && (
                     <>
                       <Exercise
                         compact={p.kind === 'warmup' || p.kind === 'free'}
@@ -266,10 +274,10 @@ export default function Today() {
         })}
       </section>
 
-      {doneCount === parts.length && parts.length > 0 && (
+      {doneCount === planned.length && planned.length > 0 && (
         <section className="section wash center">
           <h2>Session complete.</h2>
-          <p>That’s today done. Small, steady sessions are exactly what builds skill. See you tomorrow.</p>
+          <p>That’s today’s practice done. Small, steady sessions are exactly what builds skill. Free drawing and your projects are open as long as you like.</p>
           <a className="btn small" href="#/progress">
             Look at your progress
           </a>

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { TreeIcon, TREE_INFO, Tree } from './Tree.jsx';
+import { useMusic } from './Music.jsx';
 
 // The focus timer. A block plants a tree that grows while you draw. Finishing
 // (or stopping at a natural point after 10 minutes) keeps it; giving up
@@ -62,6 +63,10 @@ export function TimerProvider({ children, onChange }) {
   const [now, setNow] = useState(Date.now());
   const hiddenAt = useRef(null);
   const busy = useRef(false);
+  // Music follows the timer (Spotify player in the dock).
+  const music = useMusic();
+  const musicRef = useRef(music);
+  musicRef.current = music;
 
   const update = useCallback((s) => {
     setState(s);
@@ -82,6 +87,8 @@ export function TimerProvider({ children, onChange }) {
       busy.current = false;
       if (status === 'done') chime();
       update({ ...s, phase: status === 'done' ? 'done' : 'withered', endedAt: Date.now(), minutes: Math.round(minutes), ...extra });
+      if (status === 'done') musicRef.current?.onBreak();
+      else musicRef.current?.onStop();
       onChange?.();
     },
     [update, onChange],
@@ -98,13 +105,14 @@ export function TimerProvider({ children, onChange }) {
     if (state?.phase === 'break' && now >= state.breakEndsAt) {
       chime();
       update({ ...state, phase: 'breakOver' });
+      musicRef.current?.onStop();
     }
   }, [now, state, finish, update]);
 
   // Title shows the time left.
   useEffect(() => {
     const base = 'Atelier';
-    if (state?.phase === 'focus') document.title = `${fmt(state.startedAt + state.planned * 60000 - now)} · ${base}`;
+    if (state?.phase === 'focus') document.title = `${state.open ? fmt(now - state.startedAt) : fmt(state.startedAt + state.planned * 60000 - now)} · ${base}`;
     else if (state?.phase === 'break') document.title = `Break ${fmt(state.breakEndsAt - now)} · ${base}`;
     else document.title = base;
   }, [now, state]);
@@ -126,9 +134,11 @@ export function TimerProvider({ children, onChange }) {
   }, [finish]);
 
   const start = useCallback(
-    async ({ minutes, kind = 'free', lessonId, area, label, guard }) => {
-      const b = await api.startBlock({ minutes, kind, lessonId, area });
-      update({ phase: 'focus', blockId: b.id, tree: b.tree, startedAt: Date.now(), planned: b.planned, kind, lessonId: lessonId ?? null, area: b.area ?? area ?? null, label: label ?? null, guard: !!guard });
+    async ({ minutes, kind = 'free', lessonId, area, label, guard, open = false, projectId = null }) => {
+      // Start the music right away, while the click still counts as a user action (autoplay rules).
+      musicRef.current?.onFocus();
+      const b = await api.startBlock({ minutes, kind, lessonId, area, open, projectId });
+      update({ phase: 'focus', blockId: b.id, tree: b.tree, startedAt: Date.now(), planned: b.planned, kind, lessonId: lessonId ?? null, area: b.area ?? area ?? null, label: label ?? null, guard: !!guard, open: !!open, projectId });
     },
     [update],
   );
@@ -147,18 +157,82 @@ export function TimerProvider({ children, onChange }) {
 }
 
 // The big ring with the growing tree.
-function Ring({ progress, tree, withered, size = 230 }) {
+// The ring. With `dial` ({ value, max, step, min, onChange }) it becomes a
+// slider: drag the knob around (one turn = max minutes) or use the arrow keys.
+function Ring({ progress, tree, withered, size = 230, dial, grow: growTo }) {
   const r = 100;
   const c = 2 * Math.PI * r;
-  const grow = withered ? 1 : progress;
+  const ref = useRef(null);
+  const dragging = useRef(false);
+  const frac = dial ? dial.value / dial.max : progress;
+  const grow = withered ? 1 : growTo ?? (dial ? 0.15 + 0.85 * frac : progress);
+
+  const fromPointer = (e) => {
+    const box = ref.current.getBoundingClientRect();
+    const x = e.clientX - (box.left + box.width / 2);
+    const y = e.clientY - (box.top + box.height / 2);
+    let a = Math.atan2(x, -y); // 0 at the top, clockwise
+    if (a < 0) a += Math.PI * 2;
+    let v = Math.round(((a / (Math.PI * 2)) * dial.max) / dial.step) * dial.step;
+    // Don't wrap around past the top: stick to the ends.
+    if (dial.value > dial.max * 0.75 && v < dial.max * 0.25) v = dial.max;
+    if (dial.value < dial.max * 0.25 && v > dial.max * 0.75) v = dial.min;
+    dial.onChange(Math.max(dial.min, Math.min(dial.max, v)));
+  };
+  const knob = dial ? [Math.sin(frac * Math.PI * 2) * r, -Math.cos(frac * Math.PI * 2) * r] : null;
+
   return (
-    <svg viewBox="-115 -115 230 230" width={size} height={size} aria-hidden="true">
+    <svg
+      ref={ref}
+      viewBox="-115 -115 230 230"
+      width={size}
+      height={size}
+      className={dial ? 'dial' : undefined}
+      role={dial ? 'slider' : undefined}
+      aria-hidden={dial ? undefined : 'true'}
+      aria-label={dial ? 'Focus minutes' : undefined}
+      aria-valuemin={dial?.min}
+      aria-valuemax={dial?.max}
+      aria-valuenow={dial?.value}
+      tabIndex={dial ? 0 : undefined}
+      onKeyDown={
+        dial &&
+        ((e) => {
+          if (['ArrowUp', 'ArrowRight'].includes(e.key)) dial.onChange(Math.min(dial.max, dial.value + dial.step));
+          else if (['ArrowDown', 'ArrowLeft'].includes(e.key)) dial.onChange(Math.max(dial.min, dial.value - dial.step));
+          else return;
+          e.preventDefault();
+        })
+      }
+      onPointerDown={
+        dial &&
+        ((e) => {
+          dragging.current = true;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          fromPointer(e);
+        })
+      }
+      onPointerMove={dial && ((e) => dragging.current && fromPointer(e))}
+      onPointerUp={dial && (() => (dragging.current = false))}
+      onPointerCancel={dial && (() => (dragging.current = false))}
+    >
       <circle r={r} fill="none" stroke="var(--line)" strokeWidth="8" />
-      <circle r={r} fill="none" stroke={withered ? 'var(--muted)' : 'var(--sage)'} strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - progress)} transform="rotate(-90)" style={{ transition: 'stroke-dashoffset 1s linear' }} />
+      <circle r={r} fill="none" stroke={withered ? 'var(--muted)' : 'var(--sage)'} strokeWidth="8" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - frac)} transform="rotate(-90)" style={{ transition: dial ? 'none' : 'stroke-dashoffset 1s linear' }} />
+      {dial &&
+        Array.from({ length: 12 }, (_, i) => {
+          const a = (i / 12) * Math.PI * 2;
+          return <line key={i} x1={Math.sin(a) * 88} y1={-Math.cos(a) * 88} x2={Math.sin(a) * (i % 3 ? 92 : 84)} y2={-Math.cos(a) * (i % 3 ? 92 : 84)} stroke="var(--line-2)" strokeWidth="2" />;
+        })}
       <ellipse cx="0" cy="22" rx="62" ry="12" fill="var(--paper-2)" />
       <g transform="translate(0 22)">
-        <Tree type={withered ? "withered" : tree} scale={0.45 + 1.0 * grow} />
+        <Tree type={withered ? 'withered' : tree} scale={0.45 + 1.0 * grow} />
       </g>
+      {knob && (
+        <g style={{ cursor: 'grab' }}>
+          <circle cx={knob[0]} cy={knob[1]} r="14" fill="var(--card)" stroke="var(--sage)" strokeWidth="4" />
+          <circle cx={knob[0]} cy={knob[1]} r="4" fill="var(--sage)" />
+        </g>
+      )}
     </svg>
   );
 }
@@ -172,6 +246,7 @@ export function TimerCard({ profile, areas, suggestion }) {
   const [area, setArea] = useState('');
   const [label, setLabel] = useState('');
   const [guard, setGuard] = useState(() => localStorage.getItem('atelier.guard') === '1');
+  const [openEnded, setOpenEnded] = useState(false);
   const [err, setErr] = useState(null);
   const [confirmGiveUp, setConfirmGiveUp] = useState(false);
   useEffect(() => {
@@ -187,6 +262,30 @@ export function TimerCard({ profile, areas, suggestion }) {
       setErr(e.message);
     }
   };
+
+  if (s?.phase === 'focus' && s.open) {
+    // Open-ended (free drawing): counts up, the tree grows over 90 minutes, stop any time.
+    const elapsed = t.now - s.startedAt;
+    const hourFrac = (elapsed % 3600000) / 3600000;
+    return (
+      <div className="card timer-card">
+        <div className="timer-ring">
+          <Ring progress={hourFrac} tree={s.tree} grow={Math.min(1, elapsed / 5400000)} />
+          <div className="timer-time">{fmt(elapsed)}</div>
+        </div>
+        <div>
+          <div className="kicker">Free drawing · open-ended</div>
+          <h2>{s.label ?? 'Free drawing'}</h2>
+          <p className="muted">No limit: draw as long as you like and stop when you’re done. The ring goes round once an hour; your tree grows the longer you stay.</p>
+          <div className="row">
+            <button className="btn primary" onClick={t.stopHere}>
+              Done for now
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (s?.phase === 'focus') {
     const total = s.planned * 60000;
@@ -294,19 +393,22 @@ export function TimerCard({ profile, areas, suggestion }) {
   return (
     <div className="card timer-card">
       <div className="timer-ring">
-        <Ring progress={0} tree={suggestion?.tree ?? 'sapling'} />
-        <div className="timer-time">{minutes}:00</div>
+        <Ring progress={0} tree={suggestion?.tree ?? 'sapling'} dial={{ value: minutes, min: 5, max: 180, step: 5, onChange: setMinutes }} />
+        <div className="timer-time">{openEnded ? '∞' : minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}:00` : `${minutes}:00`}</div>
       </div>
       <div>
         <div className="kicker">Focus timer</div>
         <h2>Plant a tree, then draw</h2>
-        <p className="muted">One block, one thing. When the bell rings, your tree joins the valley.</p>
+        <p className="muted">One block, one thing. When the bell rings, your tree joins the valley. Drag the ring to set any length.</p>
         <div className="timer-presets" role="group" aria-label="Minutes">
           {[...new Set([...PRESETS, profile?.focusMinutes].filter(Boolean))].sort((a, b) => a - b).map((m) => (
-            <button key={m} className={m === minutes ? 'active' : ''} onClick={() => setMinutes(m)}>
+            <button key={m} className={m === minutes && !openEnded ? 'active' : ''} onClick={() => { setMinutes(m); setOpenEnded(false); }}>
               {m} min
             </button>
           ))}
+          <button className={openEnded ? 'active' : ''} onClick={() => setOpenEnded(!openEnded)} title="Free drawing: counts up, stop whenever you like">
+            ∞ Open
+          </button>
         </div>
         <div className="row" style={{ marginBottom: 12 }}>
           <input type="text" placeholder="What are you drawing? (optional)" value={label} onChange={(e) => setLabel(e.target.value)} style={{ flex: '1 1 200px' }} />
@@ -320,8 +422,8 @@ export function TimerCard({ profile, areas, suggestion }) {
           </select>
         </div>
         <div className="row">
-          <button className="btn primary" onClick={() => begin()}>
-            Start focus
+          <button className="btn primary" onClick={() => begin(openEnded ? { open: true, minutes: 240, kind: 'free' } : {})}>
+            {openEnded ? 'Start open-ended' : 'Start focus'}
           </button>
           <label className="row small" style={{ gap: 6, cursor: 'pointer' }}>
             <input type="checkbox" checked={guard} onChange={(e) => setGuard(e.target.checked)} /> Phone guard
@@ -339,7 +441,7 @@ export function TimerMini() {
   const s = t.state;
   if (!s || !['focus', 'break'].includes(s.phase)) return null;
   const focus = s.phase === 'focus';
-  const left = focus ? s.startedAt + s.planned * 60000 - t.now : s.breakEndsAt - t.now;
+  const left = focus ? (s.open ? t.now - s.startedAt : s.startedAt + s.planned * 60000 - t.now) : s.breakEndsAt - t.now;
   const progress = focus ? 1 - left / (s.planned * 60000) : 1;
   return (
     <a className="timer-mini" href="#/" aria-label="Open the timer">

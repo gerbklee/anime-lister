@@ -304,7 +304,7 @@ function todaySession(userId) {
     const p = exProgress(l, ex, prog);
     return { id: `exercise:${l.id}:${ex.id}`, kind: ex.kind, lessonId: l.id, area: l.area, exerciseId: ex.id, title: ex.title, prompt: ex.prompt, minutes, refs: ex.refs ?? null, psd: !!ex.psd, practice: ex.practice ?? null, session: Math.min(ex.sessions, p.days + 1), sessions: ex.sessions, steps: ex.steps, success: ex.success, example: ex.example, exampleUrl: ex.exampleUrl, ...extra };
   };
-  let budget = Math.max(15, D - parts.reduce((s, p) => s + p.minutes, 0) - (D >= 75 ? 20 : 0));
+  let budget = Math.max(15, D - parts.reduce((s, p) => s + p.minutes, 0));
 
   // Today's lesson: its exercises that still need sessions (one session per exercise per day).
   if (lesson) {
@@ -373,11 +373,9 @@ function todaySession(userId) {
     }
   }
 
-  // Free project time on longer days.
-  if (D >= 75) {
-    const used = parts.reduce((s, p) => s + p.minutes, 0);
-    if (D - used >= 10) parts.push({ id: 'free', kind: 'free', lessonLink: lesson?.id ?? null, title: 'Free drawing', prompt: 'Draw anything you like using today’s lesson: your characters, fan art, an idea. Fun counts.', minutes: Math.min(30, D - used) });
-  }
+  // Free drawing & personal projects: open-ended, after the day's exercises.
+  // It isn't part of the daily target: draw as long as you like.
+  parts.push({ id: 'free', kind: 'free', open: true, title: 'Free drawing & projects', prompt: 'Your time: personal projects, fan art, your characters, anything. No limit: start an open-ended timer and stop whenever you like. It all counts towards your practice hours.', minutes: 0 });
 
   // Every part links to the lesson it comes from.
   for (const p of parts) {

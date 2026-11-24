@@ -58,6 +58,10 @@ export const api = {
   deleteDrawing: (id) => request('DELETE', `/api/atelier/drawings/${id}`),
   critique: (id, level) => request('POST', `/api/atelier/drawings/${id}/critique`, { level }),
   portfolio: () => request('GET', '/api/atelier/portfolio'),
+  projects: () => request('GET', '/api/atelier/projects'),
+  createProject: (title) => request('POST', '/api/atelier/projects', { title }),
+  project: (id) => request('GET', `/api/atelier/projects/${id}`),
+  updateProject: (id, patch) => request('PUT', `/api/atelier/projects/${id}`, patch),
   savePortfolio: (o) => request('POST', '/api/atelier/portfolio', o),
   react: (target, emoji) => request('POST', '/api/reactions', { target, emoji }),
 };

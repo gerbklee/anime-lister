@@ -76,10 +76,11 @@ export default function Sketchbook({ tab = 'mine' }) {
       <div className="seg" style={{ marginTop: 18 }} role="tablist">
         {[
           ['mine', `Mine${done.length ? ` (${done.length})` : ''}`],
+          ['projects', 'Projects'],
           ['todo', `To draw${todo.length ? ` (${todo.length})` : ''}`],
           ['shared', 'Shared with me'],
         ].map(([k, l]) => (
-          <button key={k} className={tab === k ? 'active' : ''} onClick={() => (window.location.hash = `#/sketchbook/${k}`)} role="tab" aria-selected={tab === k}>
+          <button key={k} className={tab === k ? 'active' : ''} onClick={() => (window.location.hash = k === "projects" ? "#/projects" : `#/sketchbook/${k}`)} role="tab" aria-selected={tab === k}>
             {l}
           </button>
         ))}

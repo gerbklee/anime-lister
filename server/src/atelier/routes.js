@@ -30,7 +30,9 @@ fs.mkdirSync(CLIP_DIR, { recursive: true });
 fs.mkdirSync(LAYER_DIR, { recursive: true });
 
 const q = {
-  insertBlock: db.prepare('INSERT INTO atelier_blocks (user_id, started_at, planned, kind, lesson_id, area, tree, stage, status) VALUES (@u, @at, @planned, @kind, @lesson, @area, @tree, @stage, @status)'),
+  insertBlock: db.prepare('INSERT INTO atelier_blocks (user_id, started_at, planned, kind, lesson_id, area, tree, stage, status, project_id) VALUES (@u, @at, @planned, @kind, @lesson, @area, @tree, @stage, @status, @project)'),
+  ownProject: db.prepare('SELECT * FROM atelier_projects WHERE id = ? AND user_id = ?'),
+  setProject: db.prepare('UPDATE atelier_drawings SET project_id = ? WHERE id = ?'),
   block: db.prepare('SELECT * FROM atelier_blocks WHERE id = ? AND user_id = ?'),
   finishBlock: db.prepare('UPDATE atelier_blocks SET status = ?, ended_at = ?, minutes = ? WHERE id = ?'),
   logBlock: db.prepare("INSERT INTO atelier_blocks (user_id, started_at, ended_at, planned, minutes, status, kind, area, tree, stage, poses) VALUES (@u, @start, @end, @planned, @minutes, 'done', @kind, @area, @tree, @stage, @poses)"),
@@ -108,6 +110,7 @@ function drawingView(d, me, users) {
     adult: d.adult,
     status: d.status,
     createdAt: d.created_at,
+    projectId: d.project_id ?? null,
     reactions: d.shared ? activity.reactionSummary(`drawing:${d.id}`, me) : null,
     clip: (() => {
       const c = clipInfoOf(d);
@@ -279,13 +282,15 @@ router.post('/atelier/exercises/done', (req, res) => {
 // ---- Focus blocks (pomodoro) ----------------------------------------------------------------
 
 router.post('/atelier/blocks', (req, res) => {
-  const planned = Math.max(1, Math.min(240, Math.round(Number(req.body?.minutes) || 25)));
+  // Open-ended blocks (free drawing) run up to 4 hours; you stop them when you like.
+  const planned = req.body?.open === true ? 240 : Math.max(1, Math.min(240, Math.round(Number(req.body?.minutes) || 25)));
+  const project = req.body?.projectId ? q.ownProject.get(Number(req.body.projectId), req.user.id) : null;
   const lesson = req.body?.lessonId ? C.LESSON.get(String(req.body.lessonId)) : null;
   const area = C.AREA[req.body?.area] ? req.body.area : lesson?.area ?? null;
   const { tree, stage } = treeFor(req.user.id);
   q.staleBlocks.run(req.user.id, Date.now());
   const id = Number(
-    q.insertBlock.run({ u: req.user.id, at: Date.now(), planned, kind: String(req.body?.kind ?? 'free').slice(0, 20), lesson: lesson?.id ?? null, area, tree, stage, status: 'running' }).lastInsertRowid,
+    q.insertBlock.run({ u: req.user.id, at: Date.now(), planned, kind: String(req.body?.kind ?? 'free').slice(0, 20), lesson: lesson?.id ?? null, area, tree, stage, status: 'running', project: project?.id ?? null }).lastInsertRowid,
   );
   res.status(201).json({ id, tree, stage, planned, area });
 });
@@ -321,6 +326,42 @@ router.get('/atelier/stats', (req, res) => {
 });
 
 router.get('/atelier/review', (req, res) => res.json(stats.weeklyReview(req.user.id)));
+
+// ---- Personal projects (free drawing) ---------------------------------------------------------
+
+const projectStats = db.prepare(`SELECT p.*,
+    (SELECT COALESCE(SUM(minutes), 0) FROM atelier_blocks b WHERE b.project_id = p.id AND b.status = 'done') AS minutes,
+    (SELECT COUNT(*) FROM atelier_drawings d WHERE d.project_id = p.id AND d.file IS NOT NULL) AS versions,
+    (SELECT d.file FROM atelier_drawings d WHERE d.project_id = p.id AND d.file IS NOT NULL ORDER BY d.created_at DESC LIMIT 1) AS cover,
+    (SELECT MAX(d.created_at) FROM atelier_drawings d WHERE d.project_id = p.id) AS updated
+  FROM atelier_projects p WHERE p.user_id = ? ORDER BY p.archived, COALESCE(updated, p.created_at) DESC`);
+const projectView = (p) => ({ id: p.id, title: p.title, archived: !!p.archived, createdAt: p.created_at, minutes: Math.round(p.minutes ?? 0), versions: p.versions ?? 0, cover: fileUrl(p.cover), updatedAt: p.updated ?? p.created_at });
+
+router.get('/atelier/projects', (req, res) => res.json({ projects: projectStats.all(req.user.id).map(projectView) }));
+
+router.post('/atelier/projects', (req, res) => {
+  const title = String(req.body?.title ?? '').trim().slice(0, 80);
+  if (!title) throw new HttpError(400, 'Give your project a name');
+  const id = Number(db.prepare('INSERT INTO atelier_projects (user_id, title, created_at) VALUES (?, ?, ?)').run(req.user.id, title, Date.now()).lastInsertRowid);
+  res.status(201).json(projectView(projectStats.all(req.user.id).find((p) => p.id === id)));
+});
+
+router.get('/atelier/projects/:id', (req, res) => {
+  const p = projectStats.all(req.user.id).find((x) => x.id === parseId(req.params.id));
+  if (!p) throw new HttpError(404, 'Project not found');
+  const users = usersById();
+  const versions = db.prepare('SELECT * FROM atelier_drawings WHERE project_id = ? AND user_id = ? AND file IS NOT NULL ORDER BY created_at').all(p.id, req.user.id).map((d) => drawingView(d, req.user.id, users));
+  const sessions = db.prepare("SELECT started_at, minutes FROM atelier_blocks WHERE project_id = ? AND user_id = ? AND status = 'done' ORDER BY started_at").all(p.id, req.user.id);
+  res.json({ project: projectView(p), versions, sessions: sessions.map((s) => ({ at: s.started_at, minutes: Math.round(s.minutes ?? 0) })) });
+});
+
+router.put('/atelier/projects/:id', (req, res) => {
+  const p = q.ownProject.get(parseId(req.params.id), req.user.id);
+  if (!p) throw new HttpError(404, 'Project not found');
+  if (typeof req.body?.title === 'string' && req.body.title.trim()) db.prepare('UPDATE atelier_projects SET title = ? WHERE id = ?').run(req.body.title.trim().slice(0, 80), p.id);
+  if (typeof req.body?.archived === 'boolean') db.prepare('UPDATE atelier_projects SET archived = ? WHERE id = ?').run(req.body.archived ? 1 : 0, p.id);
+  res.json(projectView(projectStats.all(req.user.id).find((x) => x.id === p.id)));
+});
 
 // ---- Quarterly portfolio review ------------------------------------------------------------------
 
@@ -473,6 +514,8 @@ router.post('/atelier/drawings', raw, wrap(async (req, res) => {
     }).lastInsertRowid,
   );
   if (clipFile) q.setClip.run(clipFile, clipInfo, id);
+  const project = req.query.projectId ? q.ownProject.get(Number(req.query.projectId), req.user.id) : null;
+  if (project) q.setProject.run(project.id, id);
   res.status(201).json(drawingView(q.drawing.get(id), req.user.id, usersById()));
 }));
 
