@@ -339,6 +339,7 @@ export default function Drawing({ id }) {
       {d.status === 'todo' && (
         <section className="section wash">
           <h3>A study, waiting for you</h3>
+            {d.studioPass != null && <a className="btn primary" href={'#/?study='+d.id}>Resume guided drawing</a>}
           <p className="small">Download the study file, draw it in Clip Studio, then upload the result here.</p>
           <div className="row">
             {!timer.running && (

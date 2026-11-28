@@ -108,3 +108,24 @@ test('Clip Studio upload (needs CLIP_SAMPLE)', { skip: !process.env.CLIP_SAMPLE 
   const dl = await u.call('GET', `/api/atelier/drawings/${up.data.id}/clip`);
   assert.equal(dl.data.length, clip.length);
 });
+
+test('a studio study keeps its reference and saved pass when the finished artwork arrives', async () => {
+  const artist = await user(server, 'studio-artist');
+  const other = await user(server, 'studio-neighbour');
+  const picture = await png();
+  const started = await artist.call('POST', '/api/atelier/studio/studies?title=First%20character', null, picture);
+  assert.equal(started.status, 201);
+  const {id, reference} = started.data;
+  assert.ok(reference);
+  const route = '/api/atelier/drawings/' + id;
+  assert.equal((await other.call('GET', reference)).status, 404);
+  assert.equal((await other.call('PUT', route, {studioPass: 1})).status, 404);
+  assert.equal((await artist.call('PUT', route, {studioPass: 4})).status, 400);
+  await artist.call('PUT', route, {studioPass: 2});
+  assert.equal((await artist.call('GET', '/api/atelier/studio/studies')).data.studies[0].studioPass, 2);
+  const finished = await artist.call('POST', route + '/file', null, picture);
+  assert.equal(finished.data.reference, reference);
+  assert.equal(finished.data.status, 'done');
+  assert.ok(finished.data.file);
+  assert.deepEqual((await other.call('GET', '/api/atelier/studio/studies')).data.studies, []);
+});

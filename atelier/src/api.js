@@ -94,6 +94,8 @@ export const api = {
   lessonMedia: (id) => request('GET', `/api/atelier/lessons/${encodeURIComponent(id)}/media`),
 
   drawings: () => request('GET', '/api/atelier/drawings'),
+  studioStudies: () => request('GET', '/api/atelier/studio/studies'),
+  startStudio: (title, file, source) => uploadFile(`/api/atelier/studio/studies?${qs({ title, source })}`, file),
   sharedDrawings: () => request('GET', '/api/atelier/drawings/shared'),
   drawing: (id) => request('GET', `/api/atelier/drawings/${id}`),
   upload: (file, info) => uploadFile(`/api/atelier/drawings?${qs(info)}`, file),

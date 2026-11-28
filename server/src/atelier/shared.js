@@ -93,6 +93,7 @@ function drawingView(d, me, users) {
     mine: d.user_id === me,
     user: users?.get(d.user_id) ?? null,
     lessonId: d.lesson_id,
+    studioPass: d.studio_pass ?? null,
     lessonTitle: lesson?.title ?? null,
     exerciseId: d.exercise_id,
     exerciseTitle: lesson?.exercises.find((e) => e.id === d.exercise_id)?.title ?? null,

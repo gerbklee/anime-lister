@@ -6,6 +6,7 @@ import UploadStatus from './components/UploadStatus.jsx';
 import LevelUp from './components/LevelUp.jsx';
 import Skills from './pages/Skills.jsx';
 import Home from './pages/Home.jsx';
+import Studio from './pages/Studio.jsx';
 import Today from './pages/Today.jsx';
 import PathPage from './pages/Path.jsx';
 import Lesson from './pages/Lesson.jsx';
@@ -98,7 +99,8 @@ function Login({ onLogin }) {
 }
 
 const NAV = [
-  ['', 'Valley'],
+  ['', 'Studio'],
+  ['valley', 'Valley'],
   ['today', 'Today'],
   ['path', 'Path'],
   ['sketchbook', 'Sketchbook'],
@@ -162,6 +164,9 @@ export default function App() {
 
   let body;
   switch (page) {
+    case 'valley':
+      body = <Home />;
+      break;
     case 'today':
       body = <Today />;
       break;
@@ -211,7 +216,7 @@ export default function App() {
       body = <Project id={id} key={id} />;
       break;
     default:
-      body = <Home />;
+      body = <Studio />;
   }
 
   const active = ['projects', 'project'].includes(page) ? 'sketchbook' : ['portfolio', 'compare'].includes(page) ? 'progress' : ['lesson', 'clip-studio', 'method', 'brushes'].includes(page) ? 'path' : page === 'drawing' ? 'sketchbook' : page === 'check' ? 'today' : page;
@@ -246,7 +251,7 @@ export default function App() {
             <a href="#/clip-studio">Clip Studio handbook</a> · <a href="#/method">How Atelier teaches</a> · <a href={hubUrl()}>Anime Hub</a>
           </footer>
         </main>
-        {page !== '' && <TimerMini />}
+        {page !== 'valley' && <TimerMini />}
         {toast && <div className="toast">{toast}</div>}
         <UploadStatus />
         <LevelUp userId={user.id} version={version} />

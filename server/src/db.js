@@ -637,6 +637,7 @@ const MIGRATIONS = {
     ALTER TABLE atelier_drawings ADD COLUMN project_id INTEGER;
     ALTER TABLE atelier_blocks ADD COLUMN project_id INTEGER;
   `,
+  22: `ALTER TABLE atelier_drawings ADD COLUMN studio_pass INTEGER CHECK (studio_pass BETWEEN 0 AND 3);`,
 };
 
 const LATEST = Math.max(...Object.keys(MIGRATIONS).map(Number));

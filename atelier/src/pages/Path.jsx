@@ -36,6 +36,8 @@ export default function PathPage() {
       <section style={{ marginTop: 10, marginBottom: 26 }}>
         <div className="kicker">From first line to professional</div>
         <h1>The path</h1>
+        <p>New to drawing? Start with a full-body study of your own character. You can use the lessons below to practise what felt difficult.</p>
+        <a className="btn primary" href="#/">Open my fan-art study</a>
         <p className="muted" style={{ maxWidth: 680 }}>
           Fourteen stages, about 1,580 hours of practice: three to four years at an hour or two a day. Each stage has its own tree for your valley and a building when you finish it. A stage opens when the one before is complete: every lesson practised on enough days, and the stage’s practice hours put in. Finished lessons come back as short reviews, spaced out so they stick.
         </p>

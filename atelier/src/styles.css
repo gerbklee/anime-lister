@@ -1828,3 +1828,14 @@ table.data th {
     animation: none;
   }
 }
+
+.studio-gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(90px,1fr)); gap:8px; margin:12px 0; }
+.studio-gallery button { padding:4px; }
+.studio-gallery [aria-pressed="true"] { outline:3px solid var(--accent); }
+.studio-gallery img { width:100%; height:110px; object-fit:contain; }
+.studio-preview, .studio-reference img { display:block; max-width:100%; max-height:55vh; object-fit:contain; margin:auto; }
+.studio-reference { margin:0 0 16px; text-align:center; }
+.studio-frame { display:inline-block; position:relative; vertical-align:top; max-width:100%; }
+.studio-frame.measured::after { content:''; position:absolute; inset:0; pointer-events:none; background-size:25% 25%; background-image:linear-gradient(to right, #3175a9aa 1px, transparent 1px), linear-gradient(to bottom, #3175a9aa 1px, transparent 1px); }
+.studio-example { background:#f7f1e6; text-align:center; }
+.studio-reference ~ details { margin-top:16px; }

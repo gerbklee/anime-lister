@@ -85,7 +85,29 @@ router.post('/atelier/drawings', raw, wrap(async (req, res) => {
   res.status(201).json(drawingView(q.drawing.get(id), req.user.id, usersById()));
 }));
 
-// "Study this" from Anime Hub's Art viewer: a study waiting in your sketchbook.
+router.get('/atelier/studio/studies', (req, res) => {
+  const rows = db.prepare('SELECT * FROM atelier_drawings WHERE user_id = ? AND studio_pass IS NOT NULL ORDER BY id DESC').all(req.user.id);
+  const users = usersById();
+  res.json({ studies: rows.map(d => drawingView(d, req.user.id, users)) });
+});
+
+router.post('/atelier/studio/studies', raw, wrap(async (req, res) => {
+  const title = String(req.query.title ?? '').trim().slice(0, 120);
+  if (!title) throw new HttpError(400, 'Enter your character’s name.');
+  const refFile = await saveImage(req.body, REF_DIR, 'ref', 2400);
+  let id;
+  try {
+    id = Number(db.prepare(`INSERT INTO atelier_drawings
+      (user_id, title, kind, status, reference_file, reference_post, studio_pass, created_at)
+      VALUES (?, ?, 'study', 'todo', ?, ?, 0, ?)`).run(req.user.id, title, refFile,
+      /^https?:\/\//i.test(req.query.source) ? String(req.query.source).slice(0,500) : null, Date.now()).lastInsertRowid);
+  } catch (err) {
+    await fs.promises.unlink(path.join(REF_DIR, refFile)).catch(() => {});
+    throw err;
+  }
+  res.status(201).json(drawingView(q.drawing.get(id), req.user.id, usersById()));
+}));
+
 router.post('/atelier/studies', wrap(async (req, res) => {
   const url = String(req.body?.referenceUrl ?? '');
   const refFile = await saveReference(url).catch(() => null);
@@ -108,6 +130,11 @@ router.post('/atelier/drawings/:id/file', raw, wrap(async (req, res) => {
 
 router.put('/atelier/drawings/:id', (req, res) => {
   const d = ownDrawing(parseId(req.params.id), req.user.id);
+  if (req.body?.studioPass !== undefined) {
+    const pass = req.body.studioPass;
+    if (d.studio_pass == null || !Number.isInteger(pass) || pass < 0 || pass > 3) throw new HttpError(400, 'Unknown studio pass.');
+    db.prepare('UPDATE atelier_drawings SET studio_pass = ? WHERE id = ?').run(pass, d.id);
+  }
   if (req.body?.selfScores && typeof req.body.selfScores === 'object') {
     const clean = Object.fromEntries(Object.entries(req.body.selfScores).filter(([k, v]) => /^[a-z]+$/.test(k) && Number(v) >= 1 && Number(v) <= 5).map(([k, v]) => [k, Math.round(Number(v))]));
     q.setSelf.run(JSON.stringify(clean), d.id);
